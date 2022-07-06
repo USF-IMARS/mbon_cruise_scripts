@@ -1,0 +1,39 @@
+---
+title: "CDOM Processing"
+author: "Sebastian DiGeronimo"
+date: '2022-07-06'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+root <- rprojroot::find_rstudio_root_file()
+knitr::opts_chunk$set(echo = TRUE)
+library("ggplot2")
+library("tibble")
+library("tidyr")
+library("readr")
+library("purrr")
+library("dplyr")
+library("stringr")
+library("forcats")
+library("lubridate")
+library("glue")
+library("fs")
+library("magrittr")
+```
+
+```{r create-dir}
+# will create a set directory if does not exists
+# useful for new projects
+mainDir <- rprojroot::find_rstudio_root_file()
+subDir <-
+    c("data/raw",
+      "data/processed",
+      "data/plots",
+      "data/metadata",
+      "Rmd",
+      "scripts")
+
+fs::dir_create(path = paste0(mainDir,"/",subDir))
+rm(mainDir, subDir)
+```
