@@ -2,6 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+.Rprofile
 
 # ignore IDL methods
 old_idl/*
+data/**
