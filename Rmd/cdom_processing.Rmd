@@ -20,20 +20,215 @@ library("lubridate")
 library("glue")
 library("fs")
 library("magrittr")
+# library("broom") # optional
 ```
 
 ```{r create-dir}
 # will create a set directory if does not exists
 # useful for new projects
-mainDir <- rprojroot::find_rstudio_root_file()
 subDir <-
     c("data/raw",
       "data/processed",
       "data/plots",
       "data/metadata",
+      "data/raw/cdom",
       "Rmd",
       "scripts")
 
-fs::dir_create(path = paste0(mainDir,"/",subDir))
-rm(mainDir, subDir)
+fs::dir_create(path = paste0(root,"/",subDir))
+rm(subDir)
 ```
+
+
+```{r}
+old_dir <- fs::dir_ls(paste0(root, "/old_idl/"))
+for (i in 2:length(old_dir)) {
+  cat("Folder:", old_dir[i])
+  (cat("", gsub("\\.(txt|pro|jrn)$","", list.files(path = old_dir[i])), sep ="\n"))
+  cat("\n")
+}
+
+cat(gsub("\\.m$","", list.files(path = old_dir[i])), sep ="\n")
+
+```
+
+# Files to change:
+----
+# Orig:
+  Folder: D:/sample_processing/old_idl/orig_enrique_idl_routines_cdom
+    1. sta_files.txt = 
+    2. temp.jr       = renames and moves files into nested dir
+    3. readsp.pro    =
+    4. agdata.pro    =
+    5. sta_plot.pro  =
+    6. interpol2.pro =
+    
+    ag.txt        != A data
+    abs_ag.txt    != abs data
+-----
+# New Instrument Jen:
+  Folder: D:/sample_processing/old_idl/new_jen_idl_cdom
+    1. sta_files_850.txt
+    4. agdata_850.pro
+    5. sta_plot_850.pro
+----
+# Updated:
+  Folder: D:/sample_processing/old_idl/new_jen_idl_cdom_updated
+    1. sta_files_850.txt
+    4. agdata_850.pro
+    5. sta_plot_850.pro
+
+
+------
+# Info
+  1. sta_files.txt 
+                  5/6 columns (depends on instrument)
+                  staNum = sample ID without `WS`
+                  file1 = scan 1 of run ID
+                  file2 = scan 2 of run ID
+                  file3 = scan 1 of run ID
+                  blankf = blank run ID	
+                  bias = wavelength for bias
+                  color = color for graph
+  2. temp.jrn      
+                  renames files, then you copy them to nested folder
+                  rename by lowercase month, remove leading 0s in file name, add 
+                  `_` between month and number, removes `.SP` extension
+  3. readsp.pro    
+                  seems like just reading the files and formatting to remove 
+                  beginning header
+                  counts number of files in nested folder of data
+                  for loop, replaces first 86 rows to '', then read files again
+                  to contain 2 columns of wv and A
+                  
+  4. agdata.pro    
+                  takes the 2 column data files and takes data column into large
+                  dataframe of all columns with headers as file names
+  5. sta_plot.pro 
+                  read each row in sta_files and gives each column to a variable
+                  create 3 matrices, rows of 601 and columns # of samples
+                  for each column will add the data related to sta_files
+                  
+                  cols: staNum		file1		file2		blankf		bias	color
+  
+                  file1 cols goes to scan1
+                  file2 cols goes to scan2 
+                  blankf cols goes to blank
+                  
+                  create abs.txt file
+                  formula: 
+                          avg scan = mean(scan1+scan2) - blank
+                          scan1&scan2&blank * 23.03
+                          = L * log(10) <- L = 10cm
+                          
+                  smooth data: 
+                          27 width moving boxcar
+                          
+                  Bias
+                          bias col (mostly 10 nm window)
+                          if 550: take average of 540nm to 560nm
+                          if 600: take average of 590nm to 610nm
+                          if 620: take average of 610nm to 630nm
+                          if 670: take average of 660nm to 680nm
+                          if 680: take average of 670nm to 690nm
+                          if 690: take average of 680nm to 700nm
+                          if 700: take average of 690nm to 710nm
+                          if 710: take average of 705nm to 715nm - 5 nm window
+                          if 720: take average of 715nm to 725nm - 5 nm window
+                          if 750: take average of 745nm to 755nm - 5 nm window
+                          if 800: take average of 780nm to 800nm
+                          
+                          then subtract bias from spectra
+                          
+                  Slope 
+                        = -ag(375)/ag(412)
+                        natural log (ag(375):ag(412))
+                        least square polynomial fit of degree 1, take slope
+                        = -ag(350)/ag(450)
+                        natural log (ag(375):ag(412))
+                        least square polynomial fit of degree 1, take slope
+                        = -ag(350)/ag(500)
+                        natural log (ag(375):ag(412))
+                        least square polynomial fit of degree 1, take slope
+                        = ag 400
+                        # ignore? find where ag > 0.15 for all scans, count
+                        # ignore? find where ag <= 0.05 for all scans, count
+                        # ignore? = ag 375
+                        
+                        ag(400) * exp(S(350:500)*(wv-400))
+                        
+                  Plot
+                        plot,lam,ag(0,*),$
+                        xr=[400,800],xs=1,$
+                        yr=[-0.05,0.4],ys=1,$
+                        xtit='Wavelength (nm)',$
+                        ytit='a!DCDOM!N(!4k!3) (m!E-1!N)',$
+                        tit='WS19119 - MBON',thick=1.5
+                        
+                                                plot,lam,ag(0,*),$
+                        xr=[300,800],xs=1,$
+                        yr=[0.0001,20],ys=1,$
+                        xtit='Wavelength (nm)',$
+                        ytit='a!DCDOM!N(!4k!3) (m!E-1!N)',$
+                        tit='WS19119 - MBON',thick=1.5
+  6. interpol2.pro 
+                  rotate final matrix and save a .txt 
+
+```{r read-data}
+date_run <- "22MAY10"
+
+df_cdom <-
+  fs::dir_ls(paste0(root, "/data/raw/cdom/", date_run, "/"),
+             regexp = "\\.SP") %>%
+  map_dfr(., ~ read_tsv(.x, skip = 86, col_names = F), .id = "file") %>%
+  mutate(file = gsub("\\.SP$", "", basename(file))  %>%
+           str_to_lower) %>%
+  rename(lamda = 2, absorb = 3)
+
+```
+```{r metadata}
+file_match <-
+  fs::dir_ls(paste0(root, "/data/metadata/"), regexp = regex(str_to_lower("10MAY2022"))) %>%
+  readxl::read_xlsx(skip = 6, .name_repair = janitor::make_clean_names) %>%
+  select(sample_id, comments) %>%
+  # mutate(scan1 = str_split(sample_id," \\+ ", simplify = T)[,1])
+  separate(sample_id,
+           c("scan1", "scan2"),
+           sep = " \\+ ",
+           remove = F) %>%
+  mutate(
+    scan2 = str_c(substr(scan1, 1 , 5), scan2),
+    cruise_id = case_when(
+      str_detect(comments, "Milli-q")  ~ "blank",
+      TRUE ~ str_split(comments, " ", simplify = T)[, 1]
+    )
+  ) %>%
+  pivot_longer(
+    cols = c(scan1, scan2), names_to = "scans", values_to = "file"
+  )
+  
+
+```
+
+```{r}
+mean(c(-1.05e-05, 1e-4))
+mean(c(2.7e-04, 4.0e-05))
+df_cdom_mg <- left_join(df_cdom, file_match, by = "file") %>%
+  relocate(sample_id:scans, .before = file) %>%
+  group_by(sample_id, lamda) %>%
+  mutate( 
+    abs_mean = mean(absorb)
+    ) %>%
+      filter(lamda == 800)
+
+```
+
+
+```{r}
+zoo::rollmean(c(1.0, 1.0, 2.0, 3.0, 4.0, 1e18, 4.0, 3.0, 2.0, 1.0, 1.0), k = 3,
+              align = "left")
+
+(27-1)/2
+600 - (27+1)/2
+```
+
