@@ -5,6 +5,9 @@ date: '2022-07-06'
 output: html_document
 ---
 
+
+TODO: include something about ignoring bad samples
+should be something like bad in the notes spreadsheet to filter it out
 ```{r setup, include=FALSE}
 root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
@@ -183,7 +186,7 @@ df_cdom <-
   map_dfr(., ~ read_tsv(.x, skip = 86, col_names = F), .id = "file") %>%
   mutate(file = gsub("\\.SP$", "", basename(file))  %>%
            str_to_lower) %>%
-  rename(lamda = 2, absorb = 3)
+  rename(lambda = 2, absorb = 3)
 
 ```
 ```{r metadata}
@@ -211,17 +214,164 @@ file_match <-
 ```
 
 ```{r}
-mean(c(-1.05e-05, 1e-4))
-mean(c(2.7e-04, 4.0e-05))
+# length of cuvette
+L     <-  10
+const <-  L * log(10)
+
+scan_num <- file_match %$%
+  n_distinct(scans)
+
+
 df_cdom_mg <- left_join(df_cdom, file_match, by = "file") %>%
   relocate(sample_id:scans, .before = file) %>%
-  group_by(sample_id, lamda) %>%
+  group_by(sample_id, lambda) %>%
   mutate( 
-    abs_mean = mean(absorb)
+    abs_mean    = mean(absorb),
+    abs_log     = absorb * const,
+    abs_log_avg = mean(abs_log)
     ) %>%
-      filter(lamda == 800)
+  filter(grepl("1", scans)) %>%
+  ungroup
+
+
+# df_splt <- df_cdom_mg %>%
+#   group_split(cruise_id) %>%
+#   set_names(value = unique(df_cdom_mg$cruise_id))
+
+# blanks <- df_splt[[1]]
+# df <- df_splt[-1] 
+
+blanks <- 
+  df_cdom_mg %>%
+  filter(grepl("blank",cruise_id)) 
+  
+df <- df_cdom_mg %>%
+  filter(!grepl("blank",cruise_id))
+
+avg_blank <- blanks %>%
+  group_by(lambda) %>%
+  summarise(avg = mean(abs_mean),
+            med = median(abs_mean),
+            avg_log = mean(abs_log_avg),
+            med_log = mean(abs_log_avg)) %>%
+  arrange(-lambda)
+```
+
+# Plot Blank Scans
+```{r}
+(
+  df_cdom_mg %>%
+    group_by(file) %>%
+    filter(grepl("blank", cruise_id)) %>%
+    ggplot(aes(
+      x = lambda, y = abs_mean, color = sample_id
+    )) +
+    geom_line(size = 0.3) +
+    geom_line(
+      data = avg_blank,
+      aes(x = lambda, y = avg),
+      color = "black",
+      inherit.aes = F
+    ) +
+    geom_smooth(
+      data = avg_blank,
+      aes(x = lambda, y = med),
+      color = "black", se = F, 
+      inherit.aes = F
+    ) +
+    labs(
+      title = "Blank Scans (10 cm Milli-q Water)",
+      subtitle = paste("Number of Scans:", scan_num),
+      x = "Wavelength (\u03BB)",
+      y = expression(a[milli-q]~(lambda)~(m^-1)) ,
+      color = NULL
+    ) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(labels = ~ format(.x, scientific = FALSE)) +
+    coord_cartesian(ylim = c(-0.001, 0.001), xlim = c(199, 805)) +
+    theme_bw() +
+    theme(
+      legend.position = c(0.8, 0.83),
+      legend.text = element_text(size = 8),
+      legend.key.size = unit(0.37, "cm"),
+      legend.title = element_blank(),
+      legend.margin = margin(
+        t = 0,
+        r = 0,
+        b = 0,
+        l = 0,
+        unit = "pt"
+      )
+    )
+) 
+```
+
+
+```{r}
+
+df <-   df %>%
+    group_by(sample_id) %>%
+    mutate(
+      abs_avg = abs_mean - avg_blank$avg,
+      abs_med = abs_mean - avg_blank$med,
+      log_avg = abs_log_avg - avg_blank$avg_log,
+      log_med = abs_log_avg - avg_blank$med_log
+    ) %>%
+      ungroup
+
+(
+  df_abs %>%
+    
+    ggplot(aes(
+      x = lambda, y = abs_avg, color = file
+    )) +
+    geom_line(show.legend = F) +
+    scale_x_continuous(expand = c(0, 0)) +
+    coord_cartesian(ylim = c(NA, 0.2), xlim = c(300, 700))
+) %>%
+  plotly::ggplotly()
 
 ```
+
+```{r 375-412}
+
+polys <- function(.x, .var) {
+  values <- .x$.var
+}
+
+slopes <- df %>%
+  group_by(file) %>%
+  filter(lambda >= 375 & lambda <= 412)  %>%
+  # select(file, lambda, log_avg) %>%
+  group_map(~lm(log_avg ~ 1 + poly(lambda, 1), data = .x)) %>%
+  map_df(broom::tidy) %>%
+  filter(grepl("poly", term)) %>%
+  select(estimate) %>%
+  mutate(
+    abs = df %>%
+          filter(lambda == 400) %>%
+          select(lambda, log_avg) 
+  ) %>%
+    unnest(abs)
+ 
+tibble( 
+  lambda = (seq(800,200, -1))
+  ) %>%
+    mutate(
+      test = slopes$log_avg[3] * exp(slopes$estimate[3] * (lambda - 400))
+    ) %>%
+  ggplot(aes(x = lambda, y = test)) +
+  geom_line() +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(labels = ~ format(.x, scientific = FALSE)) +
+  theme_bw() +
+  coord_cartesian(
+    xlim = c(300,800),
+    ylim = c(-0.05,0.4)
+    )
+
+```
+
 
 
 ```{r}
@@ -230,5 +380,9 @@ zoo::rollmean(c(1.0, 1.0, 2.0, 3.0, 4.0, 1e18, 4.0, 3.0, 2.0, 1.0, 1.0), k = 3,
 
 (27-1)/2
 600 - (27+1)/2
+
+sta %>%
+  as_tibble() %>%
+  mutate(test = seq(800,200,-1))
 ```
 
