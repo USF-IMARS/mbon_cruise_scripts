@@ -8,6 +8,14 @@ output: html_document
 
 TODO: include something about ignoring bad samples
 should be something like bad in the notes spreadsheet to filter it out
+
+
+TODO: add in select folder or file if not specified 
+i.e. file.choose or choose.dir()
+or even: 
+rstudioapi::selectDirectory()
+rstudioapi::selectFile()
+
 ```{r setup, include=FALSE}
 root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
@@ -188,6 +196,17 @@ df_cdom <-
            str_to_lower) %>%
   rename(lambda = 2, absorb = 3)
 
+
+filename <-
+  fs::dir_ls(paste0(root, "/data/raw/cdom/", date_run, "/"),
+             regexp = "\\.SP") %>%
+             str_sort()
+filename %>%
+  map_dfr(., ~ read_tsv(.x, skip = 86, col_names = F), .id = "file")
+%>%
+  mutate(file = gsub("\\.SP$", "", basename(file))  %>%
+           str_to_lower) %>%
+  rename(lambda = 2, absorb = 3)
 ```
 ```{r metadata}
 file_match <-
@@ -333,7 +352,7 @@ df <-   df %>%
 
 ```
 
-```{r 375-412}
+```{r 375-412-wv}
 
 polys <- function(.x, .var) {
   values <- .x$.var
@@ -385,4 +404,35 @@ sta %>%
   as_tibble() %>%
   mutate(test = seq(800,200,-1))
 ```
+
+# Add header (snippet hfile):
+to add header, can use glue("text", .trim = F)
+Note: `.trim = F` means will allow indented white spaces, where if `T` will 
+remove indents. 
+# TODO: decide if need trim
+
+This will allow to add custom variables within a predetermined header using
+{} for info from another variable
+
+Depending on desired output file:
+
+txt <- glue("text", .trim = F) # writing text
+
+fileConn<-file("output.txt") # output name
+writeLines(txt, fileConn)    # writing lines 
+close(fileConn)              # closing file
+
+```{r}
+words <- "it does"
+txt <- glue("something {words} 
+            yes",
+       .trim = T
+       )
+
+
+file <- file(paste0(root,"outs.txt"))
+writeLines(txt, file)
+close(file)
+```
+
 
