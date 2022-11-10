@@ -1,0 +1,397 @@
+---
+title: "Read All Meta for eDNA"
+author: "Sebastian DiGeronimo"
+date: '2022-09-13'
+output: html_document
+---
+
+```{r setup}
+library("ggplot2")
+library("tibble")
+library("tidyr")
+library("readr")
+library("purrr")
+library("dplyr")
+library("stringr")
+library("forcats")
+library("lubridate")
+library("glue")
+library("fs")
+library("magrittr")
+# library("broom") # optional
+
+library("readxl")
+
+
+```
+
+
+```{r}
+# find all file names with log in it
+files <- fs::dir_ls(
+  here::here("data", "metadata", "WS_all"),
+  regexp = "^[^~]*log.*\\.(xlsx)$",
+  recurse = T
+) %>%
+  tibble(files = .) %>%
+  
+  # extract path and file name, and year
+  mutate(
+    path = dirname(files),
+    file = basename(files),
+    year = str_extract(path, "20[0-9]{2}")
+  ) 
+
+# filter files after 2017, not 2019, `ignore` file, any without fknms
+files <- files %>%
+  filter(str_detect(basename(files), "fknms_"),
+         year > 2017,
+         year != 2019,
+         !str_detect(file, "ignore|blank"))
+
+# files$file
+```
+
+```{r}
+# file_i <- list()
+
+recal <- data.frame(file = NA, sht_name = NA, row = NA, last_c = NA)
+
+for (i in seq(nrow(files))) {
+  # for (i in 6:8) {
+  
+  
+  cli::cli_alert_info("Reading file: {.file {files$file[i]}}")
+  temp_sht <- excel_sheets(files$files[i]) 
+  
+  # detect enda sheet, search if not
+  sht_name <- str_which(temp_sht, "(?i)edna")
+
+  if (length(sht_name) > 1 || length(sht_name) < 1 || is.na(sht_name)) {
+    cli::cli_alert_info("Couldn't find a sheet with {.code eDNA}")
+    cli::cli_inform("Which sheet is it?")
+    cli::cli_ol(temp_sht)
+    sht_name <- readline("") %>% as.numeric()
+  }
+  
+  if (is.na(sht_name)) {
+    cli::cli_alert_danger("Skipping file: {.file {files$file[i]}}")
+    next
+    }
+  
+  # read file for headers
+  temp <- read_excel(files$files[i],
+             sheet = sht_name, 
+             n_max = 5,
+             col_names = F) 
+
+  name <- files$file[i]
+  
+  # detect row that has `sample` from 1st column
+  row <- str_which(temp$...1, "(?i)sample")
+  
+  if (length(row) == 0 || is.na(row)) {
+    cli::cli_alert_info("Couldn't find a row with {.code sample}")
+    cli::cli_inform("Which row is it?")
+    cli::cli_ol(temp$...1)
+    row <- readline("") %>% as.numeric()
+  } 
+  
+  if (is.na(row)) {
+    cli::cli_alert_danger("No row with {.code sample}")
+    cli::cli_alert_danger("Skipping file: {.file {files$file[i]}}")
+    next
+    }
+  
+  # final column
+  if (!is.na(row)) {
+    last_c <- str_which(temp[row, ], "(?i)notes")
+  }
+  
+  # file_i[[name]] <- as.character(temp[row,]) 
+  
+  recal[i,] <- data.frame(file = files$file[i], 
+                     # temp_sht[sht_name], 
+                     sht_name, 
+                     as.numeric(row), 
+                     as.numeric(last_c)
+                     )
+   
+}
+
+files <- recal %>%
+  drop_na(file) %>%
+  left_join(files, ., by = "file")
+```
+
+```{r}
+# header <- tibble(`names(temp)` = NA)
+store_edna <- list()
+
+files <- files %>%
+  drop_na(sht_name)
+
+na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
+             stringi::stri_dup("-", 1:20))
+
+
+for (i in seq(nrow(files))) {
+  cli::cli_alert_info("Reading file: {.file {files$file[i]}}")
+  temp <- read_xlsx(
+    files$files[i],
+    sheet = files$sht_name[i],
+    # n_max = 30,
+    skip = files$row[i] - 1,
+    .name_repair = janitor::make_clean_names,
+    na = na_skip
+  )   %>%
+  select(1:files$last_c[i]) # %>%
+  
+  if (nrow(drop_na(temp, sample)) < 3 ) next
+  
+  if (is.logical(temp$depth_m)) {
+    temp <- temp %>%
+    mutate(depth_m = 1)
+  }
+  {
+    #     type_convert() %>%
+  #   mutate(
+  #     notes = as.character(notes)
+  #   )
+  
+ 
+  # if (basename(files[i]) == "fknms_sample_logsheet_OCT2017.xlsx") {
+  #   temp %<>%
+  #   mutate(vol_ml = strsplit(as.character(vol_ml), "&")) %>%
+  #     unnest(vol_ml) %>%
+  #     mutate(vol_ml = str_trim(vol_ml)) %>%
+  #     type_convert()
+  # }
+
+  # if (basename(files[i]) == "fknms_logsheet_OCT2018.xlsx") temp %<>%
+  # rename("sample_collection_time_gmt" = time_gmt)
+  # 
+  # if (basename(files[i]) == "fknms_sample_logsheet_07_08_2021.xlsx") temp %<>% 
+  #   replace_na(list(depth_m = 1))
+
+  
+  # store_edna$fknms_sample_logsheet_07_08_2021.xlsx %>%
+  # replace_na(list(depth_m = 1))
+    }
+  
+  name               <- files$file[i]
+  store_edna[[name]] <- temp
+
+  # header <- bind_rows(header, as.data.frame(names(temp)))
+  
+}
+
+# ---- fix 2 files ----
+# causes errors with merging becaue of column type being different
+# errors with typing on the user level
+# Oct 2018
+store_edna$fknms_logsheet_OCT2018.xlsx %<>%
+  filter(!is.na(vol_ml)) %>%
+  # select(mm_dd_yy) %>%
+  mutate(
+    mm_dd_yy = janitor::excel_numeric_to_date(as.numeric(mm_dd_yy)),
+    mm_dd_yy = as.POSIXct(mm_dd_yy)
+  ) %>%
+    fill(everything()) %>%
+  mutate(
+    sample = case_when(
+      str_detect(sample, "(?i)blank") ~ sample,
+      TRUE ~ str_to_upper(sample)),
+    across(lon:lat, ~ case_when(
+      str_detect(sample, "(?i)blank") ~ NA_real_,
+      TRUE ~ .x
+    ))
+  )
+
+# Oct 2022
+store_edna$fknms_sample_logsheet_10_2022.xlsx %<>%
+  filter(!is.na(vol_ml)) %>%
+  mutate(
+    max_depth_m = str_replace(max_depth_m, "\\.\\.", "\\."),
+    max_depth_m = as.numeric(max_depth_m)
+  )
+
+```
+```{r}
+store_edna$fknms_sample_logsheet_07_08_2021.xlsx
+# merge_by <- header %>%
+#   group_by(`names(temp)`) %>%
+# summarise(count = n()) %>%
+#   filter(count > 32) %$% 
+#   `names(temp)`
+
+mismatch <- t(janitor::compare_df_cols(store_edna, 
+                         return = "mismatch"))
+
+mismatch
+```
+```{r}
+
+
+# i = which(files$file == "fknms_sample_logsheet_08_2022.xlsx")
+# store_edna$fknms_sample_logsheet_10_2022.xlsx %>%
+#   filter(!is.na(vol_ml)) %>%
+#   mutate(
+#     max_depth_m = str_replace(max_depth_m, "\\.\\.", "\\."),
+#     max_depth_m = as.numeric(max_depth_m)
+#   )# %$% unique(max_depth_m)#%>%
+#   View()
+
+# temp
+
+# opens file outside of rstudio
+# shell.exec(files[1])
+
+```
+
+```{r}
+store_merg <- 
+  reduce(store_edna, full_join) %>%
+  filter(!is.na(mm_dd_yy) & !is.na(vol_ml)) %>%
+  mutate(time_gmt = hms::as_hms(time_gmt),
+         year     = year(mm_dd_yy),
+         month    = month(mm_dd_yy, label = TRUE),
+         day      = day(mm_dd_yy),
+         station  = str_to_upper(station),
+         .before  = station
+         ) %>%
+  fill(collector)  %>%
+  group_by(station) %>%
+  fill(lat, lon) %>%
+  ungroup()
+
+blank <- store_merg %>%
+  # filter(!is.na(mm_dd_yy) & !is.na(vol_ml)) %>%
+  filter(str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank")) %>%
+  mutate(time_gmt = hms::as_hms(time_gmt))
+
+store_merg <-
+  store_merg  %>%
+  filter(!(str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank"))) %>%
+  mutate(
+    cruise_id = case_when(
+        between(ymd(mm_dd_yy), ymd("2018-10-01"), ymd("2018-10-20")) ~ "WS18285",
+        TRUE ~ str_split(sample, pattern = "-", simplify = T)[,1]), 
+    .before = everything()
+  ) %>%
+  full_join(., blank) %>%
+  arrange(mm_dd_yy) %>%
+  fill(cruise_id) %>%
+  mutate(
+    depth_m = case_when(
+      str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank") ~ 0,
+      is.na(depth_m) ~ 1,
+      TRUE ~ depth_m),
+    sample = str_remove(sample, "\\*"),
+    replicate = str_sub(sample, -1L, -1L), 
+    replicate = if_else(str_detect(replicate, "(?i)[A-C1-6]"),
+                        replicate, NA_character_),
+    .after = sample
+  )
+
+
+
+for (i in 1:nrow(test)) {
+  View(test$data[[i]], test$cruise_id[i])
+}
+
+store_merg %>%
+write_csv(
+  paste0(here::here("data", "metadata", "edna_metadata"),
+        # time of save, so you don't overwrite
+        format(Sys.time(), '_%Y%m%d_%H%M%S'),
+        ".csv"),
+  na = ""
+  )
+
+
+read_csv(
+    here::here("data", "metadata", "edna_metadata_20220916_103458.csv"),
+)
+
+store_merg %>%
+  count(cruise_id)
+
+
+
+
+```
+```{r}
+names(store_merg)
+master_file <- here::here("data", "metadata") %>%
+  dir_ls(., regex = "master") 
+master <- master_file %>%
+  read_xlsx(., sheet = 1)
+
+{
+  names(store_merg) %>% print()
+cat("\n")
+names(master) %>% print()
+  }
+
+match_var <- c("station", "year", "month", "day", "Notes" = "notes", 
+               "long" = "lon", "lat" = "lat", "depth" = "depth_m", 
+               "Replicate" = "replicate", "filter type" = "filter_type")
+finals <- store_merg %>%
+  mutate(
+    filter_type = "sterivex",
+    across(c(everything(), -time_gmt, -vol_ml), as.character)) %>%
+  select(-sample_n) %>%
+  full_join(master, ., by = match_var) %>%
+  # slice(1000:nrow(finals))
+  relocate(mm_dd_yy, .before = year) %>%
+  relocate(time_gmt, .after = day) %>%
+  relocate(cruise_id, .before = 1) %>%
+  relocate(sample_id = sample, .after = station) %>%
+  relocate(vol_ml, .after = Replicate) %>%
+  relocate(max_depth_m, .after = depth) 
+
+finals %>%
+  xlsx::write.xlsx(.,
+    master_file, sheetName = "eDNA2", append = TRUE, showNA = FALSE
+  )
+  
+```
+
+```{r}
+
+# 
+# store_merg %>%
+#   filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
+#   # filter(sample_type != "CDOM", is.na(vol_ml))
+#   group_by(sample_type) %>%
+#   distinct() %>%
+#   summarise(total = n())
+#   
+# test <- store_merg %>%
+#   filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
+#   # filter(sample_type != "CDOM", is.na(vol_ml))
+#   group_by(sample_type) %>%
+#   distinct()
+# # %>%
+#   # summarise(total = n())
+# 
+# store_merg %>% 
+#   # arrange(date_mm_dd_yy)
+#   filter(date_mm_dd_yy <= as_date("2019-07-19")) %>%
+#   group_by(sample_type) %>%
+#   
+#   summarise(n = n())
+# 
+# 
+# 
+# store_merg %>%
+#   filter(sample_type == "Chl-a", 
+#          !is.na(vol_ml),
+#          date_mm_dd_yy != as_date("1899-12-31 00:00:00")
+#          ) %>%
+#   distinct(identifier, .keep_all = T) %>%
+#   arrange(date_mm_dd_yy)
+
+```
+
