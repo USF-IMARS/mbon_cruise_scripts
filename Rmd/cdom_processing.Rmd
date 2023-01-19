@@ -17,20 +17,17 @@ rstudioapi::selectDirectory()
 rstudioapi::selectFile()
 
 ```{r setup, include=FALSE}
-root <- rprojroot::find_rstudio_root_file()
 knitr::opts_chunk$set(echo = TRUE)
-library("ggplot2")
-library("tibble")
-library("tidyr")
-library("readr")
-library("purrr")
-library("dplyr")
-library("stringr")
-library("forcats")
-library("lubridate")
-library("glue")
-library("fs")
-library("magrittr")
+
+
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+)
+
+library("conflicted")
+
 # library("broom") # optional
 ```
 
@@ -46,13 +43,13 @@ subDir <-
       "Rmd",
       "scripts")
 
-fs::dir_create(path = paste0(root,"/",subDir))
+fs::dir_create(path = here(subDir))
 rm(subDir)
 ```
 
 
 ```{r}
-old_dir <- fs::dir_ls(paste0(root, "/old_idl/"))
+old_dir <- fs::dir_ls(here("old_idl"))
 for (i in 2:length(old_dir)) {
   cat("Folder:", old_dir[i])
   (cat("", gsub("\\.(txt|pro|jrn)$","", list.files(path = old_dir[i])), sep ="\n"))
@@ -189,7 +186,7 @@ cat(gsub("\\.m$","", list.files(path = old_dir[i])), sep ="\n")
 date_run <- "22MAY10"
 
 df_cdom <-
-  fs::dir_ls(paste0(root, "/data/raw/cdom/", date_run, "/"),
+  fs::dir_ls(here("data", "raw", "cdom", date_run),
              regexp = "\\.SP") %>%
   map_dfr(., ~ read_tsv(.x, skip = 86, col_names = F), .id = "file") %>%
   mutate(file = gsub("\\.SP$", "", basename(file))  %>%
@@ -198,7 +195,7 @@ df_cdom <-
 
 
 filename <-
-  fs::dir_ls(paste0(root, "/data/raw/cdom/", date_run, "/"),
+  fs::dir_ls(here("data", "raw", "cdom", date_run),
              regexp = "\\.SP") %>%
              str_sort()
 filename %>%
@@ -210,19 +207,22 @@ filename %>%
 ```
 ```{r metadata}
 file_match <-
-  fs::dir_ls(paste0(root, "/data/metadata/"), regexp = regex(str_to_lower("10MAY2022"))) %>%
-  readxl::read_xlsx(skip = 6, .name_repair = janitor::make_clean_names) %>%
+  fs::dir_ls(here("data", "metadata"), 
+             regexp = regex(str_to_lower("10MAY2022"))
+             ) %>%
+  readxl::read_xlsx(skip = 6, 
+                    .name_repair = janitor::make_clean_names) %>%
   select(sample_id, comments) %>%
   # mutate(scan1 = str_split(sample_id," \\+ ", simplify = T)[,1])
   separate(sample_id,
            c("scan1", "scan2"),
            sep = " \\+ ",
-           remove = F) %>%
+           remove = FALSE) %>%
   mutate(
     scan2 = str_c(substr(scan1, 1 , 5), scan2),
     cruise_id = case_when(
       str_detect(comments, "Milli-q")  ~ "blank",
-      TRUE ~ str_split(comments, " ", simplify = T)[, 1]
+      TRUE ~ str_split(comments, " ", simplify = TRUE)[, 1]
     )
   ) %>%
   pivot_longer(
@@ -430,7 +430,7 @@ txt <- glue("something {words}
        )
 
 
-file <- file(paste0(root,"outs.txt"))
+file <- file(here("outs.txt"))
 writeLines(txt, file)
 close(file)
 ```
