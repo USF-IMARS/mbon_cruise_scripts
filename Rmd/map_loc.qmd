@@ -131,18 +131,23 @@ fs::dir_create(path)
 if (!file.exists(here(path,"etopo1.nc"))) {
   message("Getting Topography Data")
   # ERDDAP method
-  etopo    <- info('etopo180')
+  # etopo    <- info('etopo180')
 
   # ERDDAP extract and save
-  griddap(etopo, latitude = exnt[3:4], longitude = exnt[1:2], stride = c(1,1), 
-          fields = 'altitude',
-          store = disk(path))
+  griddap(
+    info('etopo180'),
+    latitude  = exnt[3:4],
+    longitude = exnt[1:2],
+    stride    = c(1, 1),
+    fields    = 'altitude',
+    store     = disk(path)
+  )
   
   # Rename file 
   file.rename(fs::dir_ls(path, regexp = "\\.nc$"),
               here("data","map", "etopo1.nc"))
   
-  rm(etopo)
+  # rm(etopo)
 }
 
 coast         <- fs::dir_ls(path = path,
