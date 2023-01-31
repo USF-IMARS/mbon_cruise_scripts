@@ -6,7 +6,7 @@ output: html_document
 ---
 
 # TODO: format like merge_data.Rmd
-
+# Load Libraries
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -24,11 +24,11 @@ conflict_prefer("select", "dplyr")
 
 ```
 
-
+# Search files
 ```{r find-files}
 files <-
   dir_ls(here("data/metadata/WS_all/"),
-         regexp  = "^[^~]*\\.(xlsx|csv)$",
+         regexp  = "^[^~]*\\.(xlsx)$",
          recurse = TRUE) %>%
   tibble(files = ., 
          base  = basename(.)) %>%
@@ -40,116 +40,119 @@ files <-
 # files to be read
 files$base
 ```
-
-```{r}
-file_info <- list()
-# recal <- list()
-recal <- data.frame(file = NA, temp_sht = NA, sht_name = NA, row = NA, last_c = NA)
+# Extract sheet name and row to read
+```{r sheet-info}
+recal <- tibble(file = NA, sht_num = NA, row = NA, last_c = NA)
 
 for (i in seq(nrow(files))) {
-  # for (i in 1:5) {
+# for (i in 1) {
   
   # select sheet name with `field_logsheet`
   cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
   temp_sht <- excel_sheets(files$files[i]) 
-  sht_name <- which(str_detect(temp_sht, "field_"))
+  sht_num <- which(str_detect(temp_sht, "field_"))
   
-  if (is_empty(sht_name)) {
-    sht_name <- menu(temp_sht, 
+  if (is_empty(sht_num)) {
+    sht_num <- menu(temp_sht, 
                      title = glue(
                        "\n-----\n\n",
                        "Which sheet contains metadata?", 
                        "\n(0 for none)"))
   }
   
-  # # ----
-  # if (length(temp_sht[grepl("field_", temp_sht)]) > 0 ) {
-  #   sht_name <- which(grepl("field_", temp_sht))
-  # } else {
-  #   print(temp_sht)
-  #   sht_name <- readline("pick one of the sheets ") %>%
-  #     as.numeric()
-  # }
-   
+  # skip if no sheet name
+  if (sht_num == 0) {
+    recal <- add_row(recal,
+    tibble(file = files$files[i], sht_num = NA, row = NA, last_c = NA) )
+    next
+  }
   
-  # read sheet ----
-  temp <- read_excel(files$files[i],
-             # sheet = temp_sht[sht_name], 
-             sheet = sht_name, 
-             n_max = 5,
-             col_names = FALSE,
-             .name_repair = "unique_quiet") 
+  # read sheet 
+  temp <- read_excel(
+    files$files[i],
+    sheet        = sht_num, 
+    n_max        = 5,
+    col_names    = FALSE,
+    .name_repair = "unique_quiet") 
   
-  print(temp)
-
-  name <- files$files[i]
+  # name <- files$files[i]
   
-  row <- which(grepl("(?i)sample", temp), arr.ind = TRUE)[1]
+  # row number that contains headers
+  row <- which(apply(temp, 1, function(x) any(grepl("(?i)sample", x))))
   
-  if (is.na(row)) {
-    print(temp)
-    Sys.sleep(1)
-    row <- readline("which line is the header? ") %>%
-      as.numeric()
+  if (is_empty(row) || is.na(row)) {
+    View(temp)
+    row <- readline("Which line is the header? ") %>%
+           as.numeric()
+  }
+  
+  # skip if no row info
+  if (is_empty(row) || is.na(row)) {
+    recal <- 
+      add_row(recal, 
+              tibble(file    = files$files[i], 
+                     sht_num = sht_num, 
+                     row     = NA, 
+                     last_c  = NA))
+    next
     }
   
-  # if (grepl("(?i)sample", temp[1,1])) {
-  #    1
-  # } else {
-  #   row <- readline("which line is the header? ") %>%
-  #   as.numeric()
-  # } 
-  # 
-
-  
-  if (is.na(row)) next
-  
-  # TODO: add end column number
+  # get last column number
   last_c <- which(grepl("(?i)notes", temp[row,])) 
-  
-  
-  # file_info[[name]] <- as.character(temp[row,]) 
-  
-  recal[i,] <-  (cbind(file = files[i], temp_sht[sht_name], sht_name, row, last_c))
-   
+
+  recal <- 
+    add_row(
+      recal,
+      tibble(file = files$files[i], sht_num = sht_num, row = row, last_c = last_c)
+    )
 }
+
+files <- recal %>%
+  drop_na(everything()) %>%
+  left_join(files, by = c("file" = "files"))
 ```
 
 ```{r}
-na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
+# `NA` values to skip
+na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", "*",
              stringi::stri_dup("-", 1:20))
 
 header <- tibble(`names(temp)` = NA)
 store <- list()
-for (i in seq(files)) {
-  temp <- read_xlsx(
-    recal$file[i],
-    sheet = recal$temp_sht[i],
-    # n_max = 30,
-    skip = as.numeric(recal$row[i]) - 1,
-    .name_repair = janitor::make_clean_names,
-    na = na_skip
-  )   %>%
-  select(1:recal$last_c[i] %>% as.numeric()) %>%
 
-  select(-any_of(c("x", "wb", "ws", "x_2", "x_3", "x_4", "x_5",  "x_6",  "x_7", "x_8",
-                   "x_9", "nov",
-                   "x21338","x22022", "x22072",
-                   "x22141", "x22215", "max_depth", "depth_m" )
-                 )
-         )  %>%
+
+for (i in seq(nrow(files))) {
+  temp <- read_xlsx(
+    files$file[i],
+    sheet        = files$sht_num[i],
+    skip         = files$row[i] - 1,
+    range        = cell_cols(c(NA, files$last_c[i])),
+    .name_repair = janitor::make_clean_names,
+    na           = na_skip
+  ) %>%
+  
+  filter(str_detect(identifier, "WS|SV|WB")) %>%
+
+  # select(-any_of(c("x", "wb", "ws", "x_2", "x_3", "x_4", "x_5",  "x_6",  "x_7", "x_8",
+  #                  "x_9", "nov",
+  #                  "x21338","x22022", "x22072",
+  #                  "x22141", "x22215", "max_depth", "depth_m" )
+  #                )
+  #        )  %>%
+ 
   mutate(
-    across(where(is.character), ~ replace(., str_detect(., "--|\\*|Skipped"), NA)),
+    # across(where(is.character), ~ replace(., str_detect(., "--|\\*|Skipped"), NA)),
     vol_ml = replace(vol_ml,  str_detect(vol_ml, "-"), NA),
     vol_ml = str_replace_all(vol_ml, "~", "")
     ) %>%
-      type_convert() %>%
-    mutate(
+  type_convert() %>%
+  mutate(
       notes = as.character(notes)
-    )
-  
- 
-  if (basename(files[i]) == "fknms_sample_logsheet_OCT2017.xlsx") {
+    )  %>%
+    rename(any_of(c(sample_collection_time_gmt = "time_gmt")))
+}
+ typeof(temp$vol_ml) == "character" 
+  if (files$base[i] == "fknms_sample_logsheet_OCT2017.xlsx") {
     temp %<>%
     mutate(vol_ml = strsplit(as.character(vol_ml), "&")) %>%
       unnest(vol_ml) %>%
@@ -157,9 +160,12 @@ for (i in seq(files)) {
       type_convert()
   }
 
-  if (basename(files[i]) == "fknms_logsheet_OCT2018.xlsx") temp %<>%
-  rename("sample_collection_time_gmt" = time_gmt)
+  # if (basename(files[i]) == "fknms_logsheet_OCT2018.xlsx") temp %<>%
+  # rename("sample_collection_time_gmt" = time_gmt)
   
+tibble(time_gmt = 1) %>%
+  
+
   if (basename(files[i]) == "fknms_sample_logsheet_07_08_2021.xlsx") temp %<>% 
     replace_na(list(depth_m = 1))
 
