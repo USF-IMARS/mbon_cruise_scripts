@@ -8,93 +8,107 @@ output: html_document
 # TODO: format like merge_data.Rmd
 
 ```{r setup}
-library("ggplot2")
-library("tibble")
-library("tidyr")
-library("readr")
-library("purrr")
-library("dplyr")
-library("stringr")
-library("forcats")
-library("lubridate")
-library("glue")
-library("fs")
-library("magrittr")
-# library("broom") # optional
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  readxl
+)
 
-library("readxl")
+library("conflicted")
 
-
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
 
 ```
 
 
 ```{r find-files}
-root <- rprojroot::find_rstudio_root_file() 
+files <-
+  dir_ls(here("data/metadata/WS_all/"),
+         regexp  = "^[^~]*\\.(xlsx|csv)$",
+         recurse = TRUE) %>%
+  tibble(files = ., 
+         base  = basename(.)) %>%
 
-files <- fs::dir_ls(
-  paste0(root, "/data/metadata/WS_all/"),
-  regexp = "^[^~]*\\.(xlsx|csv)$",
-  recurse = T
-) 
+  # ignore some files
+  filter(str_detect(basename(files), "fknms_") &
+         !str_detect(files, "ignore"))
 
-# ignore some files
-# files <- files[!grepl("BB3|Digna|Schedule|Kelble", files)]
-files <- files[grepl("fknms_", basename(files))]
-files <- files[!grepl("ignore", basename(files))]
-
-# see files to be read
-files %>%
-  basename()
+# files to be read
+files$base
 ```
 
 ```{r}
-
 file_info <- list()
 # recal <- list()
 recal <- data.frame(file = NA, temp_sht = NA, sht_name = NA, row = NA, last_c = NA)
 
-for (i in seq(files)) {
+for (i in seq(nrow(files))) {
   # for (i in 1:5) {
   
-  print(basename(files[i]))
-  temp_sht <-
-    excel_sheets(files[i]) 
+  # select sheet name with `field_logsheet`
+  cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
+  temp_sht <- excel_sheets(files$files[i]) 
+  sht_name <- which(str_detect(temp_sht, "field_"))
   
-  if (length(temp_sht[grepl("field_", temp_sht)]) > 0 ) {
-    sht_name <- which(grepl("field_", temp_sht))
-  } else {
-    print(temp_sht)
-    sht_name <- readline("pick one of the sheets ") %>%
-      as.numeric()
+  if (is_empty(sht_name)) {
+    sht_name <- menu(temp_sht, 
+                     title = glue(
+                       "\n-----\n\n",
+                       "Which sheet contains metadata?", 
+                       "\n(0 for none)"))
   }
   
-  temp <- read_excel(files[i],
-             sheet = temp_sht[as.numeric(sht_name)], 
+  # # ----
+  # if (length(temp_sht[grepl("field_", temp_sht)]) > 0 ) {
+  #   sht_name <- which(grepl("field_", temp_sht))
+  # } else {
+  #   print(temp_sht)
+  #   sht_name <- readline("pick one of the sheets ") %>%
+  #     as.numeric()
+  # }
+   
+  
+  # read sheet ----
+  temp <- read_excel(files$files[i],
+             # sheet = temp_sht[sht_name], 
+             sheet = sht_name, 
              n_max = 5,
-             col_names = F) 
+             col_names = FALSE,
+             .name_repair = "unique_quiet") 
   
   print(temp)
 
-  name <- files[i]
-    
-  if (grepl("[sS]ample", temp[1,1])) {
-    row <- 1
-  } else {
-    row <- readline("which line is the header? ") %>%
-    as.numeric()
-  } 
+  name <- files$files[i]
   
+  row <- which(grepl("(?i)sample", temp), arr.ind = TRUE)[1]
+  
+  if (is.na(row)) {
+    print(temp)
+    Sys.sleep(1)
+    row <- readline("which line is the header? ") %>%
+      as.numeric()
+    }
+  
+  # if (grepl("(?i)sample", temp[1,1])) {
+  #    1
+  # } else {
+  #   row <- readline("which line is the header? ") %>%
+  #   as.numeric()
+  # } 
+  # 
 
   
   if (is.na(row)) next
   
-  if (!is.na(row)) {
-    # TODO: add end column number
-    last_c <- which(grepl("[nN]otes", temp[row,])) 
-  }
+  # TODO: add end column number
+  last_c <- which(grepl("(?i)notes", temp[row,])) 
   
-  file_info[[name]] <- as.character(temp[row,]) 
+  
+  # file_info[[name]] <- as.character(temp[row,]) 
   
   recal[i,] <-  (cbind(file = files[i], temp_sht[sht_name], sht_name, row, last_c))
    
