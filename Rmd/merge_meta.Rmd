@@ -446,42 +446,9 @@ files %>%
     station  = str_to_upper(station),
     .before  = station
     )
-  slice_tail(n = 752)
-# WS22022	2022	44	2022-01-24	1899-12-31 14:34:00	CAL5
-```
-
-```{r}
-# store_edna$fknms_sample_logsheet_07_08_2021.xlsx
-# # merge_by <- header %>%
-# #   group_by(`names(temp)`) %>%
-# # summarise(count = n()) %>%
-# #   filter(count > 32) %$% 
-# #   `names(temp)`
-# 
-# mismatch <- t(janitor::compare_df_cols(store_edna, 
-#                          return = "mismatch"))
-# 
-# mismatch
-```
-
-```{r}
-
-
-# i = which(files$file == "fknms_sample_logsheet_08_2022.xlsx")
-# store_edna$fknms_sample_logsheet_10_2022.xlsx %>%
-#   filter(!is.na(vol_ml)) %>%
-#   mutate(
-#     max_depth_m = str_replace(max_depth_m, "\\.\\.", "\\."),
-#     max_depth_m = as.numeric(max_depth_m)
-#   )# %$% unique(max_depth_m)#%>%
-#   View()
-
-# temp
-
-# opens file outside of rstudio
-# shell.exec(files[1])
 
 ```
+
 # ---- ----
 ```{r}
 store_merg <- 
