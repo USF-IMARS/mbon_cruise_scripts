@@ -22,35 +22,131 @@ library("conflicted")
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 
+# `NA` values to skip when reading `.xlsx.
+na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
+             "*", stringi::stri_dup("-", 1:20))
+
+# where to pull data from
+# "cloud" - cloud path ~/<box-location>/mbon_imars_cruises/
+# "local" - local path in this project, ~/data/metadata/
+locat <- "cloud" 
 ```
 
 # Search files
-```{r find-files}
-files <-
-  dir_ls(here("data/metadata/WS_all/"),
+## Cloud Directory
+To make searching faster, the first time you run this it will search the cloud
+directory location for the folder names with `~/<year>/<cruise>/<metadata>`.
+This will take a few minutes, but it will save in the root of this project. 
+
+When re-running, it will only look at previous `box_search`, so you may need to
+re-run if new folders are added.
+
+After the first time, you will get a variable called `cloud_dir`. You should 
+copy this into a `.Rprofile` so when you restart `R`, the path will be set.
+
+i.e. copy "cloud_dir <- `<path-to-box>/mbon_imars_cruises`" 
+*make sure to change `<path-to-box>` to the location on your computer.*
+```{r find-files-box}
+# folder path in cloud directory
+if (!file_exists(here("box_search.csv"))) {
+  # if need box_search.csv 
+  if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
+  box_search <- 
+  dir_ls(
+    here(cloud_dir, "years"),
+    regexp  = "metadata",
+    type    = "directory",
+    recurse = TRUE) %>%
+    tibble(folder = .)
+  
+  write_csv(box_search, here("box_search.csv"))
+} else {
+  box_search <- read_csv(here("box_search.csv"), show_col_types = FALSE)
+}
+
+files_all <- 
+  dir_ls(box_search$folder,
          regexp  = "^[^~]*\\.(xlsx)$",
          recurse = TRUE) %>%
-  tibble(files = ., 
+  tibble(file_path = .,
          base  = basename(.)) %>%
+  mutate(
+    cruise_id = str_replace(file_path, ".*cruises/[0-9]+/(.*)/m.*", "\\1"),
+    year = str_extract(file_path, "[0-9]{4}") %>%
+    as.numeric()
+  )
+
+files_filt <- files_all %>%
+         filter(str_detect(basename(file_path), "(?i)fknms_") &
+         !str_detect(file_path, "ignore"))
+
+# files_filt <- read_csv(here("file_path_orig.csv"))
+
+
+# files_filt <- anti_join(files_filt1, files_filt)
+
+```
+
+## Local Directory
+This is the location within this project that should be created when loading the
+first time.
+```{r find-files-local}
+files_local <-
+  dir_ls(here("data", "metadata"),
+         regexp  = "^[^~]*\\.(xlsx)$",
+         recurse = TRUE) %>%
+  tibble(file_path   = ., 
+         base    = basename(.)) %>%
 
   # ignore some files
-  filter(str_detect(basename(files), "fknms_") &
-         !str_detect(files, "ignore"))
+  filter(str_detect(basename(file_path), "fknms_") &
+         !str_detect(file_path, "ignore"))
 
 # files to be read
-files$base
+# files$base
 ```
+## Compare Local and Cloud
+Check the differences between the two to see if any discrepencies exists. 
+You should only need to use the `cloud_dir` location
+```{r compare}
+files_local$base %in% files_filt$base
+files_all$base %in% files_local$base
+
+anti_join(files_all, files_local, by = "base")
+anti_join(files_filt, files_local, by = "base")
+inner_join(files_filt, files_local, by = "base")
+
+full_join(files_filt, files_local, by = "base") %>%
+  arrange(year, base) %>%
+  filter(is.na(file_path.y)) 
+```
+
 # Extract sheet name and row to read
+Extracts sheet info by looking for prefix `field` or `Sheet1`
+- if none are found, it will ask which of the sheets it could be
+
+Extracts row info where data starts by looking for prefix `Sample`
+- if none are found, it will ask which row it could be
+
+Extracts how many columns to read in. This looks for either `notes` or 
+`collector` as the last column.
 ```{r sheet-info}
-recal <- tibble(file = NA, sht_num = NA, row = NA, last_c = NA)
+files <- switch(locat,
+  "cloud" = files_filt,
+  "local" = files_local
+)
+
+recal <- tibble()
 
 for (i in seq(nrow(files))) {
-# for (i in 1) {
-  
   # select sheet name with `field_logsheet`
   cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
-  temp_sht <- excel_sheets(files$files[i]) 
-  sht_num <- which(str_detect(temp_sht, "field_"))
+  temp_sht <- excel_sheets(files$file_path[i]) 
+  sht_num  <- which(str_detect(temp_sht, "field_"))
+
+  if (is_empty(sht_num)) {
+    sht_num <- which(str_detect(temp_sht, "Sheet1")) 
+  } 
   
   if (is_empty(sht_num)) {
     sht_num <- menu(temp_sht, 
@@ -62,21 +158,21 @@ for (i in seq(nrow(files))) {
   
   # skip if no sheet name
   if (sht_num == 0) {
-    recal <- add_row(recal,
-    tibble(file = files$files[i], sht_num = NA, row = NA, last_c = NA) )
+    recal <- 
+      bind_rows(
+        recal,
+        tibble(file_path = files$file_path[i]))
     next
   }
   
   # read sheet 
   temp <- read_excel(
-    files$files[i],
+    files$file_path[i],
     sheet        = sht_num, 
     n_max        = 5,
     col_names    = FALSE,
     .name_repair = "unique_quiet") 
-  
-  # name <- files$files[i]
-  
+
   # row number that contains headers
   row <- which(apply(temp, 1, function(x) any(grepl("(?i)sample", x))))
   
@@ -88,161 +184,525 @@ for (i in seq(nrow(files))) {
   
   # skip if no row info
   if (is_empty(row) || is.na(row)) {
-    recal <- 
-      add_row(recal, 
-              tibble(file    = files$files[i], 
-                     sht_num = sht_num, 
-                     row     = NA, 
-                     last_c  = NA))
+    recal <-
+      bind_rows(recal, 
+              tibble(file_path    = files$file_path[i], 
+                     sht_num = sht_num))
     next
     }
   
-  # get last column number
-  last_c <- which(grepl("(?i)notes", temp[row,])) 
-
+  # get last column to read
+  # either `notes` or `collector`
+  last_c <- which(grepl("(?i)notes|(?i)collector", temp[row,])) %>%
+            max()
+  
   recal <- 
-    add_row(
+    bind_rows(
       recal,
-      tibble(file = files$files[i], sht_num = sht_num, row = row, last_c = last_c)
+      tibble(
+        file_path = files$file_path[i],
+        sht_num = sht_num,
+        row     = row,
+        last_c  = last_c
+      )
     )
 }
 
+# joins recal and files
 files <- recal %>%
   drop_na(everything()) %>%
-  left_join(files, by = c("file" = "files"))
+  left_join(files, by = "file_path")
+
+rm(recal)
 ```
-
-```{r}
-# `NA` values to skip
-na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", "*",
-             stringi::stri_dup("-", 1:20))
-
-header <- tibble(`names(temp)` = NA)
-store <- list()
-
-
-for (i in seq(nrow(files))) {
-  temp <- read_xlsx(
-    files$file[i],
-    sheet        = files$sht_num[i],
-    skip         = files$row[i] - 1,
-    range        = cell_cols(c(NA, files$last_c[i])),
-    .name_repair = janitor::make_clean_names,
-    na           = na_skip
+# Read all data as strings and merge
+No filtering of data is done. It will remove all `NA`s that was specified above.
+```{r all-data-as-str}
+og_data_chr <- 
+  files %>%
+  mutate(
+    data = pmap(
+      list(file_path, sht_num, row, last_c), 
+      function(.x, .y, .z, .l) {
+        temp <- read_xlsx(
+          path         = .x,
+          sheet        = .y,
+          skip         = .z - 1,
+          range        = cell_cols(c(NA, .l)),
+          .name_repair = janitor::make_clean_names,
+          na           = na_skip,
+          col_types    = "text"
+          ) %>%
+          
+          # remove column
+          select(-any_of("time_filtered_24_00"))}
+    )
   ) %>%
   
-  filter(str_detect(identifier, "WS|SV|WB")) %>%
-
-  # select(-any_of(c("x", "wb", "ws", "x_2", "x_3", "x_4", "x_5",  "x_6",  "x_7", "x_8",
-  #                  "x_9", "nov",
-  #                  "x21338","x22022", "x22072",
-  #                  "x22141", "x22215", "max_depth", "depth_m" )
-  #                )
-  #        )  %>%
- 
-  mutate(
-    # across(where(is.character), ~ replace(., str_detect(., "--|\\*|Skipped"), NA)),
-    vol_ml = replace(vol_ml,  str_detect(vol_ml, "-"), NA),
-    vol_ml = str_replace_all(vol_ml, "~", "")
-    ) %>%
+  unnest(data) %>%
+  
+  # combine different time column names into one
+  unite(
+    "sample_collection_time_gmt",
+    c(sample_collection_time_gmt, time_gmt, time_sampled_24_00),
+    sep    = "",
+    na.rm  = TRUE,
+    remove = TRUE
+  )  %>%
+  
+  # convert to time by converting decimal (fraction of day in second) to HMS
+  # convert decmial to seconds then convert to time
+  # 24*60*60 = 86400 seconds in a day
+  # i.e. 0.4826388888888889 = 41700 seconds
+  # then hms::as_hms(41700) = 11:35:00
   type_convert() %>%
   mutate(
-      notes = as.character(notes)
-    )  %>%
-    rename(any_of(c(sample_collection_time_gmt = "time_gmt")))
-}
- typeof(temp$vol_ml) == "character" 
-  if (files$base[i] == "fknms_sample_logsheet_OCT2017.xlsx") {
-    temp %<>%
-    mutate(vol_ml = strsplit(as.character(vol_ml), "&")) %>%
-      unnest(vol_ml) %>%
-      mutate(vol_ml = str_trim(vol_ml)) %>%
-      type_convert()
-  }
+    sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt*24*60*60)
+  ) 
+```
+# Load data and correct formats if needed
+Loads all data and fixes column formatting to merge afterwards.
+This ignores potential NAs using any of 
+- "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", "*", or any 
+  number of "-"s (i.e "-", "--", etc)
+```{r load-data}
+files <-
+  files %>%
+  # filter(cruise_id == "WS20278") %>%
+  
+  mutate(
+    data = pmap(
+      list(file_path, sht_num, row, last_c), 
+      function(.x, .y, .z, .l) {
+        # load data
+        # select sheet, skip number of lines to sample 1, stop columns after
+        # `notes` or `collector`, remove NA values, clean names
+        temp <- read_xlsx(
+          path         = .x,
+          sheet        = .y,
+          skip         = .z - 1,
+          range        = cell_cols(c(NA, .l)),
+          .name_repair = janitor::make_clean_names,
+          na           = na_skip
+          ) %>%
+          
+          # fix time_gmt and time_sampled_24_00 to sample_collection_time_gmt
+          # fix sample_id to identifier
+          rename(any_of(
+            c(sample_collection_time_gmt = "time_gmt",
+              sample_collection_time_gmt = "sample_collection_time_hh_mm",
+              sample_collection_time_gmt = "sample_collection_time_edt", # TODO: need to correct to gmt
+              sample_collection_time_gmt = "time_sampled_24_00",
+              identifier = "sample_id"))) %>%
+          
+          # make sure the identifiers contain: FK, WS, SV or WB
+          filter(str_detect(identifier, "FK|WS|SV|WB")) %>%
+          
+          # if vol_mol contains - or ~, remove 
+          mutate(
+            vol_ml    = replace(vol_ml,  str_detect(vol_ml, "-"), NA),
+            vol_ml    = str_replace_all(vol_ml, "~", "")
+            ) %>%
+          
+          # try to convert to `numeric`
+          type_convert() %>%
+          
+          # make sure notes are strings
+          mutate(
+              notes = as.character(notes)
+            ) 
+        
+        # ==== fix issues related to few sheets 
+        # fix vol_ml if contains `&` to add two values
+        if (typeof(temp$vol_ml) == "character") {
+          temp <- temp %>%
+            mutate(
+              vol_ml = (str_split(vol_ml, " & ")),
+              vol_ml = map(vol_ml, ~ sum(as.numeric(.x)))) %>%
+            unnest(vol_ml) %>%
+            type_convert()
+          }
+        
+        # fix depth_m to remove any `*` or `..`, then convert to num
+        if (typeof(temp$depth_m) == "character") {
+          temp <- temp %>%
+            mutate(
+              depth_m = str_remove(depth_m, "(\\*)+"),
+              depth_m = str_replace(depth_m, "\\.\\.", "\\.")
+              ) %>%
+            type_convert()
+          }
+        
+        # fix max_depth to replace `flow through` to 0
+        if (typeof(temp$max_depth) == "character") {
+        temp <- mutate(temp,
+                       max_depth = str_replace(max_depth, "flo.*", "0")) %>%
+          type_convert()
+        }
+        
+        # fix date_mm_dd_yy when excel date is non-numeric
+        # i.e. error 08//01/2015 - encoded as string, all other values are 
+        # read as strings (i.e. `"48025"` as string instead of `48025` as num)
+        if (typeof(temp$date_mm_dd_yy) == "character") {
+          temp <- temp %>%
+            mutate(
+              date_mm_dd_yy = str_replace(date_mm_dd_yy, "//", "/"),
+              date_mm_dd_yy = map_chr(date_mm_dd_yy,
+                             function(.x) {
+                               if (!is.na(as.numeric(.x))) {
+                                 times <- as.numeric(.x) %>%
+                                   janitor::excel_numeric_to_date()
+                               } else {
+                                 # convert strings "8/1/2015" to date 
+                                 times <- anytime::anydate(.x)
+                               }
+                               return(as.character(times))
+                             }),
+              
+              # converts to correct format
+              date_mm_dd_yy = suppressWarnings(as.POSIXct(date_mm_dd_yy))
+            )
+        }
+        
+        # add date_time, 
+        # first, converting excel date_time to HMS
+        # i.e. 1899-01-01 12:15:34 UTC to 12:15:13
+        # then, add date and time
+        temp <- mutate(
+          temp,
+          sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+          date_time = date_mm_dd_yy + sample_collection_time_gmt,
+          .after = sample_collection_time_gmt) %>%
+          
+          # remover extract column if exists
+          select(-any_of("time_filtered_24_00")) %>%
+          
+          # fix date when entered as mm:dd:yy instead of mm/dd/yyyy
+          {if (nrow(filter(., date_mm_dd_yy > as_date("2015-01-01"))) < 1) {
+            mutate(., date_mm_dd_yy = as.character(date_mm_dd_yy), 
+             date_mm_dd_yy = str_replace(date_mm_dd_yy, ".* ", ""),
+             date_mm_dd_yy = str_replace_all(date_mm_dd_yy, ":", "/"),
+             date_mm_dd_yy = str_replace_all(date_mm_dd_yy, "(.*/.*/)", "\\120"),
+             date_mm_dd_yy = anytime::anydate(date_mm_dd_yy),
+             .before = 1)
+          } else {.}}
+        
+        return(temp)
+        }
+      )
+    )
+```
+# Check Mismatched
+Check which sheets and columns have different types from the rest so you can fix
+using the above code. 
 
-  # if (basename(files[i]) == "fknms_logsheet_OCT2018.xlsx") temp %<>%
-  # rename("sample_collection_time_gmt" = time_gmt)
-  
-tibble(time_gmt = 1) %>%
-  
-
-  if (basename(files[i]) == "fknms_sample_logsheet_07_08_2021.xlsx") temp %<>% 
-    replace_na(list(depth_m = 1))
-
-  
-  store$fknms_sample_logsheet_07_08_2021.xlsx %>%
-  replace_na(list(depth_m = 1))
-  
-  
-  name <- basename(files[i])
-  store[[name]] <- temp
-  
-  header <- bind_rows(header, as.data.frame(names(temp)))
-  
-}
-
-merge_by <- header %>%
-  group_by(`names(temp)`) %>%
-summarise(count = n()) %>%
-  filter(count > 32) %$% 
-  `names(temp)`
-
-mismatch <- t(janitor::compare_df_cols(store, 
-                         return = "mismatch"))
-                         
-                         
+Currently, as of `Feb 1st, 2023`, there are no mismatches.
+```{r mismatch}
+mismatch <- t(janitor::compare_df_cols(files$data, return = "mismatch"))        
+rownames(mismatch) <- c(NA, tools::file_path_sans_ext(files$base))
                          
 mismatch
 
-# TODO: add log stuff here to fix mismatches
+# examine issue
+# bad <- files %>%
+#   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %$%
+#   unique(<enter-column-mismatched>)  
+
+# checks if any dates are betfore 2015. This would show bad dates and will need
+# to be fixed
+# An error means no bad dates
+files %>%
+  unnest(data) %>%
+  filter(!is.na(vol_ml) & 
+         date_mm_dd_yy <= as_date("2015-01-01")) 
 ```
-```{r}
 
+# Summarise Results
+```{r unnest}
+# WS17030 - CDOM vol_ml = ran out of bottles; filter date/time
+# WS17282 - CDOM vol_ml = NA; messed up bottle number as well
+# SV18067 - CDOM vol_ml = NA, but contains date and time, missing time if not collected
+# SV18173 - no date/time if not collected
+# WS18120 - not date/time if not collected
+# WS18285 - CDOM as NA, missed station wont have date/time
+# WS19028 - not collected, no date/time
+# WS19119 - not collected, no date/time
+# WS19210 - not collected, no date/time
+# WS19266 - not collected, no date/time
+# WS19322 - not collected, no date/time
+# WS20006 - not collected, no date/time
+# WS21093 - couple collected, but no date/time
+# WB22215 - if not collected, date/time for samples will have 1899-12-31
+data_unnest <-
+  files %>%
+  unnest(data) %>% 
+  mutate(station = str_remove(station, "~"),
+         station = str_replace_all(station, " ", ""),
+         station = str_to_upper(station),
+         station = case_when(
+           str_detect(station, "9.69999") ~ "9.7",
+           str_detect(station, "9.80000") ~ "9.8",
+           TRUE ~ station)) %>%
+  select(-c(file_path:last_c)) %>%
+  # removes rows that contain no data encoded as `1899-12-31 00:00:00` or `NA`
+  # and vol_ml is `NA`
+  filter(
+    !( (date_mm_dd_yy < as_date("2015-01-01") | is.na(date_mm_dd_yy))
+      & is.na(vol_ml))
+    
+    # filter where sample_type (chl|hplc|cdom) has no vol and no date/time
+    & !(is.na(date_time) & is.na(vol_ml))) %>%
+  
+  group_by(cruise_id, station, depth_m) %>%
+  filter(!(
+    !is.na(notes) 
+    &
+      str_detect(notes, "skipped b/c low on amber vials")) 
+    & 
+      if_any(vol_ml, ~ !any(
+        str_detect(sample_type, "(?i)chl|hplc") 
+        & (is.na(.x) | .x == 0))) 
+    & 
+      !(!is.na(notes) 
+        & str_detect(
+          notes, 
+          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost")))
 
-# i = which(basename(files) == "fknms_sample_logsheet_12_2021.xlsx")
-store$fknms_logsheet_OCT2018.xlsx
-
-
-
+data_unnest %$% unique(station)
 ```
 
-```{r}
 
-store_merg <- reduce(store, full_join) %>%
-  filter(date_mm_dd_yy != as_date("1899-12-31 00:00:00"))
+```{r station-summary}
+data_summary <- data_unnest %>%
+  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml
+  )) %>%
+    select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
+    pivot_wider(
+    data         = .,
+    names_from   = c(sample_type), # category column(s) to pivot wide
+    values_from  = c(vol_ml), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names,
+    values_fn    = list(vol_ml = length)
+    ) %>%
+      ungroup()
 
-
-store_merg %>%
-  filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
-  # filter(sample_type != "CDOM", is.na(vol_ml))
-  group_by(sample_type) %>%
-  distinct() %>%
-  summarise(total = n())
-  
-test <- store_merg %>%
-  filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
-  # filter(sample_type != "CDOM", is.na(vol_ml))
-  group_by(sample_type) %>%
-  distinct()
-# %>%
-  # summarise(total = n())
-
-store_merg %>% 
-  # arrange(date_mm_dd_yy)
-  filter(date_mm_dd_yy <= as_date("2019-07-19")) %>%
-  group_by(sample_type) %>%
-  
-  summarise(n = n())
+data_summary
+```
 
 
+```{r cruise-summary}
+cruise_summary <- data_summary %>% 
+  # select(-(contains("milli"):last_col())) %>%
+  summarise(
+    .by  = cruise_id,
+    date = min(date_mm_dd_yy, na.rm = TRUE),
+    across(chl_a:cdom, sum, na.rm = TRUE)
+    ) %>%
+  mutate(
+    date   = as_date(date),
+    year   = year(date),
+    month = month(date),
+    .after = date) %>%
+  arrange(date) 
 
-store_merg %>%
-  filter(sample_type == "Chl-a", 
-         !is.na(vol_ml),
-         date_mm_dd_yy != as_date("1899-12-31 00:00:00")
+cruise_summary
+```
+
+
+```{r sample-progress}
+sample_progress <- data_unnest %>%
+  ungroup() %>%
+  transmute(
+    cruise_id,
+    station,
+    identifier, 
+    sample_type,
+    present_missing   = NA,
+    collection_date   = date_time, 
+    collected_by      = collector,
+    processed_date    = NA_Date_,
+    processed_by      = NA,
+    post_process_date = NA_Date_,
+    post_process_by   = NA,
+    submit_date       = NA_Date_,
+    submit_database   = NA,
+    submit_by         = NA
          ) %>%
-  distinct(identifier, .keep_all = T) %>%
-  arrange(date_mm_dd_yy)
+    group_by(sample_type) %>%
+    nest()
+
+
+# cruise_summary %>%
+#   mutate(
+#     chl_analyzed = glue("of {chl_a}"),
+#     hplc_analyzed = glue("of {hplc}"),
+#     cdom_analyzed = glue("of {cdom}"),
+#   )
+View(cruise_summary)
+```
+
+
+```{r save-inventory}
+list("cruise_summary"   = cruise_summary, 
+     "chl_progress"     = sample_progress$data[[1]],
+     "hplc_progress"    = sample_progress$data[[2]],
+     "cdom_progress"    = sample_progress$data[[3]],
+     "station_summary"  = data_summary,
+     "sample_meta_data" = data_unnest
+     ) %>%
+openxlsx::write.xlsx(., 
+                     file = here("imars_inventory_chl_hplc_cdom.xlsx"),)
+
+shell.exec(here("imars_inventory_chl_hplc_cdom.xlsx"))
+```
+
+
+
+```{r label}
+# # chl_2019 <- 
+#    data_unnest %>%
+#       # group_by(cruise_id, station, depth_m) %>%
+#     select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
+# 
+#     pivot_wider(
+#     data         = .,
+#     # id_cols      = c(), # *optional* vector of unaffected columns,
+#     names_from   = c(sample_type), # category column(s) to pivot wide
+#     values_from  = c(vol_ml), # value column(s) that hold data for each category column
+#     names_sep    = "_",
+#     names_repair = janitor::make_clean_names
+#     ) %>%
+#       View()
+#     
+# 
+# 
+# map2(.x = data_unnest$data,
+#      .y = data_unnest$year, 
+#      .f = ~ View(.x, title = .y))
+# map2(.x = files$data,
+#      .y = files$cruise_id, 
+#      .f = ~ View(.x, title = .y))
+# map(data_unnest$data, ~ unique(.x$cruise_id)  %>%
+#   print())
+# 
+# # 
+# data_unnest %>%
+# 
+#   filter(!(is.na(vol_ml) & is.na(lat) & is.na(lon) & is.na(date_mm_dd_yy))) %>%
+#   filter((is.na(vol_ml & is.na(date_mm_dd_yy)))) %>%
+#   select(-c(1:base)) %>%
+#   pivot_wider(
+#     data         = .,
+#     # id_cols      = c(), # *optional* vector of unaffected columns,
+#     names_from   = c(sample_type), # category column(s) to pivot wide
+#     values_from  = c(vol_ml), # value column(s) that hold data for each category column
+#     names_sep    = "_",
+#     names_repair = janitor::make_clean_names
+#     )
+#   
+  # count() %>%
+  # ungroup() %>%
+  # pivot_wider(
+  #   data         = .,
+  #   # id_cols      = c(), # *optional* vector of unaffected columns,
+  #   names_from   = c(sample_type), # category column(s) to pivot wide
+  #   values_from  = c(n), # value column(s) that hold data for each category column
+  #   names_sep    = "_",
+  #   names_repair = janitor::make_clean_names
+  #   )
+  # 
+  # data_unnest  %>%
+  # group_by(cruise_id, station, depth_m) %>%
+    # select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
+ # pivot_wider(
+ #    data         = .,
+ #    # id_cols      = c(), # *optional* vector of unaffected columns,
+ #    names_from   = c(sample_type), # category column(s) to pivot wide
+ #    values_from  = c(vol_ml), # value column(s) that hold data for each category column
+ #    names_sep    = "_",
+ #    names_repair = janitor::make_clean_names,
+ #    values_fn    = list(vol_ml = length)
+ #    ) %>%
+    # select(-c(millipore_e_dna:last_col())) %>%
+    # filter(
+    #   # if_any(chl_a:cdom, is.na) &
+    #   !(if_all(chl_a:cdom, is.na) & 
+    #     if_any(c(date_mm_dd_yy, sample_collection_time_gmt), is.na))
+    #   ) %>%
+    # ungroup() %>%
+    #     janitor::get_dupes(cruise_id, station)
+    # 
+data_unnest
+
+```
+```{r}
+# data_unnest  %>%
+#   filter(str_detect(sample_type, "(?i)chl"))
+# test <- files %>%
+#   select(-c(2:last_c)) %>%
+#   mutate(
+#     chl = map(data,
+#               function(.x) {
+#                 .x %>%
+#                   filter(str_detect(sample_type, "(?i)chl") &
+#                            !if_all(c(
+#                              date_mm_dd_yy, sample_collection_time_gmt), 
+#                            is.na))
+#               }),
+#     hplc = map(data,
+#                function(.x) {
+#                  .x %>% 
+#                    filter(str_detect(sample_type, "(?i)hplc") &
+#                            !if_all(c(
+#                              date_mm_dd_yy, sample_collection_time_gmt), 
+#                            is.na))
+#                }),
+#     cdom = map(data,
+#                function(.x) {
+#                  .x %>%
+#                    filter(str_detect(sample_type, "(?i)cdom")
+#                           ) %>%
+#                            relocate(vol_ml, .before = 1)
+#                })
+#   ) 
+
+```
+
+# TODO: delete
+```{r}
+
+
+# store_merg %>%
+#   filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
+#   # filter(sample_type != "CDOM", is.na(vol_ml))
+#   group_by(sample_type) %>%
+#   distinct() %>%
+#   summarise(total = n())
+#   
+# test <- store_merg %>%
+#   filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
+#   # filter(sample_type != "CDOM", is.na(vol_ml))
+#   group_by(sample_type) %>%
+#   distinct()
+# # %>%
+#   # summarise(total = n())
+# 
+# store_merg %>% 
+#   # arrange(date_mm_dd_yy)
+#   filter(date_mm_dd_yy <= as_date("2019-07-19")) %>%
+#   group_by(sample_type) %>%
+#   
+#   summarise(n = n())
+# 
+# 
+# 
+# store_merg %>%
+#   filter(sample_type == "Chl-a", 
+#          !is.na(vol_ml),
+#          ) %>%
+#   distinct(identifier, .keep_all = T) %>%
+#   arrange(date_mm_dd_yy)
 
 ```
 
