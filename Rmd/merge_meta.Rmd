@@ -209,7 +209,7 @@ files <- recal %>%
   drop_na(everything()) %>%
   left_join(files, by = "file_path")
 ```
-
+# ---- Read Files ----
 ```{r}
 files <-
   files %>%
@@ -316,9 +316,8 @@ files <-
 # files <- recal %>%
 #   drop_na(file) %>%
 #   left_join(files, ., by = "file")
-```
-# ---- Read Files and Fix Info ----
-```{r}
+
+# -- orignally separate chunks
 # # header <- tibble(`names(temp)` = NA)
 # store_edna <- list()
 # 
@@ -411,7 +410,7 @@ files <-
 #   )
 
 ```
-# ---- ----
+# ---- Check Mismatched Column Types or Names ----
 ```{r mismatch}
 mismatch <- t(janitor::compare_df_cols(files$data, return = "mismatch"))        
 rownames(mismatch) <- c(NA, tools::file_path_sans_ext(files$base))
@@ -431,9 +430,10 @@ mismatch
 #   filter(str_detect(file_path, ""<enter-bad-base-file-name>"")) %$% 
 #   shell.exec(file_path)
 ```
-`
+# ---- Unnest Metadata and Format ----
 ```{r}
-files %>%
+data_all <- 
+  files %>%
   select(-c(file_path:base)) %>%
   unnest(data) %>%
   filter(!if_all(mm_dd_yy:vol_ml, is.na) &
@@ -445,132 +445,168 @@ files %>%
     day      = day(mm_dd_yy),
     station  = str_to_upper(station),
     .before  = station
-    )
-
-```
-
-# ---- ----
-```{r}
-store_merg <- 
-  reduce(store_edna, full_join) %>%
-  filter(!is.na(mm_dd_yy) & !is.na(vol_ml)) %>%
-  
-  mutate(
-    time_gmt = hms::as_hms(time_gmt),
-    year     = year(mm_dd_yy),
-    month    = month(mm_dd_yy, label = TRUE),
-    day      = day(mm_dd_yy),
-    station  = str_to_upper(station),
-    .before  = station
     ) %>%
-  fill(collector)  %>%
-  group_by(station) %>%
-  fill(lat, lon) %>%
-  ungroup()
-
-blank <- store_merg %>%
-  # filter(!is.na(mm_dd_yy) & !is.na(vol_ml)) %>%
-  filter(str_detect(sample, "(?i)blank") | 
-           str_detect(station, "(?i)blank")) %>%
-  
-  mutate(time_gmt = hms::as_hms(time_gmt))
-
-store_merg <-
-  store_merg  %>%
-  filter(!(str_detect(sample, "(?i)blank") | 
-             str_detect(station, "(?i)blank"))) %>%
-  
   mutate(
-    cruise_id = case_when(
-        between(ymd(mm_dd_yy), ymd("2018-10-01"), ymd("2018-10-20")) ~ "WS18285",
-        TRUE ~ str_split(sample, pattern = "-", simplify = T)[,1]), 
-    .before = everything()
-  ) %>%
-  
-  full_join(., blank) %>%
-  arrange(mm_dd_yy) %>%
-  fill(cruise_id) %>%
-  mutate(
-    depth_m = case_when(
-      str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank") ~ 0,
+    depth_m   = case_when(
+      str_detect(sample, "(?i)blank") 
+      | str_detect(station, "(?i)blank") ~ 0,
       is.na(depth_m) ~ 1,
       TRUE ~ depth_m),
-    sample = str_remove(sample, "\\*"),
-    replicate = str_sub(sample, -1L, -1L), 
-    replicate = if_else(str_detect(replicate, "(?i)[A-C1-6]"),
-                        replicate, NA_character_),
-    .after = sample
-  )
+    sample    = str_remove(sample, "\\*"),
+    replicate = str_extract(sample, "(?i)[a-c]$|[1-6]$"), 
+    replicate = str_to_upper(replicate),
+    filter_type = "sterivex",
+    .after    = sample
+  ) 
 
-
-
-for (i in 1:nrow(test)) {
-  View(test$data[[i]], test$cruise_id[i])
-}
-
+# save current sheet
 if (FALSE) {
   store_merg %>%
   write_csv(
-    paste0(here::here("data", "metadata", "edna_metadata"),
+    here("data", "metadata", 
+         glue("edna_metadata",
           # time of save, so you don't overwrite
           format(Sys.time(), '_%Y%m%d_%H%M%S'),
-          ".csv"),
+          ".csv")),
     na = ""
     )
 }
-
-
-read_csv(
-    here::here("data", "metadata", "edna_metadata_20220916_103458.csv"),
-)
-
-store_merg %>%
-  count(cruise_id)
-
-
-
-
 ```
-# ---- ----
+
+# Probably Delete
+```{r todo-delete2}
+# store_merg <- 
+  # reduce(store_edna, full_join) %>%
+  # filter(!is.na(mm_dd_yy) & !is.na(vol_ml)) %>%
+  
+  # mutate(
+  #   time_gmt = hms::as_hms(time_gmt),
+  #   year     = year(mm_dd_yy),
+  #   month    = month(mm_dd_yy, label = TRUE),
+  #   day      = day(mm_dd_yy),
+  #   station  = str_to_upper(station),
+  #   .before  = station
+  #   ) %>%
+  # fill(collector)  %>%
+  # group_by(station) %>%
+  # fill(lat, lon) %>%
+  # ungroup()
+# 
+# blank <- store_merg %>%
+#   # filter(!is.na(mm_dd_yy) & !is.na(vol_ml)) %>%
+#   filter(str_detect(sample, "(?i)blank") | 
+#            str_detect(station, "(?i)blank")) %>%
+#   
+#   mutate(time_gmt = hms::as_hms(time_gmt))
+# 
+# store_merg <-
+#   store_merg  %>%
+#   filter(!(str_detect(sample, "(?i)blank") | 
+#              str_detect(station, "(?i)blank"))) %>%
+#   
+#   mutate(
+#     cruise_id = case_when(
+#         between(ymd(mm_dd_yy), ymd("2018-10-01"), ymd("2018-10-20")) ~ "WS18285",
+#         TRUE ~ str_split(sample, pattern = "-", simplify = TRUE)[,1]), 
+#     .before = everything()
+#   ) %>%
+#   
+#   full_join(., blank) %>%
+#   arrange(mm_dd_yy) %>%
+#   fill(cruise_id) %>%
+  # mutate(
+  #   depth_m = case_when(
+  #     str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank") ~ 0,
+  #     is.na(depth_m) ~ 1,
+  #     TRUE ~ depth_m),
+  #   sample = str_remove(sample, "\\*"),
+  #   replicate = str_sub(sample, -1L, -1L), 
+  #   replicate = if_else(str_detect(replicate, "(?i)[A-C1-6]"),
+  #                       replicate, NA_character_),
+  #   .after = sample
+  # )
+
+# for (i in 1:nrow(test)) {
+#   View(test$data[[i]], test$cruise_id[i])
+# }
+
+# if (FALSE) {
+#   store_merg %>%
+#   write_csv(
+#     paste0(here::here("data", "metadata", "edna_metadata"),
+#           # time of save, so you don't overwrite
+#           format(Sys.time(), '_%Y%m%d_%H%M%S'),
+#           ".csv"),
+#     na = ""
+#     )
+# }
+# 
+# 
+# read_csv(
+#     here::here("data", "metadata", "edna_metadata_20220916_103458.csv"),
+# )
+# 
+# store_merg %>%
+#   count(cruise_id)
+```
+# ---- Merge to Enrique's Format ----
 ```{r}
-names(store_merg)
-master_file <- here::here("data", "metadata") %>%
-  dir_ls(., regex = "master_up-to-2022") 
-master <- master_file[1] %>%
-  read_xlsx(., sheet = 1)
+master_file <-
+suppressWarnings(master <- 
+  here("data", "metadata") %>%
+  dir_ls(., regex = "master_up-to-2022") %>%
+  read_xlsx(., 
+            sheet = "eDNA2",
+            .name_repair = "unique_quiet"))
+
 
 {
-  names(store_merg) %>% print()
-cat("\n")
-names(master) %>% print()
-  }
+  cat("\nData:\n")
+  cat(names(data_all), sep = ", ")
+  cat("\n\nMaster:\n")
+  cat(names(master), sep = ", ")
+}
 
-match_var <- c("station", "year", "month", "day", "Notes" = "notes", 
-               "long" = "lon", "lat" = "lat", "depth" = "depth_m", 
-               "Replicate" = "replicate", "filter type" = "filter_type")
-finals <- store_merg %>%
+finals <- 
+  data_all %>%
   mutate(
-    filter_type = "sterivex",
-    across(c(everything(), -time_gmt, -vol_ml), as.character)) %>%
+    across(c(everything(), 
+             -time_gmt, 
+             -vol_ml), 
+           as.character)) %>%
   select(-sample_n) %>%
-  full_join(master, ., by = match_var) %>%
-  # slice(1000:nrow(finals))
-  relocate(mm_dd_yy, .before = year) %>%
-  relocate(time_gmt, .after = day) %>%
-  relocate(cruise_id, .before = 1) %>%
-  relocate(sample_id = sample, .after = station) %>%
-  relocate(vol_ml, .after = Replicate) %>%
-  relocate(max_depth_m, .after = depth) 
+  
+  # rename to fit master
+  rename(
+    "Notes"       = "notes",
+    "sample_id"   = "sample",
+    "long"        = "lon",
+    "lat"         = "lat",
+    "depth"       = "depth_m",
+    "Replicate"   = "replicate",
+    "filter type" = "filter_type"
+  ) 
+
+finals <- bind_rows(master, finals)
 
 if (FALSE) {
   finals %>%
   xlsx::write.xlsx(.,
-    master_file, sheetName = "eDNA2", append = TRUE, showNA = FALSE
+    here("data", "metadata", glue("master_up-to-",
+                                  sort(finals$mm_dd_yy, 
+                                       decreasing = TRUE)[1] %>%
+                                    as_date() %>%
+                                    format("%b-%Y"), 
+                                  ".xlsx")), 
+    sheetName = "eDNA2", 
+    append    = TRUE, 
+    showNA    = FALSE,
+    row.names = TRUE
   )
 }
 ```
 
-```{r}
+```{r delete-idk}
 
 # 
 # store_merg %>%
@@ -606,88 +642,88 @@ if (FALSE) {
 #   arrange(date_mm_dd_yy)
 
 ```
-# ---- ----
+# ---- Dec 2022 and Jan 2023 ----
 ```{r}
-meta <-
-  here(cloud_dir, "years", c("2022", "2023"))  %>%
-  fs::dir_ls(
-  recurse = TRUE,
-  regexp = "sample.*(12_2022|01_2023)"
-) %>%
-  tibble(files = .) %>%
-  filter(!str_detect(files, "ignore")) %>%
-  mutate(
-    base = basename(files),
-    cruise_id = str_extract(files, "WS[0-9]{5}"),
-    info = map(files,
-               ~ read_xlsx(.x,
-                           .name_repair = janitor::make_clean_names,
-                           sheet = "eDNA",
-                           na = c(na_skip, ":"),
-                           # col_types = c("mm_dd_yy" = "date")
-                           # range = cell_cols(c(NA, "notes"))
-                           )  %>%
-                    select(-c(x:last_col())) %>%
-                    filter(!if_all(1:3, is.na) &
-                           !if_all(c(vol_ml, lat, lon), is.na)) #%>%
-                    # mutate(mm_dd_yy = janitor::excel_numeric_to_date(mm_dd_yy))
-               )
-  ) %>%
-  unnest(info)
-
-
-c("cruise_id", "station", "sample_id", "Extraction_no", "DNA_extr_kit", "mm_dd_yy", "year", "month", "day", "time_gmt", "lat", "long", "depth", "max_depth_m", "Replicate", "vol_ml", "filter type", "DNA_conc_ng_ul", "12s_sequ", "16S_sequ", "18S_sequ", "COI_sequ", "28S_sequ", "Date extracted", "Notes", "Manuscript", "collector")
+# meta <-
+#   here(cloud_dir, "years", c("2022", "2023"))  %>%
+#   fs::dir_ls(
+#   recurse = TRUE,
+#   regexp = "sample.*(12_2022|01_2023)"
+# ) %>%
+#   tibble(files = .) %>%
+#   filter(!str_detect(files, "ignore")) %>%
+#   mutate(
+#     base = basename(files),
+#     cruise_id = str_extract(files, "WS[0-9]{5}"),
+#     info = map(files,
+#                ~ read_xlsx(.x,
+#                            .name_repair = janitor::make_clean_names,
+#                            sheet = "eDNA",
+#                            na = c(na_skip, ":"),
+#                            # col_types = c("mm_dd_yy" = "date")
+#                            # range = cell_cols(c(NA, "notes"))
+#                            )  %>%
+#                     select(-c(x:last_col())) %>%
+#                     filter(!if_all(1:3, is.na) &
+#                            !if_all(c(vol_ml, lat, lon), is.na)) #%>%
+#                     # mutate(mm_dd_yy = janitor::excel_numeric_to_date(mm_dd_yy))
+#                )
+#   ) %>%
+#   unnest(info)
+# 
+# 
+# c("cruise_id", "station", "sample_id", "Extraction_no", "DNA_extr_kit", "mm_dd_yy", "year", "month", "day", "time_gmt", "lat", "long", "depth", "max_depth_m", "Replicate", "vol_ml", "filter type", "DNA_conc_ng_ul", "12s_sequ", "16S_sequ", "18S_sequ", "COI_sequ", "28S_sequ", "Date extracted", "Notes", "Manuscript", "collector")
 ```
 
 ```{r}
-match_var <- c("station", "year", "month", "day", "Notes" = "notes", 
-               "long" = "lon", "lat" = "lat", "depth" = "depth_m", 
-               "Replicate" = "replicate", "filter type" = "filter_type")
-
-names(meta)
-names(master)
- finals <- 
-  meta %>%
-  select(-c(1:2)) %>%
-    rename("max_depth_m" = max_depth) %>%
-    
-     mutate(
-    depth_m = case_when(
-      str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank") ~ 0,
-      is.na(depth_m) ~ 1,
-      TRUE ~ depth_m),
-    sample = str_remove(sample, "\\*"),
-    replicate = str_sub(sample, -1L, -1L), 
-    replicate = if_else(str_detect(replicate, "(?i)[A-C1-6]"),
-                        replicate, NA_character_),
-    .after = sample
-  ) %>%
-  mutate( 
-    time_gmt = hms::as_hms(time_gmt),
-    year = year(mm_dd_yy),
-    month    = month(mm_dd_yy, label = TRUE),
-    day      = day(mm_dd_yy),
-    station  = str_to_upper(station),
-    .after = mm_dd_yy
-    ) %>%
-      
-  
-  mutate(
-    filter_type = "sterivex",
-    across(c(everything(), -time_gmt, -vol_ml), as.character)) %>%
-  select(-sample_n) %>%
-  full_join(master, ., by = match_var) %>%
-  # slice(1000:nrow(finals))
-  relocate(mm_dd_yy, .before = year) %>%
-  relocate(time_gmt, .after = day) %>%
-  relocate(cruise_id, .before = 1) %>%
-  relocate(sample_id = sample, .after = station) %>%
-  relocate(vol_ml, .after = Replicate) %>%
-  relocate(max_depth_m, .after = depth) %>%
-  filter(
-    (str_detect(year, "2022") & str_detect(month, "Dec") )|
-    (str_detect(year, "2023") & str_detect(month, "Jan")) 
-  ) 
+# match_var <- c("station", "year", "month", "day", "Notes" = "notes", 
+#                "long" = "lon", "lat" = "lat", "depth" = "depth_m", 
+#                "Replicate" = "replicate", "filter type" = "filter_type")
+# 
+# names(meta)
+# names(master)
+#  finals <- 
+#   meta %>%
+#   select(-c(1:2)) %>%
+#     rename("max_depth_m" = max_depth) %>%
+#     
+#      mutate(
+#     depth_m = case_when(
+#       str_detect(sample, "(?i)blank") | str_detect(station, "(?i)blank") ~ 0,
+#       is.na(depth_m) ~ 1,
+#       TRUE ~ depth_m),
+#     sample = str_remove(sample, "\\*"),
+#     replicate = str_sub(sample, -1L, -1L), 
+#     replicate = if_else(str_detect(replicate, "(?i)[A-C1-6]"),
+#                         replicate, NA_character_),
+#     .after = sample
+#   ) %>%
+#   mutate( 
+#     time_gmt = hms::as_hms(time_gmt),
+#     year = year(mm_dd_yy),
+#     month    = month(mm_dd_yy, label = TRUE),
+#     day      = day(mm_dd_yy),
+#     station  = str_to_upper(station),
+#     .after = mm_dd_yy
+#     ) %>%
+#       
+#   
+#   mutate(
+#     filter_type = "sterivex",
+#     across(c(everything(), -time_gmt, -vol_ml), as.character)) %>%
+#   select(-sample_n) %>%
+#   full_join(master, ., by = match_var) %>%
+#   # slice(1000:nrow(finals))
+#   relocate(mm_dd_yy, .before = year) %>%
+#   relocate(time_gmt, .after = day) %>%
+#   relocate(cruise_id, .before = 1) %>%
+#   relocate(sample_id = sample, .after = station) %>%
+#   relocate(vol_ml, .after = Replicate) %>%
+#   relocate(max_depth_m, .after = depth) %>%
+#   filter(
+#     (str_detect(year, "2022") & str_detect(month, "Dec") )|
+#     (str_detect(year, "2023") & str_detect(month, "Jan")) 
+#   ) 
 ```
 
 
