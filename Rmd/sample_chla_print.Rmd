@@ -1,0 +1,49 @@
+---
+title: "Print Cruise"
+author: "Sebastian DiGeronimo"
+date: "2023-02-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+```{r}
+cruise <- "WS19266"
+dir.create(here("data", "print"))
+meta <- 
+  dir_ls(here(cloud_dir), 
+         regexp = "imars_inventory_chl_hplc_cdom") %>%
+  read_xlsx(sheet = "chl_progress") %>%
+  filter(str_detect(cruise_id, cruise)) %>%
+  select(3, 2, 5, 6) %>%
+  mutate(
+    present = NA_character_,
+    absent  = NA_character_,
+    maybe   = NA_character_
+  )
+
+sink(here("data", "print", glue("{cruise}_pres_abs.csv")))
+ 
+cat(paste(cruise, "\n\n"))
+write.csv(meta, row.names = FALSE, na = "")
+
+sink()
+  
+shell.exec(here("data", "print", glue("{cruise}_pres_abs.csv")))
+```
+
