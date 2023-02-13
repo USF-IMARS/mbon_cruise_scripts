@@ -7,3 +7,7 @@
 # ignore IDL methods
 old_idl/*
 data/**
+*xlsx
+*csv
+*.m
+*pptx
