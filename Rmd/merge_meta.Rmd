@@ -13,7 +13,7 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  readxl
+  readxl, hms
 )
 
 library("conflicted")
@@ -24,42 +24,10 @@ conflict_prefer("select", "dplyr")
 # `NA` values to skip when reading `.xlsx.
 na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
              "*", stringi::stri_dup("-", 1:20))
-
-# where to pull data from
-# "cloud" - cloud path ~/<box-location>/mbon_imars_cruises/
-# "local" - local path in this project, ~/data/metadata/
-
-```
-
-# ---- Create Directories in Box with apad, cdom, and metadata ----
-```{r}
-# inventory <- ("C:/Users/spd19/OneDrive/Documents/College/IMaRS/HPLC Data and documentation/Inventory.xlsx") %>%
-#   readxl::read_xlsx() %>%
-#   select(cruise = `Cruise ID`) %>%
-#   drop_na() %>%
-#   mutate(
-#   cruise = str_replace(cruise, " \\(279\\)", ""),
-#   year = str_extract(cruise, "[0-9]{2}"),
-#   year = str_c("20", year)
-#   )
-# 
-# directs <- glue::glue("C:/Users/spd19/Box/mbon_imars_cruises/{inventory$year}/{inventory$cruise}/"
-#            ) 
-# 
-# glue("{directs}CDOM") %>%
-#              fs::dir_create()
-# 
-# glue("{directs}apad") %>%
-#              fs::dir_create()
-# 
-# glue("{directs}CDOM") %>%
-#              fs::dir_create()
-# 
-# "C:/Users/spd19/Desktop/"
 ```
 
 # ---- Search Box for FKNMS Logsheets ----
-```{r}
+```{r search-fknms}
 # folder paths in cloud directory
 if (!file_exists(here("box_search.csv"))) {
   # if need box_search.csv 
@@ -73,14 +41,13 @@ if (!file_exists(here("box_search.csv"))) {
     tibble(folder = .) %>%
     filter(!str_detect(folder, "train"))
 } else {
-  # select if alraedy exists
+  # read cloud directory search
   box_search <- read_csv(here("box_search.csv"), 
                          show_col_types = FALSE)
 }
 
 # find all file names with log in it
 files_all <- 
-  
   dir_ls(box_search$folder,
          regexp  = "^[^~]*\\.(xlsx)$",
          recurse = TRUE) %>%
@@ -94,8 +61,9 @@ files_all <-
          year = str_extract(file_path, "[0-9]{4}"),
          year = as.numeric(year)
     )
- 
-# filter files after 2017, not 2019, `ignore` file, any without fknms
+
+# filter files after 2017, and not 2019 because this is when I started
+# remove `ignore` file, and any without `fknms` in the name
 files_filt <-
   files_all %>%
   filter(str_detect(basename(file_path), "fknms_") &
@@ -104,7 +72,7 @@ files_filt <-
          !str_detect(file_path, "ignore|blank"))
 ```
 # ---- Read Sheet Info ----
-```{r}
+```{r read-meta-info}
 files <- files_filt
 
 recal <- tibble()
@@ -187,12 +155,16 @@ for (i in seq(nrow(files))) {
 }
 
 # joins recal and files
-files <- recal %>%
+files <- 
+  recal %>%
+  # drop row if no sheet exists in the file
   drop_na(everything()) %>%
+  
+  # join with original info
   left_join(files, by = "file_path")
 ```
 # ---- Read Files ----
-```{r}
+```{r read-meta-sheets}
 files <-
   files %>%
   mutate(
@@ -214,7 +186,8 @@ files <-
             notes = as.character(notes)
           ) 
         
-        if (isTRUE(any(str_detect(temp, "Did not take any")))) {
+        # filter out if sheet contained "did not take any"
+        if (isTRUE(any(str_detect(temp, "(?i)Did not take any")))) {
           temp <- filter(temp, str_detect(notes, "(?i)did not"))
         }
         
@@ -222,11 +195,12 @@ files <-
       }
     )
   )
-
-
-
 ```
 # ---- Check Mismatched Column Types or Names ----
+This will show the column that have a different type than what it should be. The
+issue arises when the column if of type "character" vs "numeric", "date", etc. 
+The ones that are diferent from "logical" vs "numeric" are fine because 
+"logical" can be converted to numeric as either a `1` or a `0`.
 ```{r mismatch}
 mismatch <- t(janitor::compare_df_cols(files$data, return = "mismatch"))        
 rownames(mismatch) <- c(NA, tools::file_path_sans_ext(files$base))
@@ -237,25 +211,26 @@ mismatch
 # # might be problematic
 # # bad <- 
 # (files %>%
-#   filter(str_detect(file_path, ""<enter-bad-base-file-name>"")) %>%
+#   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %>%
 #   pull(data))[[1]]  %$% 
 #   unique(<variable-to-check>) 
 # 
 # # open file in excel if on windows?
 # files %>%
-#   filter(str_detect(file_path, ""<enter-bad-base-file-name>"")) %$% 
+#   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %$% 
 #   shell.exec(file_path)
 ```
+
 # ---- Unnest Metadata and Format ----
 ```{r unnest-meta}
 data_all <- 
   files %>%
   select(-c(file_path:base)) %>%
   unnest(data) %>%
-  filter(!if_all(mm_dd_yy:vol_ml, is.na) &
-         mm_dd_yy > as_date("2015-01-01")) %>%
+  filter(!if_all(mm_dd_yy:vol_ml, is.na) 
+         & mm_dd_yy > as_date("2015-01-01")) %>%
   mutate(
-    time_gmt = hms::as_hms(time_gmt),
+    time_gmt = as_hms(time_gmt),
     year     = year(mm_dd_yy),
     month    = month(mm_dd_yy, label = TRUE),
     day      = day(mm_dd_yy),
@@ -263,21 +238,21 @@ data_all <-
     .before  = station
     ) %>%
   mutate(
-    depth_m   = case_when(
+    depth_m     = case_when(
       str_detect(sample, "(?i)blank") 
       | str_detect(station, "(?i)blank") ~ 0,
       is.na(depth_m) ~ 1,
       TRUE ~ depth_m),
-    sample    = str_remove(sample, "\\*"),
-    replicate = str_extract(sample, "(?i)[a-c]$|[1-6]$"), 
-    replicate = str_to_upper(replicate),
+    sample      = str_remove(sample, "\\*"),
+    replicate   = str_extract(sample, "(?i)[a-c]$|[1-6]$"), 
+    replicate   = str_to_upper(replicate),
     filter_type = "sterivex",
-    .after    = sample
+    .after      = sample
   ) 
 
 # save current sheet
 if (FALSE) {
-  store_merg %>%
+  data_all %>%
   write_csv(
     here("data", "metadata", 
          glue("edna_metadata",
@@ -290,7 +265,7 @@ if (FALSE) {
 ```
 
 # ---- Merge to Enrique's Format ----
-```{r}
+```{r convert-to-enrique}
 master_file <-
 suppressWarnings(master <- 
   here("data", "metadata") %>%
@@ -345,9 +320,9 @@ if (FALSE) {
   )
 }
 ```
-# ---- Dec 2022 and Jan 2023 ----
+# ---- Added Dec 2022 and Jan 2023 Cruise ----
 # KEEP for now!!!
-```{r}
+```{r cruise-specific}
 # meta <-
 #   here(cloud_dir, "years", c("2022", "2023"))  %>%
 #   fs::dir_ls(
@@ -377,9 +352,7 @@ if (FALSE) {
 # 
 # 
 # c("cruise_id", "station", "sample_id", "Extraction_no", "DNA_extr_kit", "mm_dd_yy", "year", "month", "day", "time_gmt", "lat", "long", "depth", "max_depth_m", "Replicate", "vol_ml", "filter type", "DNA_conc_ng_ul", "12s_sequ", "16S_sequ", "18S_sequ", "COI_sequ", "28S_sequ", "Date extracted", "Notes", "Manuscript", "collector")
-```
 
-```{r}
 # match_var <- c("station", "year", "month", "day", "Notes" = "notes", 
 #                "long" = "lon", "lat" = "lat", "depth" = "depth_m", 
 #                "Replicate" = "replicate", "filter type" = "filter_type")
