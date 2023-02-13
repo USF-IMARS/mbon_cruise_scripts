@@ -6,7 +6,7 @@ output: html_document
 ---
 
 # TODO: format like merge_data.Rmd
-# Load Libraries
+# ---- Load Libraries ----
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -32,7 +32,7 @@ na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow",
 locat <- "cloud" 
 ```
 
-# Search files
+# ---- Search files ----
 ## Cloud Directory
 To make searching faster, the first time you run this it will search the cloud
 directory location for the folder names with `~/<year>/<cruise>/<metadata>`.
@@ -121,7 +121,7 @@ full_join(files_filt, files_local, by = "base") %>%
   filter(is.na(file_path.y)) 
 ```
 
-# Extract sheet name and row to read
+# ---- Extract sheet name and row to read ----
 Extracts sheet info by looking for prefix `field` or `Sheet1`
 - if none are found, it will ask which of the sheets it could be
 
@@ -215,7 +215,7 @@ files <- recal %>%
 
 rm(recal)
 ```
-# Read all data as strings and merge
+# ---- Read all data as strings and merge ----
 No filtering of data is done. It will remove all `NA`s that was specified above.
 ```{r all-data-as-str}
 og_data_chr <- 
@@ -260,7 +260,7 @@ og_data_chr <-
     sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt*24*60*60)
   ) 
 ```
-# Load data and correct formats if needed
+# ---- Load data and correct formats if needed ----
 Loads all data and fixes column formatting to merge afterwards.
 This ignores potential NAs using any of 
 - "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", "*", or any 
@@ -392,7 +392,7 @@ files <-
       )
     )
 ```
-# Check Mismatched
+# ---- Check Mismatched ----
 Check which sheets and columns have different types from the rest so you can fix
 using the above code. 
 
@@ -403,10 +403,18 @@ rownames(mismatch) <- c(NA, tools::file_path_sans_ext(files$base))
                          
 mismatch
 
-# examine issue
-# bad <- files %>%
-#   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %$%
-#   unique(<enter-column-mismatched>)  
+# # examine issue columns by entering the name of the file and the column that 
+# # might be problematic
+# # bad <- 
+# (files %>%
+#   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %>%
+#   pull(data))[[1]]  %$% 
+#   unique(<variable-to-check>) 
+# 
+# # open file in excel if on windows?
+# files %>%
+#   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %$% 
+#   shell.exec(file_path)
 
 # checks if any dates are betfore 2015. This would show bad dates and will need
 # to be fixed
@@ -417,7 +425,7 @@ files %>%
          date_mm_dd_yy <= as_date("2015-01-01")) 
 ```
 
-# Summarise Results
+# ---- Summarise Results ----
 ```{r unnest}
 # WS17030 - CDOM vol_ml = ran out of bottles; filter date/time
 # WS17282 - CDOM vol_ml = NA; messed up bottle number as well
@@ -636,75 +644,8 @@ shell.exec(here("imars_inventory_chl_hplc_cdom.xlsx"))
 data_unnest
 
 ```
-```{r}
-# data_unnest  %>%
-#   filter(str_detect(sample_type, "(?i)chl"))
-# test <- files %>%
-#   select(-c(2:last_c)) %>%
-#   mutate(
-#     chl = map(data,
-#               function(.x) {
-#                 .x %>%
-#                   filter(str_detect(sample_type, "(?i)chl") &
-#                            !if_all(c(
-#                              date_mm_dd_yy, sample_collection_time_gmt), 
-#                            is.na))
-#               }),
-#     hplc = map(data,
-#                function(.x) {
-#                  .x %>% 
-#                    filter(str_detect(sample_type, "(?i)hplc") &
-#                            !if_all(c(
-#                              date_mm_dd_yy, sample_collection_time_gmt), 
-#                            is.na))
-#                }),
-#     cdom = map(data,
-#                function(.x) {
-#                  .x %>%
-#                    filter(str_detect(sample_type, "(?i)cdom")
-#                           ) %>%
-#                            relocate(vol_ml, .before = 1)
-#                })
-#   ) 
-
-```
-
-# TODO: delete
-```{r}
 
 
-# store_merg %>%
-#   filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
-#   # filter(sample_type != "CDOM", is.na(vol_ml))
-#   group_by(sample_type) %>%
-#   distinct() %>%
-#   summarise(total = n())
-#   
-# test <- store_merg %>%
-#   filter(!is.na(date_mm_dd_yy), !is.na(sample_collection_time_gmt)) %>%
-#   # filter(sample_type != "CDOM", is.na(vol_ml))
-#   group_by(sample_type) %>%
-#   distinct()
-# # %>%
-#   # summarise(total = n())
-# 
-# store_merg %>% 
-#   # arrange(date_mm_dd_yy)
-#   filter(date_mm_dd_yy <= as_date("2019-07-19")) %>%
-#   group_by(sample_type) %>%
-#   
-#   summarise(n = n())
-# 
-# 
-# 
-# store_merg %>%
-#   filter(sample_type == "Chl-a", 
-#          !is.na(vol_ml),
-#          ) %>%
-#   distinct(identifier, .keep_all = T) %>%
-#   arrange(date_mm_dd_yy)
-
-```
 
 ```{r}
 source("../scripts/log_file_changes.R")
