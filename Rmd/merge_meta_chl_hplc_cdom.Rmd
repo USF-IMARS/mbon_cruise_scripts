@@ -647,12 +647,12 @@ data_unnest
 
 
 
-```{r}
-source("../scripts/log_file_changes.R")
-startup()
-current_log()
-log4r_info(verbose = FALSE)
-
-read.delim("../data_change_logfile.txt")
+```{r log-section}
+# source(here("scripts/log_file_changes.R"))
+# startup()
+# current_log()
+# log4r_info(verbose = FALSE)
+# 
+# read.delim("../data_change_logfile.txt")
 ```
 
