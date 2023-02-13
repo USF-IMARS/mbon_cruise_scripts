@@ -13,7 +13,7 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  
+  readxl
 )
 
 library("conflicted")
