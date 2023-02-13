@@ -79,12 +79,6 @@ files_all <-
 files_filt <- files_all %>%
          filter(str_detect(basename(file_path), "(?i)fknms_") &
          !str_detect(file_path, "ignore"))
-
-# files_filt <- read_csv(here("file_path_orig.csv"))
-
-
-# files_filt <- anti_join(files_filt1, files_filt)
-
 ```
 
 ## Local Directory
@@ -101,9 +95,6 @@ files_local <-
   # ignore some files
   filter(str_detect(basename(file_path), "fknms_") &
          !str_detect(file_path, "ignore"))
-
-# files to be read
-# files$base
 ```
 ## Compare Local and Cloud
 Check the differences between the two to see if any discrepencies exists. 
@@ -112,11 +103,11 @@ You should only need to use the `cloud_dir` location
 files_local$base %in% files_filt$base
 files_all$base %in% files_local$base
 
-anti_join(files_all, files_local, by = "base")
-anti_join(files_filt, files_local, by = "base")
+anti_join(files_all, files_local,   by = "base")
+anti_join(files_filt, files_local,  by = "base")
 inner_join(files_filt, files_local, by = "base")
 
-full_join(files_filt, files_local, by = "base") %>%
+full_join(files_filt, files_local,  by = "base") %>%
   arrange(year, base) %>%
   filter(is.na(file_path.y)) 
 ```
@@ -291,7 +282,8 @@ files <-
           rename(any_of(
             c(sample_collection_time_gmt = "time_gmt",
               sample_collection_time_gmt = "sample_collection_time_hh_mm",
-              sample_collection_time_gmt = "sample_collection_time_edt", # TODO: need to correct to gmt
+              # TODO: need to correct to gmt ----
+              sample_collection_time_gmt = "sample_collection_time_edt", 
               sample_collection_time_gmt = "time_sampled_24_00",
               identifier = "sample_id"))) %>%
           
@@ -379,7 +371,8 @@ files <-
           
           # fix date when entered as mm:dd:yy instead of mm/dd/yyyy
           {if (nrow(filter(., date_mm_dd_yy > as_date("2015-01-01"))) < 1) {
-            mutate(., date_mm_dd_yy = as.character(date_mm_dd_yy), 
+            mutate(., 
+             date_mm_dd_yy = as.character(date_mm_dd_yy), 
              date_mm_dd_yy = str_replace(date_mm_dd_yy, ".* ", ""),
              date_mm_dd_yy = str_replace_all(date_mm_dd_yy, ":", "/"),
              date_mm_dd_yy = str_replace_all(date_mm_dd_yy, "(.*/.*/)", "\\120"),
@@ -427,20 +420,6 @@ files %>%
 
 # ---- Summarise Results ----
 ```{r unnest}
-# WS17030 - CDOM vol_ml = ran out of bottles; filter date/time
-# WS17282 - CDOM vol_ml = NA; messed up bottle number as well
-# SV18067 - CDOM vol_ml = NA, but contains date and time, missing time if not collected
-# SV18173 - no date/time if not collected
-# WS18120 - not date/time if not collected
-# WS18285 - CDOM as NA, missed station wont have date/time
-# WS19028 - not collected, no date/time
-# WS19119 - not collected, no date/time
-# WS19210 - not collected, no date/time
-# WS19266 - not collected, no date/time
-# WS19322 - not collected, no date/time
-# WS20006 - not collected, no date/time
-# WS21093 - couple collected, but no date/time
-# WB22215 - if not collected, date/time for samples will have 1899-12-31
 data_unnest <-
   files %>%
   unnest(data) %>% 
@@ -452,9 +431,10 @@ data_unnest <-
            str_detect(station, "9.80000") ~ "9.8",
            TRUE ~ station)) %>%
   select(-c(file_path:last_c)) %>%
-  # removes rows that contain no data encoded as `1899-12-31 00:00:00` or `NA`
-  # and vol_ml is `NA`
+  
   filter(
+     # removes rows that contain no data encoded as `1899-12-31 00:00:00` or `NA`
+     # and vol_ml is `NA`
     !( (date_mm_dd_yy < as_date("2015-01-01") | is.na(date_mm_dd_yy))
       & is.na(vol_ml))
     
@@ -481,9 +461,10 @@ data_unnest %$% unique(station)
 
 
 ```{r station-summary}
-data_summary <- data_unnest %>%
-  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml
-  )) %>%
+data_summary <- 
+  data_unnest %>%
+  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
+  ) %>%
     select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
     pivot_wider(
     data         = .,
@@ -500,8 +481,8 @@ data_summary
 
 
 ```{r cruise-summary}
-cruise_summary <- data_summary %>% 
-  # select(-(contains("milli"):last_col())) %>%
+cruise_summary <- 
+  data_summary %>% 
   summarise(
     .by  = cruise_id,
     date = min(date_mm_dd_yy, na.rm = TRUE),
@@ -510,7 +491,7 @@ cruise_summary <- data_summary %>%
   mutate(
     date   = as_date(date),
     year   = year(date),
-    month = month(date),
+    month  = month(date),
     .after = date) %>%
   arrange(date) 
 
@@ -641,7 +622,7 @@ shell.exec(here("imars_inventory_chl_hplc_cdom.xlsx"))
     # ungroup() %>%
     #     janitor::get_dupes(cruise_id, station)
     # 
-data_unnest
+# data_unnest
 
 ```
 
