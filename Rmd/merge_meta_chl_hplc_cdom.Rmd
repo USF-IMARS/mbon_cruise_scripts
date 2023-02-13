@@ -541,7 +541,7 @@ list("cruise_summary"   = cruise_summary,
      "sample_meta_data" = data_unnest
      ) %>%
 openxlsx::write.xlsx(., 
-                     file = here("imars_inventory_chl_hplc_cdom.xlsx"),)
+                     file = here("imars_inventory_chl_hplc_cdom.xlsx"))
 
 shell.exec(here("imars_inventory_chl_hplc_cdom.xlsx"))
 ```
