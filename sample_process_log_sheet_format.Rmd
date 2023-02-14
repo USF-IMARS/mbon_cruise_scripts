@@ -1,0 +1,481 @@
+---
+title: "Sample Process Log Sheet"
+author: "Sebastian DiGeronimo"
+date: "2023-02-13"
+output: html_document
+---
+# ---- Load Libraries ----
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  openxlsx
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+
+# cruise <- "WS21338"
+cruise <- "WS16319"
+
+sht_nm <- c("metadata", "Chl-a")
+```
+```{r calibration}
+cal <- tibble(
+  cal_date         = as_date("2022-04-29"),
+  no_acid_slop     = 0.17441,
+  no_acid_y_int    = -0.501753918982416,
+  cal_no_acid_low  = 27.32,
+  cal_no_acid_high = 200.39,
+)
+```
+
+```{r }
+file_examp <- here() %>%
+  dir_ls(regexp = "2021_12")
+
+meta_all <- suppressWarnings(dir_ls(here(cloud_dir), 
+                          regexp = "imars_inventory_chl_hplc_cdom") %>%
+                   readxl::read_xlsx(sheet = "sample_meta_data")
+                   ) 
+```
+## Styles
+```{r styles}
+# styl_date     <- createStyle(numFmt = "DATE")
+# sty_time      <- createStyle(numFmt = "hh:mm")
+# styl_col1     <- createStyle(fgFill = "#FDE9D9")
+# styl_col2     <- createStyle(fgFill = "#DCE6F1")
+# styl_col3     <- createStyle(fontName       = "Arial",
+#                              fontSize       = 22,
+#                              fontColour     = "white",
+#                              textDecoration = "bold",
+#                              border         = "TopBottomLeftRight",
+#                              fgFill         = "#948A54",
+#                              halign         = "center")
+# styl_col4     <- createStyle(
+#                              fgFill = "#DDD9C4",
+#                              halign = "center")
+# 
+# styl_border   <- createStyle(border      = "Right", 
+#                              borderStyle = "thin")
+# styl_brd_bot  <- createStyle(border      = "bottom", 
+#                              borderStyle = "thin")
+# 
+# 
+# styl_brd_head <- createStyle(border         = "bottom", 
+#                              borderStyle    = "thin",
+#                              textDecoration = "bold",
+#                              halign         = "center",
+#                              wrapText       = TRUE)
+# 
+# 
+# styl_align     <- createStyle(halign = "center")
+# 
+# 
+# styl_brd_dash  <- createStyle(border      = "right", 
+#                               borderStyle = "dotted")
+
+sstyles <-
+  list(
+      styl_date     = createStyle(numFmt = "DATE"),
+      styl_time     = createStyle(numFmt = "hh:mm"),
+      styl_col1     = createStyle(fgFill = "#FDE9D9"),
+      styl_col2     = createStyle(fgFill = "#DCE6F1"),
+      styl_col3     = createStyle(fontName        = "Arial",
+                                   fontSize       = 22,
+                                   fontColour     = "white",
+                                   textDecoration = "bold",
+                                   border         = "TopBottomLeftRight",
+                                   fgFill         = "#948A54",
+                                   halign         = "center"),
+      styl_col4     = createStyle(
+                                   fgFill = "#DDD9C4",
+                                   halign = "center"),
+      styl_border   = createStyle(border       = "Right", 
+                                   borderStyle = "thin"),
+      styl_brd_bot  = createStyle(border       = "bottom", 
+                                   borderStyle = "thin"),
+      styl_brd_head = createStyle(border          = "bottom", 
+                                   borderStyle    = "thin",
+                                   textDecoration = "bold",
+                                   halign         = "center",
+                                   wrapText       = TRUE),
+      styl_align     = createStyle(halign = "center"),
+      styl_brd_dash  = createStyle(border      = "right", 
+                                   borderStyle = "dotted")
+) 
+
+```
+
+# ---- Metadata Sheet Formatting ----
+## Read Info
+```{r read-info}
+meta <-
+  meta_all %>%
+  filter(str_detect(cruise_id, cruise)) %>%
+  select(-1, -sample_number) %>%
+  mutate(sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt)) %>%
+  filter(!str_detect(sample_type, "HPLC")) %>%
+  select(
+    date_mm_dd_yy,                                
+    sample_collection_time_gmt,
+    lat,
+    lon,
+    max_depth,
+    depth_m,
+    station,
+    identifier,
+    sample_type) %>%
+
+  pivot_wider(
+    names_from   = sample_type, 
+    values_from  = identifier,
+    values_fn    = list,
+    names_repair = janitor::make_clean_names
+    ) %>%
+  unnest(c(chl_a, cdom)) %>%
+  group_by(station, depth_m) %>%
+  mutate(cdom = replace(cdom, duplicated(cdom), NA)) %>%
+  ungroup() %>%
+  transmute(
+    "Date (UTC)"         = date_mm_dd_yy,                                
+    "Time (UTC)"         = sample_collection_time_gmt,
+    "Latitude (deg. N)"  = lat,
+    "Longitude (deg. W)" = lon,
+    "Bottom Depth (m)"   = max_depth,
+    "Sample Depth (m)"   = depth_m,
+    "Station ID"         = station,
+    "Instrument"         = "PElam850+",
+    "Sample ID"          = chl_a,
+    "CDOM Sample ID"     = cdom
+    ) %>%
+  mutate(
+    "ap,d(λ) process date"                       = NA_Date_,
+    "Instrument"                                 =  "PElam850+",
+    "ap(λ) filename (*.Sample.Raw*)"             = NA_character_,
+    "ad(λ) filename (*.Sample.Raw*)"             = NA_character_,
+    "CDOM process date"                          = NA_Date_,
+    "Instrument "                                =  "PElam850+",
+    "aCDOM(λ) filename, Rep. #1 (*.Sample.Raw*)" = NA_character_,
+    "aCDOM(λ) filename, Rep. #2 (*.Sample.Raw*)" = NA_character_,
+    "aCDOM(λ) filename, Rep. #3 (*.Sample.Raw*)" = NA_character_,
+    "Comments"                                   = NA_character_
+  ) %>%
+  relocate("ap,d(λ) process date", 
+           .before = Instrument) %>%
+  relocate("CDOM Sample ID", 
+           .after = "Instrument ")
+
+meta
+```
+
+## Create Workbook
+```{r workbook}
+# ---- Create Worksheet ----
+wb <- createWorkbook(
+               creator = "Sebastian Di Geronimo", 
+               title = glue("{cruise} Process Log"))
+
+# ---- add meta data ----
+addWorksheet(wb, sheetName = sht_nm[1])
+
+writeData(wb, sheet = sht_nm[1], startCol = 1, startRow = 1, x = meta,
+          headerStyle = sstyles$styl_brd_head)
+
+writeData(wb, sheet = sht_nm[1], startCol = "H", startRow = 1, x = meta[,8:12],
+          headerStyle = sstyles$styl_col1)
+
+writeData(wb, sheet = sht_nm[1], startCol = "M", startRow = 1, x = meta[,13:18],
+          headerStyle = sstyles$styl_col2)
+
+writeData(wb, sheet = sht_nm[1], startCol = "S", startRow = 1, x = meta[, 19],
+          headerStyle = sstyles$styl_brd_head)
+
+setRowHeights(wb, sheet = sht_nm[1], rows = 1, heights = 73.2)
+setColWidths(wb, sheet = sht_nm[1], cols = "S", widths = 39.56)
+
+# ---- style ----
+options(openxlsx.dateFormat = "mm/dd/yy")
+addStyle(wb, sht_nm[1],
+         style      = sstyles$styl_date,
+         rows       = 1:(nrow(meta) + 1),
+         cols       = 1,
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+addStyle(wb, sht_nm[1],
+         style      = sstyles$styl_time,
+         rows       = 1:nrow(meta) + 1,
+         cols       = 2,
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+
+addStyle(wb, 
+         sheet      = sht_nm[1], 
+         style      = sstyles$styl_col1,
+         cols       = 8:12,
+         rows       = 1:nrow(meta) + 1,
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+addStyle(wb, 
+         sheet      = sht_nm[1], 
+         style      = sstyles$styl_col2,
+         cols       = 13:18,
+         rows       = 1:nrow(meta) + 1,
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+addStyle(wb, 
+         sheet      = sht_nm[1], 
+         style      = sstyles$styl_border,
+         cols       = c("G", "L", "S", "R"),
+         rows       = 1:(nrow(meta) + 1),
+         gridExpand = TRUE, 
+         stack      = TRUE)
+
+addStyle(wb, 
+         sheet      = sht_nm[1], 
+         style      = sstyles$styl_brd_bot,
+         cols       = 1:19,
+         rows       = nrow(meta) + 1,
+         gridExpand = TRUE, 
+         stack      = TRUE)
+
+addStyle(wb, 
+         sheet      = sht_nm[1], 
+         style      = sstyles$styl_align,
+         cols       = 1:19,
+         rows       = 1:nrow(meta) + 1,
+         gridExpand = TRUE, 
+         stack      = TRUE)
+```
+
+
+# ---- Chl-a Process Log ----
+```{r chl-a}
+chl_a <-
+  meta_all %>%
+  filter(str_detect(cruise_id, cruise)) %>%
+  select(-1, -sample_number) %>%
+  mutate(sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt)) %>%
+  filter(str_detect(sample_type, "Chl-a")) %>%
+  select(
+    date_mm_dd_yy, sample_collection_time_gmt, lat, lon, max_depth, depth_m, 
+    station, identifier, vol_ml)  %>%
+  transmute(
+    "Date (UTC)"         = date_mm_dd_yy,                                
+    "Time (UTC)"         = sample_collection_time_gmt,
+    "Latitude (deg. N)"  = lat,
+    "Longitude (deg. W)" = lon,
+    "Bottom Depth (m)"   = max_depth,
+    "Sample Depth (m)"   = depth_m,
+    "Station ID"         = station,
+    "Sample ID"          = identifier,
+    "Volume seawater (ml)" = vol_ml
+    ) %>%
+  mutate(
+    "Process date"                 = NA_Date_,
+    "Volume methanol (ml)"         = NA_real_,
+    "'No Acid' Rb"                 = NA_real_,
+    "Fluorometer Calibration date" = cal$cal_date,
+    "No Acid' blank"               = NA_real_,
+    "'No Acid' Slope"              = cal$no_acid_slop,
+    "'No Acid' y-int"              = cal$no_acid_y_int,
+    "Cal. 'No Acid' Low"           = cal$cal_no_acid_low, 
+    "'No Acid' Low"                = NA_real_,               
+    "Cal. 'No Acid' High"          = cal$cal_no_acid_high,
+    "'No Acid' High"               = NA_real_,
+    "'No Acid' ratio"              = NA_real_,
+    "[Chl a] (mg m^-3)"            = NA_real_, 
+    "AVG [Chl a] (mg m^-3)"        = NA_real_, 
+    "STDEV [Chl a] (mg m^-3)"      = NA_real_,
+    "Comments"                     = NA_character_
+) %>%
+  relocate("Process date", .after = "Sample ID")
+
+
+```
+
+## -- Formulas for Chlorophyll-a --
+```{r chl-a-formulas}
+# =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
+no_acid_ratio <- paste0(
+  "IF(", paste0("R", 1:nrow(chl_a) + 3), ">0,((", paste0("Q", 1:nrow(chl_a) + 3), 
+  "/", paste0("R", 1:nrow(chl_a) + 3), ")+(", paste0("S", 1:nrow(chl_a) + 3), 
+  "/", paste0("T", 1:nrow(chl_a) + 3), "))/2,-999)")
+
+# V
+# =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999)
+chla_conc <- 
+  paste0("+IF(", paste0("L", 1:nrow(chl_a) + 3),">0,(", 
+         paste0("O", 1:nrow(chl_a) + 3),"*((",paste0("L", 1:nrow(chl_a) + 3),
+         "-",paste0("N", 1:nrow(chl_a) + 3),")*",paste0("U", 1:nrow(chl_a) + 3),
+         ")+",paste0("P", 1:nrow(chl_a) + 3),")*",paste0("K", 1:nrow(chl_a) + 3),
+         "/",paste0("J", 1:nrow(chl_a) + 3),",-999)")
+
+formulas <- 
+tibble(
+  # W
+  # =AVERAGE(V4:V5)
+  avg = paste0("AVERAGE(",paste0("V", seq(1, (nrow(chl_a)), 2) + 3), ":",
+               paste0("V", seq(1, (nrow(chl_a)), 2) + 4),")"),
+  # X
+  # =STDEV(V4:V5)
+  stdev = paste0("STDEV(",
+                 paste0("V", seq(1, (nrow(chl_a)), 2) + 3), ":", 
+                 paste0("V", seq(1, (nrow(chl_a)), 2) + 4),")"),
+  )  %>%
+  bind_rows(tibble(avg = rep(NA, nrow(chl_a) / 2))) %>%
+  mutate(rows = rep(1:(nrow(chl_a) / 2), 2)) %>%
+  arrange(rows, !is.na(avg), avg) %>%
+  select(-rows) %>%
+  mutate( 
+    # col U 
+    no_acid_ratio = no_acid_ratio,
+    # col V
+    chla_conc = chla_conc) 
+
+rm(no_acid_ratio, chla_conc)
+```
+
+## -- Chlor-a Sheet --
+```{r}
+# comments
+comm <- 
+  list(
+    fluor     = createComment(
+      "*Jen*: Fluoresence Reading of the Sample (RFU)",
+      author  = "Jen", visible = FALSE),
+    blank     = createComment(
+      "*Jen*: Fluorescence reading for 100% methanol 'blank'",
+      author  = "Jen", visible = FALSE),
+    low_read  = createComment(
+      "*Jen*: Report average of all 'low' readings collected that day.",
+      author  = "Jen", visible = FALSE),
+    high_read = createComment(
+      "*Jen*: Report average of all 'high' readings collected that day.", 
+      author  = "Jen", visible = FALSE)
+    )
+# --- Create Worksheet ----
+# wb <- loadWorkbook(file_examp)
+addWorksheet(wb, sheetName = sht_nm[2])
+
+# large header name
+mergeCells(wb, sht_nm[2], cols = 9:24, rows = 1)
+writeData(wb, sht_nm[2], "Trilogy Fluorometer", startCol = 9, startRow = 1, 
+          colNames = FALSE)
+addStyle(wb, sht_nm[2], rows = 1, cols = 9:24, stack = TRUE, style = sstyles$styl_col3)
+
+# small header name
+mergeCells(wb, sht_nm[2], cols = 9:12,  rows = 2)
+mergeCells(wb, sht_nm[2], cols = 13:16, rows = 2)
+mergeCells(wb, sht_nm[2], cols = 17:21, rows = 2)
+mergeCells(wb, sht_nm[2], cols = 22:24, rows = 2)
+
+						
+
+writeData(wb, sht_nm[2], "Secondary Solid Standard", 
+          startCol = 17, startRow = 2, colNames = FALSE)
+writeData(wb, sht_nm[2], "Welschmeyer (no acid)", 
+          startCol = 22, startRow = 2, colNames = FALSE)
+
+
+# data
+writeData(wb, sheet = sht_nm[2], startCol = 1, startRow = 3, x = chl_a,
+          headerStyle = sstyles$styl_brd_head)
+
+options(openxlsx.dateFormat = "mm/dd/yy")
+addStyle(wb, sht_nm[2],
+         style      = sstyles$styl_date,
+         rows       = 3:(nrow(meta) + 3),
+         cols       = 1,
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+addStyle(wb, sht_nm[2],
+         style      = sstyles$styl_date,
+         rows       = 3:(nrow(meta) + 3),
+         cols       = "M",
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+addStyle(wb, sht_nm[2],
+         style      = sstyles$styl_time,
+         rows       = 3:(nrow(meta) + 3),
+         cols       = 2,
+         gridExpand = TRUE,
+         stack      = TRUE)
+
+
+
+addStyle(wb, sht_nm[2], rows = 2:(nrow(chl_a) + 3), cols = 9:24, stack = TRUE,
+         style = sstyles$styl_col4, gridExpand = TRUE)
+
+addStyle(wb, sht_nm[2], rows = 2:(nrow(chl_a) + 3), 
+         cols = c("H", "L", "P", "U", "X", "Y"), 
+         stack = TRUE,
+         style = sstyles$styl_border, 
+         gridExpand = TRUE)
+addStyle(wb, sht_nm[2], rows = 3:(nrow(chl_a) + 3), 
+         cols = c("T"), 
+         stack = TRUE,
+         style = sstyles$styl_brd_dash, 
+         gridExpand = TRUE)
+
+addStyle(wb, sht_nm[2], cols = 1:ncol(chl_a),rows = nrow(chl_a) + 3, style = sstyles$styl_brd_bot,
+         stack = TRUE)
+
+# set col/row size
+setRowHeights(wb, sheet = sht_nm[2], rows = 1, heights = 29.3)
+setRowHeights(wb, sheet = sht_nm[2], rows = 2, heights = 14.4)
+setRowHeights(wb, sheet = sht_nm[2], rows = 3, heights = 57)
+setColWidths(wb, sheet = sht_nm[2], cols = "Y", widths = 40.56)
+
+# input formulas
+writeFormula(wb, sht_nm[2],
+             formulas$no_acid_ratio, 
+             startCol = "U",
+             startRow = 4)
+writeFormula(wb, sht_nm[2],
+             formulas$chla_conc, 
+             startCol = "V",
+             startRow = 4)
+writeFormula(wb, sht_nm[2],
+             formulas$avg, 
+             startCol = "W",
+             startRow = 4)
+writeFormula(wb, sht_nm[2],
+             formulas$stdev, 
+             startCol = "X",
+             startRow = 4)
+
+# write comments
+writeComment(wb, sht_nm[2], col = "L", row = 4, comment = comm$fluor)
+writeComment(wb, sht_nm[2], col = "N", row = 4, comment = comm$blank)
+writeComment(wb, sht_nm[2], col = "R", row = 4, comment = comm$low_read)
+writeComment(wb, sht_nm[2], col = "T", row = 4, comment = comm$high_read)
+
+
+```
+
+
+```{r save}
+
+worksheetOrder(wb) <- c(2, 1)
+
+openXL(wb)
+
+# ---- save ----
+saveWorkbook(wb, 
+             here(glue("{cruise}_WS_abs.xlsx")), 
+             overwrite = TRUE)
+```
+
