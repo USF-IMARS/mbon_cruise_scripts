@@ -22,10 +22,10 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 
 
-source("./scripts/process_log_sheet.R")
+source(here("scripts/process_log_sheet.R"))
 
 # cruise <- "WS21338"
-cruise <- "WS19210"
+cruise <- "WS19266"
 
 sht_nm <- c("metadata", "Chl-a")
 ```
@@ -107,6 +107,7 @@ openXL(wb)
 #                  overwrite = TRUE), silent = TRUE)
 # }
 
+ignore <- FALSE # redo all or ignore some
 dir_create(here(cloud_dir, "process_logs"))
 for (i in seq(nrow(meta))) {
    file_name <- here(cloud_dir, "process_logs", 
@@ -114,7 +115,7 @@ for (i in seq(nrow(meta))) {
                            "{meta$data[[i]]$year[[1]]}_",
                            "{min(format(meta$data[[i]]$date_mm_dd_yy, '%m'),", 
                            "na.rm = TRUE)}_abs.xlsx"))
-   if (!file_exists(file_name)) {
+   if (!file_exists(file_name) | ignore) {
      cli::cli_alert_info("Trying to create file {.file {basename(file_name)}}")
      try(
        saveWorkbook(meta$sheets[[i]],
