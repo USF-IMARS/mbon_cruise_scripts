@@ -249,7 +249,8 @@ process_log_sheet <- function(.meta, cal, cruise,
         "IF(AND(", paste0("V", seq(1, nrow(chl_a), 2) + 3), ">=0, ", 
         paste0("V", seq(1, nrow(chl_a), 2) + 4), ">=0), ",
         paste0("AVERAGE(",paste0("V", seq(1, nrow(chl_a), 2) + 3), ":",
-               paste0("V", seq(1, nrow(chl_a), 2) + 4),")"), ", \"\")"
+               # paste0("V", seq(1, nrow(chl_a), 2) + 4),")"), ", \"\")"
+               paste0("V", seq(1, nrow(chl_a), 2) + 4),")"), ", -999)"
       ),
       # X
       # =STDEV(V4:V5)
@@ -260,7 +261,8 @@ process_log_sheet <- function(.meta, cal, cruise,
         "IF(AND(", paste0("V", seq(1, nrow(chl_a), 2) + 3), ">=0, ", 
         paste0("V", seq(1, nrow(chl_a), 2) + 4), ">=0), ",
         paste0("STDEV(",paste0("V", seq(1, nrow(chl_a), 2) + 3), ":",
-               paste0("V", seq(1, nrow(chl_a), 2) + 4),")"), ", \"\")"
+               # paste0("V", seq(1, nrow(chl_a), 2) + 4),")"), ", \"\")"
+               paste0("V", seq(1, nrow(chl_a), 2) + 4),")"), ", -999)"
       ),
     )  %>%
     bind_rows(tibble(avg = rep(NA, nrow(chl_a) / 2))) %>%
