@@ -223,7 +223,7 @@ mismatch
 
 # ---- Unnest Metadata and Format ----
 ```{r unnest-meta}
-data_all <- 
+# data_all <- 
   files %>%
   select(-c(file_path:base)) %>%
   unnest(data) %>%
@@ -244,11 +244,74 @@ data_all <-
       is.na(depth_m) ~ 1,
       TRUE ~ depth_m),
     sample      = str_remove(sample, "\\*"),
+    station      = str_replace(station, "(?i)blank.*", "blank"),
     replicate   = str_extract(sample, "(?i)[a-c]$|[1-6]$"), 
     replicate   = str_to_upper(replicate),
     filter_type = "sterivex",
     .after      = sample
   ) 
+```
+
+
+
+```{r unnest-meta}
+data_summary <-
+  data_all %>%
+  filter(!(str_detect(station, "(?i)blan") |
+         str_detect(sample, "(?i)blan"))) %>%
+  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
+  ) %>%
+  select(-sample, -replicate, -sample_n, -notes,  -collector) %>%
+  pivot_wider(
+    data         = .,
+    names_from   = c(filter_type), # category column(s) to pivot wide
+    values_from  = c(vol_ml), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names,
+    values_fn    = list(vol_ml = length)
+    )
+
+dat_blnk <- 
+  filter(data_all, 
+         str_detect(station, "(?i)blan") |
+         str_detect(sample, "(?i)blan")) %>%
+  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
+  ) %>%
+  select(-sample, -replicate, -sample_n, -notes,  -collector) %>%
+  pivot_wider(
+    data         = .,
+    names_from   = c(filter_type), # category column(s) to pivot wide
+    values_from  = c(vol_ml), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names,
+    values_fn    = list(vol_ml = length)
+    ) %>%
+     summarise(
+    .by  = cruise_id,
+    date = min(mm_dd_yy, na.rm = TRUE),
+    across(sterivex, sum, na.rm = TRUE)
+    ) %>%
+    rename("blank" = sterivex) %>%
+  select(-date)
+
+cruise_summary <- 
+  data_summary %>% 
+  summarise(
+    .by  = cruise_id,
+    date = min(mm_dd_yy, na.rm = TRUE),
+    across(sterivex, sum, na.rm = TRUE)
+    ) 
+
+cruise_summary %>%
+  left_join(dat_blnk) %>%
+  mutate(
+    date   = as_date(date),
+    year   = year(date),
+    month  = month(date),
+    .after = date) %>%
+  arrange(date) 
+
+cruise_summary
 
 # save current sheet
 if (FALSE) {
@@ -261,8 +324,22 @@ if (FALSE) {
           ".csv")),
     na = ""
     )
+  cruise_summary %>%
+  write_csv(
+    here("data", "metadata", 
+         glue("edna_summary",
+          # time of save, so you don't overwrite
+          format(Sys.time(), '_%Y%m%d_%H%M%S'),
+          ".csv")),
+    na = ""
+    )
 }
 ```
+```{r}
+data_all %>%
+  filter(cruise_id == "WS21212")
+```
+
 
 # ---- Merge to Enrique's Format ----
 ```{r convert-to-enrique}
