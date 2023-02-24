@@ -4,6 +4,7 @@ format: html
 editor: visual
 ---
 
+# ---- Load Libraries ----
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -12,7 +13,7 @@ librarian::shelf(
   # broom # optional
   
   # added
-  ggrepel, ggtext, readxl,
+  ggrepel, ggtext, readxl, ggnnewscale,
   
   # idk if needed
   fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot
@@ -22,23 +23,28 @@ library("conflicted")
 
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
-```
 
-```{r load-locations}
-# ---- Info ----
-cruise_id <- "WS23011 (IMaRS)"
-dates     <- "January 11<sup>th</sup> - 17<sup>th</sup>, 2023"
-
-# ---- Load Locations ----
 # file with locations
 loc_file <- 
   here("data", "metadata") %>%
   fs::dir_ls(regexp = "^[^~]*locations.*xlsx")
 
+# ---- Edit Cruise Info ----
+cruise_id <- 
+  c(
+    "WS23061", # TODO:  edit for cruise
+    "March 2<sup>nd</sup> - 8<sup>th</sup>, 2023" # TODO: edit for dates
+  )
+```
+
+# ---- Load Locations ----
+```{r load-locations}
 # sample
 loca <-  
   loc_file %>%
-  readxl::read_xlsx(.name_repair = janitor::make_clean_names)
+  readxl::read_xlsx(sheet = 5,
+                    .name_repair = janitor::make_clean_names,
+                    )
 
 # all
 all_loc <- 
@@ -56,7 +62,9 @@ zoo_loc <-
 
 ```
 
+# ---- 
 ```{r data-manipulation}
+# define labels for map
 loc_labs <- 
   loca %>%
   group_by(station) %>%
@@ -96,7 +104,53 @@ loca2 <-
     lat = if_else(station == 68, 24.93, lat)
   )
 ```
+# additional noaa locations starting Feb 2023
+```{r noaa-loc}
+noaa_loc <-
+  loc_file %>%
+  read_xlsx(sheet = 4, 
+            .name_repair = janitor::make_clean_names)  %>%
+  rename("station" = waypoint) %>%
+  unite(col = "lat", 2:4, sep = " ") %>%
+  unite(col = "lon", 3:5, sep = " ") %>%
+  mutate(
+    station = case_when(
+                        str_detect(station, "MR") ~ "MR",
+                        str_detect(station, "21/ LK") ~ "LK",
+                        str_detect(station, "WS") ~ "WS",
+                        TRUE ~ station
+                        ),
+    lon = parzer::parse_lon(lon),
+    lat = parzer::parse_lat(lat), 
+    .before = 2
+    ) %>%
+  filter(!(station %in% loca2$station))
+  
 
+loca2[loca2$station %in% noaa_loc$station,]
+noaa_loc[!(noaa_loc$station %in% loca2$station),]$station
+
+# addtional locations
+# add_loc <- paste("BG7", "CW7", "ROME5", sep = "|")
+
+# noaa_loc_add <- 
+#   noaa_loc %>%
+#   filter(str_detect(waypoint, add_loc)) %>%
+#   
+#   mutate(
+#     
+#     station = waypoint,
+#     labl = "CHL, HPLC, CDOM, and eDNA",
+#    
+#     
+#     ) 
+# 
+# loca2 <- loca2 %>% 
+#   bind_rows(noaa_loc_add)
+  
+```
+
+# Bounding box
 ```{r bound-box}
 # fixes issue with reading file?
 sf::sf_use_s2(FALSE)
@@ -199,25 +253,29 @@ plt <- ggplot() +
         # legend.key.size = unit(0.6, "cm"),
         # legend.margin=margin(c(0.1,0.1,0.1,0.1), unit='cm')
         )
-plt
+# plt
 ```
 
-```{r add-stations, fig.width=8, fig.height=11}
+```{r add-stations, fig.width=8.5, fig.height=11}
 set.seed(123)
-plt +
-  annotate(geom = "richtext", y = 28, x = -81.5, label = cruise_id,
+imars_map <- plt +
+  annotate(geom = "richtext", y = 28, x = -81.5, 
+           label = glue("{cruise_id[[1]]} (IMaRS)"),
            size = 10,
            fontface = 'bold',
            fill = NA,
            label.color = NA,
            ) +
-  annotate(geom = "richtext", y = 27.85, x = -81.5, label = dates,
+  annotate(geom = "richtext", y = 27.85, x = -81.5, 
+           label = cruise_id[[2]],
            size = 7,
            fontface = 'bold',
            fill = NA,
            label.color = NA) +
   geom_point(
-    data = all_loc, aes(x = lon, y = lat),
+    # data = all_loc, 
+    data = noaa_loc, 
+    aes(x = lon, y = lat),
     shape = 3,
     color = "gray",
     size = 1
@@ -243,6 +301,7 @@ plt +
                  ) +
   
   scale_color_manual(
+    name   = "Samples",
     values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF",  "#BA55D3")) +
   labs(color = NULL) +
   new_scale_color() +
@@ -252,18 +311,21 @@ plt +
                  color = labs),
              shape = 5, 
              size  = 2) +
-  labs(color = "Zooplankton Mesh") +
+  labs(color = "Zooplankton Mesh Size") +
   theme(
     legend.position = c(0.2, 0.14),
     legend.text     = element_text(size = 10),
     legend.title    = element_text(size = 15)
   )
-
+imars_map
 ```
 
 ```{r save-map, fig.width=8.5, fig.height=11}
 if (FALSE) {
-  ggsave(here("data", "metadata", "sample_locations.jpeg"),
+  fs::dir_create(here("data", "metadata", "cruise_map"))
+  ggsave(here("data", "metadata", "cruise_map",
+              glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")),
+         plot   = imars_map,
          dpi    = 900,
          width  = 8.5,
          height = 11)
