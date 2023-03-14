@@ -1,0 +1,106 @@
+---
+title: "CDOM Process Schedule"
+author: "Sebastian DiGeronimo"
+date: "2023-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  openxlsx, readxl
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+```{r}
+cloud_dir <- "C:/Users/spd19/Box/mbon_imars_cruises"
+schedule_file <- 
+  here(cloud_dir, "blank_sheets") %>%
+  dir_ls(regexp = "schedule") 
+
+meta_data <- 
+  cloud_dir %>%
+  dir_ls(regexp = "chl_hplc") %>%
+  read_xlsx(sheet        = "cdom_progress",
+            guess_max    = min(3000, n_max = NULL),
+            .name_repair = janitor::make_clean_names) %>%
+  filter(collection_date > as_date("2022-03-25")) %>%
+  select(cruise_id, station,	"sample ID" = identifier)%>%
+  mutate(
+    sample_number = str_extract(`sample ID`, "-(.*)", group = 1)
+      )
+```
+
+
+```{r}
+loc_dist <- 
+  schedule_file %>%
+  read_xlsx(sheet = "color_code",
+            .name_repair = janitor::make_clean_names) 
+
+cdom_cruise <- 
+  left_join(meta_data, loc_dist) %>%
+  nest(.by = cruise_id)
+
+wb <- loadWorkbook(schedule_file) 
+
+for (i in seq(nrow(cdom_cruise))) {
+
+  sheet_name <- cdom_cruise$cruise_id[i]
+
+  if (any(names(wb) %in% sheet_name)) {
+    message(glue("Skipping \"{sheet_name}\""))
+      next
+  }
+
+  dat_sht <- cdom_cruise$data[[i]]
+  
+  message(glue("Adding Cruise: \"{sheet_name}\""))
+  
+  addWorksheet(wb, sheetName = sheet_name)
+  writeData(wb, sheet = sheet_name , startCol = 1, startRow = 1, 
+            x = dat_sht)
+  
+  conditionalFormatting(wb, 
+                        sheet_name ,
+                        cols = 4,
+                        rows = 1:(nrow(dat_sht) + 1), 
+                        rule = "near", type = "contains",
+                        style = createStyle(bgFill = "#FF0000"))
+  
+  conditionalFormatting(wb, 
+                        sheet_name ,
+                        cols  = 4,
+                        rows  = 1:(nrow(dat_sht) + 1), 
+                        rule  = "off", type = "contains",
+                        style = createStyle(bgFill = "#00B0F0"))
+  
+  conditionalFormatting(wb, 
+                        sheet_name ,
+                        cols = 4,
+                        rows = 1:(nrow(dat_sht) + 1), 
+                        rule = "mid", type = "contains",
+                        style = createStyle(bgFill = "#FFC000"))
+
+}
+
+openXL(wb)
+```
+
+```{r}
+if (FALSE) {
+  saveWorkbook(wb, schedule_file,
+             overwrite = TRUE)
+}
+```
+
