@@ -1,0 +1,356 @@
+---
+title: "Consolidate HPLC Data"
+author: "Sebastian Di Geronimo"
+date: '2023-03-13'
+format: html
+---
+
+# Load Libraries
+```{r}
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  readxl
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+# Search for HPLC Files
+```{r}
+# pigment files
+file.pig <-
+    here("data", "raw", "hplc") %>%
+    dir_ls(
+           recurse = FALSE,
+           type = "file",
+           # included ^[^~]* to not match ~, means that a file is opened
+           regexp = "^[^~]*\\.xlsx$") %>% 
+    str_sort() %>%
+    tibble(file = ., base = basename(.))
+```
+
+```{r}
+hplc_data <-
+  file.pig %>%
+  mutate(
+  metadata = map(
+    .x = file,
+    ~ suppressWarnings(read_xlsx(
+      .x,
+      sheet = "Report",
+      skip  = 8,
+      na    = "-9999",
+      .name_repair = janitor::make_clean_names
+      )) %>%
+      
+      select(
+        contains("cruise"), matches("original_pi_sample_label|^sample"),  
+        station, contains(c("vol")), contains("water_depth"), 
+        matches("sampling_depth_meters|^depth"), 
+        matches("gregorian_month|^month"), contains("time"), matches("^day"), 
+        contains(c("lon", "lat")), contains("replic"), matches("^year"),
+        -contains("extracted")
+             ) %>% 
+      
+      # rename to make all the same column names
+      rename(
+        any_of(
+          c(
+            cruise      = "cruise_name",
+            day         = "day_of_gregorian_month",
+            depth       = "sampling_depth_meters",
+            month       = "gregorian_month",
+            lat         = "latitude",
+            lon         = "longitude",
+            sample      = "original_pi_sample_label",
+            time        = "gmt_time",
+            volfilt     = "volume_filtered_ml",
+            water_depth = "total_water_depth_meters",
+            year        = "year_of_sample"
+            )
+          )
+        ) %>%
+      
+      # change time to hh:mm:ss and add date
+      mutate(
+        time          = hms::as_hms(time),
+        month         = str_extract(month, "\\w{3}"), # fix one month: Febuary
+        date_time_utc = ymd(glue("{year}-{month}-{day}"),
+                            tz = "utc")) %>%
+      
+      # fix one depth value to numeric
+      mutate(
+        depth = as.character(depth),
+        depth = case_when(
+                  str_detect(depth, "2..15") ~ "2.15",
+                  TRUE ~ depth),
+        depth = as.numeric(depth),
+        indicate_if_filters_are_replicates = 
+          as.character(indicate_if_filters_are_replicates)
+        ) %>%
+      
+      # fix one character value to numeric
+      mutate(
+        water_depth = as.character(water_depth),
+        water_depth = case_when(
+                        str_detect(water_depth, "flow") ~ "1",
+                        TRUE ~ water_depth),
+        water_depth = as.numeric(water_depth)
+      ) %>%
+    
+    # fix one set of cruise ID values  
+    mutate(
+       cruise = case_when(
+         str_detect(sample, "WS20278") ~ "Walton Smith 20278",
+         str_detect(sample, "WS16263") ~ "Walton Smith 16263",
+         TRUE ~ cruise)
+       )
+    )
+  ) %>%
+  mutate(
+    field_units = map(
+      .x = file,
+      function(x) {
+        # read sheet for column names 
+        temp <-
+          read_xlsx(
+            x,
+            sheet = "Report",
+            skip  = 8,
+            na    = "-9999"
+            # .name_repair = janitor::make_clean_names
+            ) %>%
+          select(contains("Tot_Chl_a"):last_col()) 
+        
+        # fix column names
+        fix_name <- names(temp)
+        fix_name <- str_remove_all(fix_name, "\\[|\\]")
+        fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
+        fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
+        
+        # read sheet for units 
+        p_units <-
+          read_xlsx(
+            x,
+            sheet     = "Report",
+            skip      = 6,
+            col_names = TRUE,
+            n_max     = 2,
+            na        = "-9999",
+            .name_repair = janitor::make_clean_names
+          ) %>%
+          select(primary_pigments:last_col()) %>%
+          slice(1) %>%
+          c(., recursive = TRUE) %>%
+          unname()
+        
+        # if na, then equals none
+        p_units <- replace_na(p_units, "none")
+        
+        temp <- set_names(temp,fix_name)  
+        
+        return(
+          tibble(
+            nest(temp, .key = "pigment_data"),
+            param_name = list(param_name = names(temp)),
+            units      = list(unit = p_units)
+            )
+          )
+      }
+    )
+  ) %>%
+    unnest(field_units) 
+```
+
+```{r}
+pigment_data <-
+  hplc_data %>%
+  unnest(c(metadata, pigment_data)) %>%
+  nest(.by = c(file, base, cruise, param_name, units))
+
+
+
+
+```
+
+
+
+```{r}
+for (i in 1:5) {
+  temp <- 
+    readxl::read_xlsx(
+        file.pig$file[i],
+        sheet = "Report",
+        skip  = 8,
+        na = "-9999"
+        # .name_repair = janitor::make_clean_names
+        ) %>%
+    select(contains("Tot_Chl_a"):last_col()) 
+  
+  fix_name <- names(temp)
+  fix_name <- str_remove_all(fix_name, "\\[|\\]")
+  fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
+  fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
+  
+  p_units <-
+  readxl::read_xlsx(
+       file.pig$file[i],
+        sheet = "Report",
+        skip  = 6,
+        col_names = TRUE,
+        n_max = 2,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+        ) %>%
+  select(primary_pigments:last_col()) %>%
+  slice(1) %>%
+  c(., recursive = TRUE) %>%
+  unname() 
+  
+  # p_units <- str_replace_all(p_units, "/", "_")
+  p_units <- replace_na(p_units, "none")
+  
+  cat(basename(file.pig$file[i]), "\n\n")
+  
+  temp <- set_names(temp,fix_name)  
+  # names(temp) %T>% print()
+  # 
+  # names(temp2) %T>% print()
+  cbind("before" = names(temp), 
+        "after"  = names(temp2), 
+        "units"  = p_units) %T>% 
+    print()
+  
+  tibble(
+    file  = basename(file.pig$file[i]),
+    param = names(temp),
+    units = p_units
+  )
+  
+  tibble(file  = basename(file.pig$file[i]),
+        nest(temp, .key = "param"),
+        units = list(unit = p_units)
+         ) %>%
+        unnest(param)
+  
+  cat("\n\n------\n\n")
+}
+
+# "[MV_Chl _b]"      "MV_Chl__b"
+
+cbind(names(temp), names(temp2))
+```
+
+
+```{r}
+for (i in 1:5) {
+p_units <-
+  readxl::read_xlsx(
+        file.pig[i],
+        sheet = "Report",
+        skip  = 6,
+        col_names = TRUE,
+        n_max = 1,
+        na = "-9999",
+        .name_repair = janitor::make_clean_names
+        ) %>%
+  select(primary_pigments:last_col()) 
+  slice(1) %>%
+  c(., recursive = TRUE) %>%
+  unname() 
+
+  cat(basename(file.pig[i]), "\n\n")
+  print(p_units)
+  cat("\n\n-----\n\n")
+
+}
+```
+
+[1] "cruise"                             "cruise"                             "cruise"                            
+ [4] "cruise_name"                        "cruise_name"                        
+ 
+ "day" "day"                                "day"                                "day_of_gregorian_month"            
+[10] "day_of_gregorian_month"             
+
+"depth"                              "depth"                             
+[13] "depth" "sampling_depth_meters"              "sampling_depth_meters"                              
+
+
+[16] "gregorian_month"                    "gregorian_month"     "month"                             
+[34] "month"                              "month"                
+
+"indicate_if_filters_are_replicates"
+[19] "indicate_if_filters_are_replicates" "indicate_if_filters_are_replicates" "indicate_if_filters_are_replicates"
+[22] "indicate_if_filters_are_replicates" 
+
+"lat"                                "lat"                               
+[25] "lat"                                "latitude"                           "latitude"   
+
+[28] "lon"                                "lon"                                "lon"                               
+[31] "longitude"                          "longitude"                         
+
+"original_pi_sample_label"          
+[37] "original_pi_sample_label"           "sample"                             "sample"                            
+[40] "sample"                             
+
+
+
+[43] "station"                            "station"                            "station"                           
+[46] "station"                            "station"                            
+
+"time"      "gmt_time"                           "gmt_time"                        
+[49] "time"                               "time"                              
+
+      
+
+"volfilt"                            "volfilt"                           
+[55] "volfilt"                            "volume_filtered_ml"                 "volume_filtered_ml" 
+
+
+[58] "water_depth"                        "water_depth"                        "water_depth"  
+"total_water_depth_meters"          
+[52] "total_water_depth_meters"     
+
+[61] "year"                               "year"                               "year"                              
+[64] "year_of_sample"                     "year_of_sample"                
+
+
+
+```{r}
+# meta
+    "hplc_gsfc_id" = "gsfc_lab_sample_code", 
+    "pi", 
+    "station", 
+    "sample" = "original_pi_sample_label", 
+    "cruise" = "cruise_name",
+    "indicate_if_filters_are_replicates",
+    "volfilt" = "volume_filtered_ml", 
+    "bottle" = "bottle_number", 
+    "depth" = "sampling_depth_meters", 
+    "water_depth" = "total_water_depth_meters",
+    "name_of_water_body", 
+    
+    # time 
+    "year" = "year_of_sample", 
+    "month" = "gregorian_month",
+    "day" = "day_of_gregorian_month", 
+    "sdy" = "sequential_day_of_year", 
+    "time" = "gmt_time", 
+    "date_time_utc",
+    "lon", 
+    "lat", 
+    
+    # sample type
+    "filter_type", 
+    "filter_diameter_mm", 
+    "filter_storage_before_shipment_to_gfsc" = 
+        "filter_storage_before_shipping_to_gsfc"
+```
+
