@@ -1,0 +1,236 @@
+---
+title: "HPLC SeaBass Submission"
+author: "Sebastian Di Geronimo"
+date: '2023-03-13'
+format: html
+---
+
+# SeaBass Submission of HPLC
+Instructions: https://seabass.gsfc.nasa.gov/wiki/Data_Submission
+Check before submit: https://seabass.gsfc.nasa.gov/wiki/FCHECK#Download%20Source%20Code
+
+# Header
+https://seabass.gsfc.nasa.gov/wiki/metadataheaders
+
+## Required Fields:
+investigators = Frank_Muller-Karger,Enrique_Montes
+affiliations
+contact
+experiment
+cruise
+station
+data_file_name
+documetns
+data_type
+calibration_files
+start_date
+end_date
+start_time
+end_time
+north_latitude
+south_latitude
+east_longitude
+west_longitude
+water_depth
+missing
+delimiter
+fields
+units
+
+## Conditionally Required Headers
+
+
+## HPLC Specific
+https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments,%20HPLC
+/HPLC_lab (e.g., NASA_GSFC)
+/HPLC_lab_technician (e.g., Crystal_Thomas)
+
+## Ex Header
+-------------------------------------------------------------------------------
+/begin_header	
+/identifier_product_doi=10.5067/SeaBASS/EXPORTS/DATA001	
+/received=20190807	
+/affiliations=Bowdoin_College	
+/investigators=Collin_Roesler	
+/contact=croesler@bowdoin.edu	sdrapeau@bowdoin.edu
+/experiment=EXPORTS	
+/cruise=EXPORTSNP	
+/data_file_name=EXPORTS_EXPORTSNP_HPLC-inline_survey_20180814.csv	
+/original_file_name=EXPORTS_Roesler_08-06_report.xlsx	
+/data_type=pigment	
+/start_date=20180811	
+/end_date=20180908	
+/start_time=19:19:00[GMT]	
+/end_time=19:44:00[GMT]	
+/water_depth=na	
+/measurement_depth=5.5	
+/west_longitude=-145.960[DEG]	
+/east_longitude=-131.543[DEG]	
+/north_latitude=50.643[DEG]	
+/south_latitude=49.4265[DEG]	
+/documents=EXPORTS_Method_Inline_HPLC_Roesler_SeaBASS.docx	EXPORTS_2018_DATA_MASTER.xlsx
+/calibration_files=EXPORTS_Method_Inline_HPLC_Roesler_SeaBASS.docx	
+/data_status=final	
+/missing=-9999	
+/below_detection_limit=-8888	
+/HPLC_lab=NASA_GSFC	
+/HPLC_lab_technician=Crystal_Thomas	
+/delimiter=comma	
+/fields=hplc_gsfc_id	sample
+/units=none	none
+/end_header	
+
+
+-------------------------------------------------------------------------------
+
+# Data fields
+1. Individual and summed pigments (based on SeaBASS fields/SeaHARRE reports)
+
+2. Separate columns for any size-fractionated measurements (e.g., Tot_Chl_a_20umprefilt goes in a separate column from Tot_Chl_a)
+
+3. Include "hplc_gsfc_id" as a column if your data were analyzed at the NASA GSFC lab to preserve the lab's sample ID
+
+Report any replicate filters separately
+Use the /below_detection_limit to mask any relevant values. It is distinct from the /missing value (e.g., /missing=-9999 vs. /below_detection_limit=-8888)
+SeaBASS files may only contain data from a single cruise or deployment. If necessary, sort and separate your data by cruise then create multiple SeaBASS files
+An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC spreadsheets into SeaBASS file format. However, please read its limitations and caveats carefully. https://seabass.gsfc.nasa.gov/hplc2sb/
+
+
+
+
+# Load Libraries
+```{r}
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+# Header Information
+```{r}
+header_skeleton <-
+  glue::glue(
+    "/begin_header",
+      # required  
+      "/investigators={investor}",
+      "/affiliations={affil}",
+      "/contact={contact}",
+      "/experiment={expri}",
+      "/cruise={cruise_id}",
+      "/station=NA",
+      "/data_file_name={file_name}", # current name of data file, self-reference
+      "/documents=",      # additonal info about experiment and cruise
+      "/data_type={type}",
+      "/calibration_files=",
+      "/start_date=",
+      "/end_date=",
+      "/start_time=",
+      "/end_time=",
+      "/north_latitude=",
+      "/south_latitude=",
+      "/east_longitude=",
+      "/west_longitude=",
+      "/water_depth=",
+      "/missing=-9999",
+      "/delimiter=comma",
+      "/fields={fields}", # fields of data 
+      "/units=",  # units for each column 
+      
+      # HPLC required
+      "/HPLC_lab={hplc_lab}",
+      "/HPLC_lab_technician={lab_tech}",
+      "/below_detection_limit=-8888",
+      
+      # conditional 
+      "/measurement_depth",
+      
+      # optional recommened
+      "/data_status={status}",
+      
+      # optional
+      "/identifier_product_doi=",
+      "/original_file_name", 
+      
+    "{comments}",
+    
+      #"/received=",
+    
+      "/end_header", 
+    .sep = "\n") |>
+    
+  expression()
+
+investor  <- "Frank Muller-Karger,Enrique Montes"
+contact   <-  ""
+affil     <- "University_of_South_Florida,USA"
+expri     <- "MBON"
+hplc_lab  <- "NASA_GSFC"	
+lab_tech  <- "Crystal_Thomas"	
+type      <- "pigment"
+status    <- "final" # final - not intending to revisit
+cruise_id <- "TODO" # TODO: include
+fields    <- "TODO" 
+
+comments <- 
+  glue(.sep = "\n",
+       "!",
+       "! test",
+       "!")
+
+file_name <-
+  glue(
+    "{expri}",
+    "{cruise_id}",
+    "{type}",
+    "min_date",
+    .sep = "_"
+  )
+
+
+header_skeleton
+eval(header_skeleton)
+```
+
+
+
+strcat('/received=',date_received);
+
+strcat('/data_file_name=',cruise,'_',data_type);
+strcat('/documents=',cruise_report);
+'/calibration_files=HPLC_method_summary';
+'/delimiter=space';
+strcat('/start_date=',start_date);
+strcat('/end_date=',end_date);
+strcat('/start_time=',start_time,'[GMT]');
+strcat('/end_time=',end_time,'[GMT]');
+strcat('/north_latitude=',lat_n,'[DEG]');
+strcat('/south_latitude=',lat_s,'[DEG]');
+strcat('/west_longitude=',lon_w,'[DEG]');
+strcat('/east_longitude=',lon_e,'[DEG]');
+'/below_detection_limit=-8888';
+'/missing=-8888';
+'/water_depth=-999';
+'/cloud_percent=-999';
+'/wave_height=-999';
+'/wind_speed=-999';
+'/secchi_depth=-999';
+'!';
+'!RUN BY: Enrique Montes';
+'!Samples were processed at NASA GSFC by Crystal Thomas';
+'!Measurements below detection limit are assigned the value -9999; this represents pigments not detected';
+'!as well as pigments present but with concentrations less than 0.0005?g/L.';
+'!Coefficient of variation (replicate filter precision) for TChl a =	1.64%; Ppig =	3.74%';
+'!!Sky: variable conditions';
+'!Water: variable conditions.';
+'/fields=date,station,lon,lat,depth,Tot_Chl_a,Tot_Chl_b,Tot_Chl_c,alpha-beta-Car,But-fuco,Hex-fuco,Allo,Diadino,Diato,Fuco,Perid,Zea,MV_Chl_a,DV_Chl_a,Chlide_a,MV_Chl_b,DV_Chl_b,Chl_c1c2,Chl_c3,Lut,Neo,Viola,Phytin_a,Phide_a,Pras,Gyro,TChl,PPC,PSC,PSP,Tcar,Tacc,Tpg,DP,Tacc_TChla,PSC_Tcar,PPC_Tcar,TChl_Tcar,PPC_Tpg,PSP_Tpg,TChla_Tpg';
+'/units=yyyymmdd,none,degrees,degrees,m,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,none,none,none,none,none,none,none';
+'/end_header'
