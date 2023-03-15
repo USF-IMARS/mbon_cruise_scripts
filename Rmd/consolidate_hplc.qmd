@@ -50,7 +50,7 @@ hplc_data <-
       .name_repair = janitor::make_clean_names
       )) %>%
       
-      select(
+      select(1,
         contains("cruise"), matches("original_pi_sample_label|^sample"),  
         station, contains(c("vol")), contains("water_depth"), 
         matches("sampling_depth_meters|^depth"), 
@@ -63,6 +63,8 @@ hplc_data <-
       rename(
         any_of(
           c(
+            gsfc_lab_sample_code = "hplc_gsfc_id",
+            gsfc_lab_sample_code = "gsfc_sample_code",
             cruise      = "cruise_name",
             day         = "day_of_gregorian_month",
             depth       = "sampling_depth_meters",
@@ -80,9 +82,9 @@ hplc_data <-
       
       # change time to hh:mm:ss and add date
       mutate(
-        time          = hms::as_hms(time),
-        month         = str_extract(month, "\\w{3}"), # fix one month: Febuary
-        date_time_utc = ymd(glue("{year}-{month}-{day}"),
+        time  = hms::as_hms(time),
+        month = str_extract(month, "\\w{3}"), # fix one month: Febuary
+        date  = ymd(glue("{year}-{month}-{day}"),
                             tz = "utc")) %>%
       
       # fix one depth value to numeric
@@ -90,7 +92,8 @@ hplc_data <-
         depth = as.character(depth),
         depth = case_when(
                   str_detect(depth, "2..15") ~ "2.15",
-                  TRUE ~ depth),
+                  # TRUE ~ depth),
+                  .default = depth), # new way 
         depth = as.numeric(depth),
         indicate_if_filters_are_replicates = 
           as.character(indicate_if_filters_are_replicates)
@@ -101,7 +104,8 @@ hplc_data <-
         water_depth = as.character(water_depth),
         water_depth = case_when(
                         str_detect(water_depth, "flow") ~ "1",
-                        TRUE ~ water_depth),
+                        # TRUE ~ water_depth),
+                        .default = water_depth), # new way 
         water_depth = as.numeric(water_depth)
       ) %>%
     
@@ -110,11 +114,10 @@ hplc_data <-
        cruise = case_when(
          str_detect(sample, "WS20278") ~ "Walton Smith 20278",
          str_detect(sample, "WS16263") ~ "Walton Smith 16263",
-         TRUE ~ cruise)
+         # TRUE ~ cruise)
+         .default = cruise) # new way 
        )
-    )
-  ) %>%
-  mutate(
+    ),
     field_units = map(
       .x = file,
       function(x) {
@@ -153,6 +156,7 @@ hplc_data <-
         
         # if na, then equals none
         p_units <- replace_na(p_units, "none")
+        p_units <- str_replace_all(p_units, "ug/l", "mg/m^3")
         
         temp <- set_names(temp,fix_name)  
         
@@ -173,83 +177,87 @@ hplc_data <-
 pigment_data <-
   hplc_data %>%
   unnest(c(metadata, pigment_data)) %>%
-  nest(.by = c(file, base, cruise, param_name, units))
+  nest(.by = c(cruise))
 
 
-
-
+dir_create( here("data", "processed", "hplc"))
+save(pigment_data,
+      file =  here("data", "processed", "hplc", 
+                   glue("consolidated_HPLC_{Sys.Date()}.RData")
+                   )
+     )
 ```
 
 
-
-```{r}
-for (i in 1:5) {
-  temp <- 
-    readxl::read_xlsx(
-        file.pig$file[i],
-        sheet = "Report",
-        skip  = 8,
-        na = "-9999"
-        # .name_repair = janitor::make_clean_names
-        ) %>%
-    select(contains("Tot_Chl_a"):last_col()) 
-  
-  fix_name <- names(temp)
-  fix_name <- str_remove_all(fix_name, "\\[|\\]")
-  fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
-  fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
-  
-  p_units <-
-  readxl::read_xlsx(
-       file.pig$file[i],
-        sheet = "Report",
-        skip  = 6,
-        col_names = TRUE,
-        n_max = 2,
-        na = "-9999",
-        .name_repair = janitor::make_clean_names
-        ) %>%
-  select(primary_pigments:last_col()) %>%
-  slice(1) %>%
-  c(., recursive = TRUE) %>%
-  unname() 
-  
-  # p_units <- str_replace_all(p_units, "/", "_")
-  p_units <- replace_na(p_units, "none")
-  
-  cat(basename(file.pig$file[i]), "\n\n")
-  
-  temp <- set_names(temp,fix_name)  
-  # names(temp) %T>% print()
-  # 
-  # names(temp2) %T>% print()
-  cbind("before" = names(temp), 
-        "after"  = names(temp2), 
-        "units"  = p_units) %T>% 
-    print()
-  
-  tibble(
-    file  = basename(file.pig$file[i]),
-    param = names(temp),
-    units = p_units
-  )
-  
-  tibble(file  = basename(file.pig$file[i]),
-        nest(temp, .key = "param"),
-        units = list(unit = p_units)
-         ) %>%
-        unnest(param)
-  
-  cat("\n\n------\n\n")
-}
-
-# "[MV_Chl _b]"      "MV_Chl__b"
-
-cbind(names(temp), names(temp2))
+## Don't need
+```{r extract}
+# for (i in 1:5) {
+#   temp <- 
+#     readxl::read_xlsx(
+#         file.pig$file[i],
+#         sheet = "Report",
+#         skip  = 8,
+#         na = "-9999"
+#         # .name_repair = janitor::make_clean_names
+#         ) %>%
+#     select(contains("Tot_Chl_a"):last_col()) 
+#   
+#   fix_name <- names(temp)
+#   fix_name <- str_remove_all(fix_name, "\\[|\\]")
+#   fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
+#   fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
+#   
+#   p_units <-
+#   readxl::read_xlsx(
+#        file.pig$file[i],
+#         sheet = "Report",
+#         skip  = 6,
+#         col_names = TRUE,
+#         n_max = 2,
+#         na = "-9999",
+#         .name_repair = janitor::make_clean_names
+#         ) %>%
+#   select(primary_pigments:last_col()) %>%
+#   slice(1) %>%
+#   c(., recursive = TRUE) %>%
+#   unname() 
+#   
+#   # p_units <- str_replace_all(p_units, "/", "_")
+#   p_units <- replace_na(p_units, "none")
+#   
+#   cat(basename(file.pig$file[i]), "\n\n")
+#   
+#   temp <- set_names(temp,fix_name)  
+#   # names(temp) %T>% print()
+#   # 
+#   # names(temp2) %T>% print()
+#   cbind("before" = names(temp), 
+#         "after"  = names(temp2), 
+#         "units"  = p_units) %T>% 
+#     print()
+#   
+#   tibble(
+#     file  = basename(file.pig$file[i]),
+#     param = names(temp),
+#     units = p_units
+#   )
+#   
+#   tibble(file  = basename(file.pig$file[i]),
+#         nest(temp, .key = "param"),
+#         units = list(unit = p_units)
+#          ) %>%
+#         unnest(param)
+#   
+#   cat("\n\n------\n\n")
+# }
+# 
+# # "[MV_Chl _b]"      "MV_Chl__b"
+# 
+# cbind(names(temp), names(temp2))
 ```
 
 
-```{r}
+```{r unit-extract}
 for (i in 1:5) {
 p_units <-
   readxl::read_xlsx(
@@ -323,34 +331,34 @@ p_units <-
 
 
 
-```{r}
+```{r equal-names}
 # meta
-    "hplc_gsfc_id" = "gsfc_lab_sample_code", 
-    "pi", 
-    "station", 
-    "sample" = "original_pi_sample_label", 
-    "cruise" = "cruise_name",
-    "indicate_if_filters_are_replicates",
-    "volfilt" = "volume_filtered_ml", 
-    "bottle" = "bottle_number", 
-    "depth" = "sampling_depth_meters", 
-    "water_depth" = "total_water_depth_meters",
-    "name_of_water_body", 
-    
-    # time 
-    "year" = "year_of_sample", 
-    "month" = "gregorian_month",
-    "day" = "day_of_gregorian_month", 
-    "sdy" = "sequential_day_of_year", 
-    "time" = "gmt_time", 
-    "date_time_utc",
-    "lon", 
-    "lat", 
-    
-    # sample type
-    "filter_type", 
-    "filter_diameter_mm", 
-    "filter_storage_before_shipment_to_gfsc" = 
-        "filter_storage_before_shipping_to_gsfc"
+    # "hplc_gsfc_id" = "gsfc_lab_sample_code", 
+    # "pi", 
+    # "station", 
+    # "sample" = "original_pi_sample_label", 
+    # "cruise" = "cruise_name",
+    # "indicate_if_filters_are_replicates",
+    # "volfilt" = "volume_filtered_ml", 
+    # "bottle" = "bottle_number", 
+    # "depth" = "sampling_depth_meters", 
+    # "water_depth" = "total_water_depth_meters",
+    # "name_of_water_body", 
+    # 
+    # # time 
+    # "year" = "year_of_sample", 
+    # "month" = "gregorian_month",
+    # "day" = "day_of_gregorian_month", 
+    # "sdy" = "sequential_day_of_year", 
+    # "time" = "gmt_time", 
+    # "date_time_utc",
+    # "lon", 
+    # "lat", 
+    # 
+    # # sample type
+    # "filter_type", 
+    # "filter_diameter_mm", 
+    # "filter_storage_before_shipment_to_gfsc" = 
+    #     "filter_storage_before_shipping_to_gsfc"
 ```
 
