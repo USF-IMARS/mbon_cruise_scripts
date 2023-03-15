@@ -117,7 +117,35 @@ conflict_prefer("select", "dplyr")
   sort(decreasing = TRUE))[1] |>
   load() 
 ```
+## All SeaBass Standard Fields 
+https://seabass.gsfc.nasa.gov/wiki/stdfields
+```{r}
+sb_field <- 
+  read_tsv(here("data", "metadata", "seabass_standard_fields_all.txt"),
+           show_col_types = FALSE,
+           name_repair    = make_clean_names) %>%
+  mutate(
+    .after   = 1,
+    low_name = str_to_lower(field_name),
+    low_name = str_replace_all(low_name, "-", "_")
+         )
 
+field_unit <- 
+  pigment_data %>%
+  unnest(data) %>%
+  unnest(param_name) %>%
+  distinct(param_name) %>%
+  arrange(param_name) %>%
+  mutate(low_name = str_to_lower(param_name),
+         low_name = str_replace(low_name, "(?i)caro", "car"),
+         low_name = case_when(
+           str_detect(low_name, "chl_c12") ~ "chl_c1c2",
+           str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
+           str_detect(low_name, "tchl_a_tpig|tchl_a_tpg") ~ "tchla_tpg",
+           .default = low_name
+         )) %>%
+  left_join(sb_field, by = c("low_name"))
+```
 ## Header Information
 ```{r defaults}
 investor  <- "Frank_Muller-Karger,Enrique_Montes"
@@ -130,9 +158,13 @@ status    <- "final" # final - not intending to revisit
 wtr_dpth  <- stn <- "na"
 
 # add more when needed
-fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
-                 "water_depth","volfilt")
-units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
+fields_extr <- 
+  tibble(
+    field_extr = c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
+                 "water_depth","volfilt")) %>%
+  left_join(sb_field, by = c("field_extr" = "field_name"))
+
+# units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
 
 # TODO:
 contact  <- "__TODO__"
@@ -197,8 +229,6 @@ header_skeleton <-
     .sep = "\n") |>
   
   expression()
-
-
 ```
 
 
@@ -266,9 +296,9 @@ Call `lifecycle::last_lifecycle_warnings()` to see where this warning was genera
 #   as.matrix() 
  
 # cruise data header_info cruise_id 
-final <-
+# final <-
   test %>%
-  # slice(1) %>%
+  slice(c(1,5,17, 25)) %>%
   mutate(
     cruise_id = case_when(
       str_detect(cruise, "(?i)walton") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
@@ -287,15 +317,18 @@ final <-
           str_c(collapse = ",")
         
         file_name <-
-          # glue("{expri}", "{cruise_id}", "{type}", "{st_dt}.sb", .sep = "_")
           glue("{expri}", "{cruise_id}", "{type}", "{x$start_date}.sb", .sep = "_")
         
         # fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
-        fields <- glue(!!!fields_extr,
-                       paste(first(y$param_name), collapse = ","), .sep = ",")
+        field_nm <- 
+          tibble(param_name = y$param_name[[1]]) %>%
+          left_join(., !!field_unit, by = "param_name") %T>% print() 
         
-        pun <- glue(!!!units_extr,
-                    paste(first(y$units), collapse = ","), .sep = ",")
+        fields <- glue(!!!fields_extr$field_extr,
+                       paste(field_nm$field_name, collapse = ","), .sep = ",")
+        
+        pun <- glue(!!!fields_extr$units,
+                    paste(field_nm$units, collapse = ","), .sep = ",")
         
         header <- 
           with(x, eval(header_skeleton)) %T>% 
@@ -465,3 +498,7 @@ strcat('/east_longitude=',lon_e,'[DEG]');
 '/fields=date,station,lon,lat,depth,Tot_Chl_a,Tot_Chl_b,Tot_Chl_c,alpha-beta-Car,But-fuco,Hex-fuco,Allo,Diadino,Diato,Fuco,Perid,Zea,MV_Chl_a,DV_Chl_a,Chlide_a,MV_Chl_b,DV_Chl_b,Chl_c1c2,Chl_c3,Lut,Neo,Viola,Phytin_a,Phide_a,Pras,Gyro,TChl,PPC,PSC,PSP,Tcar,Tacc,Tpg,DP,Tacc_TChla,PSC_Tcar,PPC_Tcar,TChl_Tcar,PPC_Tpg,PSP_Tpg,TChla_Tpg';
 '/units=yyyymmdd,none,degrees,degrees,m,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,none,none,none,none,none,none,none';
 '/end_header'};
+
+
+
+
