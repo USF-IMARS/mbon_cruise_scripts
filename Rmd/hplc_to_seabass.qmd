@@ -4,16 +4,16 @@ author: "Sebastian Di Geronimo"
 date: '2023-03-13'
 format: html
 ---
-
-# SeaBass Submission of HPLC
+# 1.0 Information
+## 1.1 Links: SeaBass Instructions for Submission of HPLC
 Instructions: https://seabass.gsfc.nasa.gov/wiki/Data_Submission
 Check before submit: https://seabass.gsfc.nasa.gov/wiki/FCHECK#Download%20Source%20Code
 
-# Header
+## 1.2 Header
 https://seabass.gsfc.nasa.gov/wiki/metadataheaders
 
-## Required Fields:
-investigators = Frank_Muller-Karger,Enrique_Montes
+### 1.2.1 Required Fields:
+investigators
 affiliations
 contact
 experiment
@@ -37,16 +37,16 @@ delimiter
 fields
 units
 
-## Conditionally Required Headers
+### 1.2.2 Conditionally Required Headers
 
 
-## HPLC Specific
+### 1.2.3 HPLC Specific
 https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments,%20HPLC
 /HPLC_lab (e.g., NASA_GSFC)
 /HPLC_lab_technician (e.g., Crystal_Thomas)
 
-## Ex Header
--------------------------------------------------------------------------------
+### 1.2.4 Ex Header
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ start ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 /begin_header	
 /identifier_product_doi=10.5067/SeaBASS/EXPORTS/DATA001	
 /received=20190807	
@@ -80,10 +80,9 @@ https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments
 /units=none	none
 /end_header	
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ end ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
--------------------------------------------------------------------------------
-
-# Data fields
+## 1.3 Data fields
 1. Individual and summed pigments (based on SeaBASS fields/SeaHARRE reports)
 
 2. Separate columns for any size-fractionated measurements (e.g., Tot_Chl_a_20umprefilt goes in a separate column from Tot_Chl_a)
@@ -95,119 +94,432 @@ Use the /below_detection_limit to mask any relevant values. It is distinct from 
 SeaBASS files may only contain data from a single cruise or deployment. If necessary, sort and separate your data by cruise then create multiple SeaBASS files
 An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC spreadsheets into SeaBASS file format. However, please read its limitations and caveats carefully. https://seabass.gsfc.nasa.gov/hplc2sb/
 
-
-
-
-# Load Libraries
-```{r}
+# 2.0 Start Code:
+## Load Libraries
+```{r libraries}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   # broom # optional
   
   # additional
-  
+  hms, janitor
 )
 
 library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+
+# load consolidated HPLC by cruise
+(dir_ls(here("data", "processed", "hplc"),
+       regexp = "RData") %>%
+  sort(decreasing = TRUE))[1] |>
+  load() 
 ```
 
-# Header Information
-```{r}
-header_skeleton <-
-  glue::glue(
-    "/begin_header",
-      # required  
-      "/investigators={investor}",
-      "/affiliations={affil}",
-      "/contact={contact}",
-      "/experiment={expri}",
-      "/cruise={cruise_id}",
-      "/station=NA",
-      "/data_file_name={file_name}", # current name of data file, self-reference
-      "/documents=",      # additonal info about experiment and cruise
-      "/data_type={type}",
-      "/calibration_files=",
-      "/start_date=",
-      "/end_date=",
-      "/start_time=",
-      "/end_time=",
-      "/north_latitude=",
-      "/south_latitude=",
-      "/east_longitude=",
-      "/west_longitude=",
-      "/water_depth=",
-      "/missing=-9999",
-      "/delimiter=comma",
-      "/fields={fields}", # fields of data 
-      "/units=",  # units for each column 
-      
-      # HPLC required
-      "/HPLC_lab={hplc_lab}",
-      "/HPLC_lab_technician={lab_tech}",
-      "/below_detection_limit=-8888",
-      
-      # conditional 
-      "/measurement_depth",
-      
-      # optional recommened
-      "/data_status={status}",
-      
-      # optional
-      "/identifier_product_doi=",
-      "/original_file_name", 
-      
-    "{comments}",
-    
-      #"/received=",
-    
-      "/end_header", 
-    .sep = "\n") |>
-    
-  expression()
-
-investor  <- "Frank Muller-Karger,Enrique Montes"
-contact   <-  ""
+## Header Information
+```{r defaults}
+investor  <- "Frank_Muller-Karger,Enrique_Montes"
 affil     <- "University_of_South_Florida,USA"
 expri     <- "MBON"
 hplc_lab  <- "NASA_GSFC"	
 lab_tech  <- "Crystal_Thomas"	
 type      <- "pigment"
 status    <- "final" # final - not intending to revisit
-cruise_id <- "TODO" # TODO: include
-fields    <- "TODO" 
+wtr_dpth  <- stn <- "na"
 
+# add more when needed
+fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
+                 "water_depth","volfilt")
+units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
+
+# TODO:
+contact  <- "__TODO__"
+docs     <- "__TODO__"
+cal_file <- "__TODO__"
 comments <- 
   glue(.sep = "\n",
        "!",
        "! test",
        "!")
+```
 
-file_name <-
-  glue(
-    "{expri}",
-    "{cruise_id}",
-    "{type}",
-    "min_date",
-    .sep = "_"
-  )
-
-
-header_skeleton
-eval(header_skeleton)
+```{r headr-skeleton}
+header_skeleton <-
+  glue::glue(
+    "/begin_header",
+    # required  
+    "/investigators={investor}",
+    "/affiliations={affil}",
+    "/contact={contact}",
+    "/experiment={expri}",
+    "/cruise={cruise_id}",
+    "/station={stn}",
+    "/data_file_name={file_name}", # current name of data file, self-reference
+    "/documents={docs}",           # additional info about experiment and cruise
+    "/data_type={type}",
+    "/calibration_files={cal_file}",
+    "/start_date={st_dt}",
+    "/end_date={end_dt}",
+    "/start_time={st_t}[GMT]",
+    "/end_time={end_t}[GMT]",
+    "/north_latitude={no_lat}[DEG]",
+    "/south_latitude={so_lat}[DEG]",
+    "/east_longitude={es_lon}[DEG]",
+    "/west_longitude={ws_lon}[DEG]",
+    "/water_depth={wtr_dpth}",
+    "/missing=-9999",
+    "/delimiter=comma",
+    "/fields={fields}", # fields of data 
+    "/units={pun}",  # units for each column 
+    
+    # HPLC required
+    "/HPLC_lab={hplc_lab}",
+    "/HPLC_lab_technician={lab_tech}",
+    "/below_detection_limit=-8888",
+    
+    # conditional 
+    # "/measurement_depth=___", # only need if don't supply depth field
+    
+    # optional recommened
+    "/data_status={status}",
+    
+    # optional
+    "/original_file_name={fbase}", 
+    
+    "{comments}",
+    
+    #"/received=",
+    
+    "/end_header", 
+    # "{dat}",
+    .sep = "\n") |>
+  
+  expression()
 ```
 
 
+## Extract Header Information
+```{r header-info}
+# TODO: delete ----
+# pigment_data$data[[1]] %>%
+#         mutate(datetime = date + time) %>%
+#       
+#         summarise(across(.col = c(datetime, lon, lat), 
+#                          .fn = list(min = min, 
+#                                     max = max),
+#                          na.rm = TRUE,
+#                          .names = "{.col}_{.fn}")) %>%
+#         rename(
+#           "north_latitude" = lat_max,
+#           "south_latitude" = lat_min,
+#           "east_longitude" = lon_max,
+#           "west_longitude" = lon_min,
+#         ) %>%
+#         mutate(
+#           start_date = ymd(as_date(datetime_min)),
+#           end_date   = ymd(as_date(datetime_max)),
+#           start_time = as_hms(datetime_min),
+#           end_time   = as_hms(datetime_max),
+#           .keep      = "unused"
+#         ) 
 
-strcat('/received=',date_received);
+# ----
+test <-
+  pigment_data %>%
+  mutate(
+    header_info = map(
+      .x = data,
+      function(x) {
+        x %>%
+        mutate(datetime = date + time) %>%
+        # get min and max of head per cruise header info
+        summarise(across(.cols = c(datetime, lon, lat), 
+                         # new way using lambda notation
+                         .fns = list(min = (\(x) min(x, na.rm = TRUE)),
+                                     max = (\(x) max(x, na.rm = TRUE))),
+                         # alternate using ~
+                         # .fns = list(min = ~ min(.x, na.rm = TRUE), 
+                         #             max = ~ max(.x, na.rm = TRUE)),
+                         
+                         # creates warning because `...` in across is deprecated?
+                         # .fns = list(min = min, 
+                         #             max = max),
+                         # na.rm = TRUE,
+                         .names = "{.col}_{.fn}")) %>%
+        # rename to match header name
+        # rename(
+        #   "north_latitude" = lat_max,
+        #   "south_latitude" = lat_min,
+        #   "east_longitude" = lon_max,
+        #   "west_longitude" = lon_min,
+        # ) %>%
+        # split datetime to date and time separately
+        mutate(
+          start_date = format(ymd(as_date(datetime_min)),"%Y%m%d"),
+          end_date   = format(ymd(as_date(datetime_max)),"%Y%m%d"),
+          start_time = as_hms(datetime_min),
+          end_time   = as_hms(datetime_max),
+          north_latitude = round(lat_max, 3),
+          south_latitude = round(lat_min, 3),
+          east_longitude = round(lon_max, 3),
+          west_longitude = round(lon_min, 3),
+          .keep      = "unused"
+        )
+      }
+    )
+  ) 
+```
+Warning: There was 1 warning in `mutate()`.
+ℹ In argument: `across(...)`.
+Caused by warning:
+! There was 1 warning in `summarise()`.
+ℹ In argument: `across(...)`.
+Caused by warning:
+! The `...` argument of `across()` is deprecated as of dplyr 1.1.0.
+Supply arguments directly to `.fns` through an anonymous function instead.
 
+  # Previously
+  across(a:b, mean, na.rm = TRUE)
+
+  # Now
+  across(a:b, \`(x) mean(x, na.rm = TRUE))
+This warning is displayed once every 8 hours.
+Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
+
+```{r header-info}
+names(test)
+# "file"        "base"        "cruise"      "param_name"  "units"       "data"        "header_info"
+  glue("here", paste(test$param_name[[1]], collapse  = ","), .sep = ",")
+test$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
+  as.matrix() 
+ 
+
+# cruise data header_info cruise_id 
+test %>%
+  slice(1:2) %>%
+  mutate(
+    cruise_id = case_when(
+      str_detect(cruise, "(?i)walton") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)weath") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
+      TRUE ~ "no"
+    ),
+     heads = pmap(
+      .progress = TRUE,
+      .l = list(data, header_info, cruise_id),
+      function(y, x, cruise_id){
+        cat("\n---\nNEXT\n", first(y$base), "\n---\n")
+        
+        # header info
+        # no_lat <- round(x$north_latitude, 3)
+        # so_lat <- round(x$south_latitude, 3)
+        # es_lon <- round(x$east_longitude, 3)
+        # ws_lon <- round(x$west_longitude, 3)
+        # st_t   <- x$start_time
+        # end_t  <- x$end_time
+        # st_dt  <- format(x$start_date, "%Y%m%d")
+        # end_dt <- format(x$end_date, "%Y%m%d")
+        # st_dt  <- x$start_date
+        # end_dt <- x$end_date
+        
+
+        fbase <- str_replace_all(first(y$base), " ", "_")
+        
+        file_name <-
+          # glue("{expri}", "{cruise_id}", "{type}", "{st_dt}.sb", .sep = "_")
+          glue("{expri}", "{cruise_id}", "{type}", "{x$start_date}.sb", .sep = "_")
+        
+        # fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
+        fields <- glue(!!!fields_extr,
+                       paste(first(y$param_name), collapse = ","), .sep = ",")
+        
+        pun <- glue(!!!units_extr,
+                    paste(first(y$units), collapse = ","), .sep = ",")
+        
+        # cat(file_name, fields, pun, sep = "\n\n")
+        cat(x$start_date, "\n", x$end_date, "\n\n\n")
+        with(x, eval(header_skeleton)) %T>% print()
+        readline("Ready?")
+      }
+     )
+  )
+    
+  #   (
+  #   heads = pmap(
+  #     # .progress = TRUE,
+  #     .l = list(base, header_info, cruise_id, data, param_name, units, base),
+  #     function(files, x, y, dat, names, p_unit, fbase) {
+  #       
+  #       cat("\n---\nNEXT\n", files, "\n---\n")
+  # 
+  #       temp   <- x
+  #       no_lat <- round(x$north_latitude, 3)
+  #       so_lat <- round(x$south_latitude, 3)
+  #       es_lon <- round(x$east_longitude, 3)
+  #       ws_lon <- round(x$west_longitude, 3)
+  #       st_t   <- x$start_time
+  #       end_t  <- x$end_time
+  #       st_dt  <- format(x$start_date, "%Y%m%d")
+  #       end_dt <- format(x$end_date, "%Y%m%d")
+  #       cruise_id <- y
+  #       fbase <- str_replace_all(fbase, " ", "_")
+  # 
+  #       file_name <-
+  #       glue("{expri}", "{cruise_id}", "{type}", "{st_dt}.sb", .sep = "_")
+  # 
+  #       fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
+  #       fields <- glue(!!!fields_extr,
+  #                      paste(names, collapse = ","), .sep = ",")
+  # 
+  #       pun <- glue(!!!units_extr,
+  #                       paste(p_unit, collapse = ","), .sep = ",")
+  # 
+  # 
+  #      
+  #       
+  #       
+  #       eval(header_skeleton) %T>% print()
+  #       readline("Ready?")
+  #     }
+  #   )
+  # ) 
+
+
+ # dat <- 
+ #          dat %>%
+ #          remove_empty(which = "cols") %>%
+ #          mutate(
+ #          volfilt = volfilt/1000 # convert mL to L
+ #        ) %>%
+ #          as.matrix()
+
+```
+# 3.0 Tests
+## List Version Test
+```{r test-default}
+hd_def <- list()
+hd_def$invest  <- "Frank_Muller-Karger,Enrique_Montes"
+
+hd_def$affil     <- "University_of_South_Florida,USA"
+hd_def$expri     <- "MBON"
+hd_def$hplc_lab  <- "NASA_GSFC"	
+hd_def$lab_tech  <- "Crystal_Thomas"	
+hd_def$type      <- "pigment"
+hd_def$status    <- "final" # final - not intending to revisit
+hd_def$wtr_dpth  <- hd_def$stn <- "na"
+hd_def$comments <- 
+  glue(.sep = "\n",
+       "!",
+       "! test",
+       "!")
+
+
+hd_def$fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
+                 "water_depth","volfilt")
+hd_def$units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
+
+# TODO:
+hd_def$contact  <- "__TODO__"
+hd_def$docs     <- "__TODO__"
+hd_def$cal_file <- "__TODO__"
+
+
+```
+
+```{r test-headr-skeleton}
+# "invest"      "affil"       "expri"       "hplc_lab"    "lab_tech"    "type"        
+# "status"      "wtr_dpth"    "comments"    "fields_extr"
+# "units_extr"  "contact"     "docs"        "cal_file"   
+
+header_skeleton <-
+  glue::glue(
+    "/begin_header",
+    # required  
+    "/investigators={hd_def$invest}",
+    "/affiliations={hd_def$affil}",
+    "/contact={hd_def$contact}",
+    "/experiment={hd_def$expri}",
+    "/cruise={cruise_id}",
+    "/station={hd_def$stn}",
+    "/data_file_name={file_name}", # current name of data file, self-reference
+    "/documents={hd_def$docs}",           # additional info about experiment and cruise
+    "/data_type={hd_def$type}",
+    "/calibration_files={hd_def$cal_file}",
+    "/start_date={st_dt}",
+    "/end_date={end_dt}",
+    "/start_time={st_t}[GMT]",
+    "/end_time={end_t}[GMT]",
+    "/north_latitude={no_lat}[DEG]",
+    "/south_latitude={so_lat}[DEG]",
+    "/east_longitude={es_lon}[DEG]",
+    "/west_longitude={ws_lon}[DEG]",
+    "/water_depth={hd_def$wtr_dpth}",
+    "/missing=-9999",
+    "/delimiter=comma",
+    "/fields={fields}", # fields of data 
+    "/units={pun}",  # units for each column 
+    
+    # HPLC required
+    "/HPLC_lab={hd_def$hplc_lab}",
+    "/HPLC_lab_technician={hd_def$lab_tech}",
+    "/below_detection_limit=-8888",
+    
+    # conditional 
+    # "/measurement_depth=___", # only need if don't supply depth field
+    
+    # optional recommened
+    "/data_status={hd_def$status}",
+    
+    # optional
+    "/original_file_name={fbase}", 
+    
+    "{comments}",
+    
+    #"/received=",
+    
+    "/end_header", 
+    # "{dat}",
+    .sep = "\n") |>
+  
+  expression()
+
+
+
+# header_skeleton
+# eval(header_skeleton)
+```
+
+```{r}
+# for (i in 1:2) {
+#   cat("\n---\nNEXT\n", test$file[[1]], "\n---\n")
+#   temp   <- test$header_info[[i]]
+#   no_lat <- round(temp$north_latitude, 3)
+#   so_lat <- round(temp$south_latitude, 3)
+#   es_lon <- round(temp$east_longitude, 3)
+#   ws_lon <- round(temp$west_longitude, 3)
+#   st_t   <- temp$start_time
+#   end_t  <- temp$end_time
+#   st_dt  <- format(temp$start_date, "%Y%m%d")
+#   end_dt <- format(temp$end_date, "%Y%m%d")
+#   eval(header_skeleton) %T>% print()
+#   
+# }
+```
+x  hdr = {'/begin_header';
+  strcat('/received=',date_received);
+  '/investigators=Frank_Muller-Karger,Enrique_Montes';
+  '/affiliations=University_of_South_Florida,USA';
+'/contact=emontesh@usf.edu';
+'/experiment=MBON';
+strcat('/cruise=',cruise);
 strcat('/data_file_name=',cruise,'_',data_type);
 strcat('/documents=',cruise_report);
 '/calibration_files=HPLC_method_summary';
 '/delimiter=space';
+'/data_type=pigment';
+'/data_status=final';
 strcat('/start_date=',start_date);
 strcat('/end_date=',end_date);
 strcat('/start_time=',start_time,'[GMT]');
@@ -233,4 +545,4 @@ strcat('/east_longitude=',lon_e,'[DEG]');
 '!Water: variable conditions.';
 '/fields=date,station,lon,lat,depth,Tot_Chl_a,Tot_Chl_b,Tot_Chl_c,alpha-beta-Car,But-fuco,Hex-fuco,Allo,Diadino,Diato,Fuco,Perid,Zea,MV_Chl_a,DV_Chl_a,Chlide_a,MV_Chl_b,DV_Chl_b,Chl_c1c2,Chl_c3,Lut,Neo,Viola,Phytin_a,Phide_a,Pras,Gyro,TChl,PPC,PSC,PSP,Tcar,Tacc,Tpg,DP,Tacc_TChla,PSC_Tcar,PPC_Tcar,TChl_Tcar,PPC_Tpg,PSP_Tpg,TChla_Tpg';
 '/units=yyyymmdd,none,degrees,degrees,m,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,mg/m^3,none,none,none,none,none,none,none';
-'/end_header'
+'/end_header'};
