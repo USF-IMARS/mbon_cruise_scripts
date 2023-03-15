@@ -190,8 +190,7 @@ header_skeleton <-
     "/original_file_name={fbase}", 
     
     "{comments}",
-    
-    #"/received=",
+
     
     "/end_header", 
     # "{dat}",
@@ -205,30 +204,6 @@ header_skeleton <-
 
 ## Extract Header Information
 ```{r header-info}
-# TODO: delete ----
-# pigment_data$data[[1]] %>%
-#         mutate(datetime = date + time) %>%
-#       
-#         summarise(across(.col = c(datetime, lon, lat), 
-#                          .fn = list(min = min, 
-#                                     max = max),
-#                          na.rm = TRUE,
-#                          .names = "{.col}_{.fn}")) %>%
-#         rename(
-#           "north_latitude" = lat_max,
-#           "south_latitude" = lat_min,
-#           "east_longitude" = lon_max,
-#           "west_longitude" = lon_min,
-#         ) %>%
-#         mutate(
-#           start_date = ymd(as_date(datetime_min)),
-#           end_date   = ymd(as_date(datetime_max)),
-#           start_time = as_hms(datetime_min),
-#           end_time   = as_hms(datetime_max),
-#           .keep      = "unused"
-#         ) 
-
-# ----
 test <-
   pigment_data %>%
   mutate(
@@ -287,16 +262,13 @@ This warning is displayed once every 8 hours.
 Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
 
 ```{r header-info}
-# names(test)
-# # "file"        "base"        "cruise"      "param_name"  "units"       "data"        "header_info"
-#   glue("here", paste(test$param_name[[1]], collapse  = ","), .sep = ",")
 # test$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
 #   as.matrix() 
  
-
 # cruise data header_info cruise_id 
-test %>%
-  slice(1:2) %>%
+final <-
+  test %>%
+  # slice(1) %>%
   mutate(
     cruise_id = case_when(
       str_detect(cruise, "(?i)walton") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
@@ -308,9 +280,11 @@ test %>%
       .progress = TRUE,
       .l = list(data, header_info, cruise_id),
       function(y, x, cruise_id){
-        cat("\n---\nNEXT\n", first(y$base), "\n---\n")
+        cat("\n---\nNEXT\n", unique(y$base), "\n---\n")
         
-        fbase <- str_replace_all(first(y$base), " ", "_")
+        fbase <- 
+          str_replace_all(unique(y$base), " ", "_") %>%
+          str_c(collapse = ",")
         
         file_name <-
           # glue("{expri}", "{cruise_id}", "{type}", "{st_dt}.sb", .sep = "_")
@@ -323,14 +297,19 @@ test %>%
         pun <- glue(!!!units_extr,
                     paste(first(y$units), collapse = ","), .sep = ",")
         
-        with(x, eval(header_skeleton)) %T>% print()
+        header <- 
+          with(x, eval(header_skeleton)) %T>% 
+          print()
         
-        readline("Ready?")
+        # readline("Ready?")
+        
+        return(list(header = header,
+                    file_name = file_name))
       }
      )
   )
     
-
+final$heads[[1]]$header
 
  # dat <- 
  #          dat %>%
@@ -339,7 +318,18 @@ test %>%
  #          volfilt = volfilt/1000 # convert mL to L
  #        ) %>%
  #          as.matrix()
+test$data[[1]] %$%
+  unique(base) %T>%
+  print() %>%
+  str_replace_all(., " ", "_") %T>%
+  print() %>%
+  str_c(collapse = ",")
 
+
+
+test$data %>%
+  map(.progress = TRUE,
+      .f = ~ unique(.$base)  %T>% cat("---", ., "\n\n"))
 ```
 # 3.0 Tests
 ## List Version Test
@@ -436,22 +426,6 @@ header_skeleton <-
 # eval(header_skeleton)
 ```
 
-```{r}
-# for (i in 1:2) {
-#   cat("\n---\nNEXT\n", test$file[[1]], "\n---\n")
-#   temp   <- test$header_info[[i]]
-#   no_lat <- round(temp$north_latitude, 3)
-#   so_lat <- round(temp$south_latitude, 3)
-#   es_lon <- round(temp$east_longitude, 3)
-#   ws_lon <- round(temp$west_longitude, 3)
-#   st_t   <- temp$start_time
-#   end_t  <- temp$end_time
-#   st_dt  <- format(temp$start_date, "%Y%m%d")
-#   end_dt <- format(temp$end_date, "%Y%m%d")
-#   eval(header_skeleton) %T>% print()
-#   
-# }
-```
 x  hdr = {'/begin_header';
   strcat('/received=',date_received);
   '/investigators=Frank_Muller-Karger,Enrique_Montes';
