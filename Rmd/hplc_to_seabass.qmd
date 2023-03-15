@@ -160,14 +160,22 @@ header_skeleton <-
     "/documents={docs}",           # additional info about experiment and cruise
     "/data_type={type}",
     "/calibration_files={cal_file}",
-    "/start_date={st_dt}",
-    "/end_date={end_dt}",
-    "/start_time={st_t}[GMT]",
-    "/end_time={end_t}[GMT]",
-    "/north_latitude={no_lat}[DEG]",
-    "/south_latitude={so_lat}[DEG]",
-    "/east_longitude={es_lon}[DEG]",
-    "/west_longitude={ws_lon}[DEG]",
+    # "/start_date={st_dt}",
+    # "/end_date={end_dt}",
+    # "/start_time={st_t}[GMT]",
+    # "/end_time={end_t}[GMT]",
+    # "/north_latitude={no_lat}[DEG]",
+    # "/south_latitude={so_lat}[DEG]",
+    # "/east_longitude={es_lon}[DEG]",
+    # "/west_longitude={ws_lon}[DEG]",
+    "/start_date={start_date}",
+    "/end_date={end_date}",
+    "/start_time={start_time}[GMT]",
+    "/end_time={end_time}[GMT]",
+    "/north_latitude={north_latitude}[DEG]",
+    "/south_latitude={south_latitude}[DEG]",
+    "/east_longitude={east_longitude}[DEG]",
+    "/west_longitude={west_longitude}[DEG]",
     "/water_depth={wtr_dpth}",
     "/missing=-9999",
     "/delimiter=comma",
@@ -186,6 +194,7 @@ header_skeleton <-
     "/data_status={status}",
     
     # optional
+    # "/identifier_product_doi=", # entered by SeaBass Staff
     "/original_file_name={fbase}", 
     
     "{comments}",
@@ -197,6 +206,8 @@ header_skeleton <-
     .sep = "\n") |>
   
   expression()
+
+
 ```
 
 
@@ -248,19 +259,14 @@ test <-
                          #             max = max),
                          # na.rm = TRUE,
                          .names = "{.col}_{.fn}")) %>%
-        # rename to match header name
-        # rename(
-        #   "north_latitude" = lat_max,
-        #   "south_latitude" = lat_min,
-        #   "east_longitude" = lon_max,
-        #   "west_longitude" = lon_min,
-        # ) %>%
+
         # split datetime to date and time separately
         mutate(
           start_date = format(ymd(as_date(datetime_min)),"%Y%m%d"),
           end_date   = format(ymd(as_date(datetime_max)),"%Y%m%d"),
           start_time = as_hms(datetime_min),
           end_time   = as_hms(datetime_max),
+          
           north_latitude = round(lat_max, 3),
           south_latitude = round(lat_min, 3),
           east_longitude = round(lon_max, 3),
@@ -312,19 +318,6 @@ test %>%
       function(y, x, cruise_id){
         cat("\n---\nNEXT\n", first(y$base), "\n---\n")
         
-        # header info
-        # no_lat <- round(x$north_latitude, 3)
-        # so_lat <- round(x$south_latitude, 3)
-        # es_lon <- round(x$east_longitude, 3)
-        # ws_lon <- round(x$west_longitude, 3)
-        # st_t   <- x$start_time
-        # end_t  <- x$end_time
-        # st_dt  <- format(x$start_date, "%Y%m%d")
-        # end_dt <- format(x$end_date, "%Y%m%d")
-        # st_dt  <- x$start_date
-        # end_dt <- x$end_date
-        
-
         fbase <- str_replace_all(first(y$base), " ", "_")
         
         file_name <-
