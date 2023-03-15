@@ -63,8 +63,8 @@ hplc_data <-
       rename(
         any_of(
           c(
-            gsfc_lab_sample_code = "hplc_gsfc_id",
-            gsfc_lab_sample_code = "gsfc_sample_code",
+            hplc_gsfc_id = "gsfc_lab_sample_code",
+            hplc_gsfc_id = "gsfc_sample_code",
             cruise      = "cruise_name",
             day         = "day_of_gregorian_month",
             depth       = "sampling_depth_meters",
