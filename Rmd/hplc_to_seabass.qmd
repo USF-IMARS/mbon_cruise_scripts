@@ -287,11 +287,11 @@ This warning is displayed once every 8 hours.
 Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
 
 ```{r header-info}
-names(test)
-# "file"        "base"        "cruise"      "param_name"  "units"       "data"        "header_info"
-  glue("here", paste(test$param_name[[1]], collapse  = ","), .sep = ",")
-test$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
-  as.matrix() 
+# names(test)
+# # "file"        "base"        "cruise"      "param_name"  "units"       "data"        "header_info"
+#   glue("here", paste(test$param_name[[1]], collapse  = ","), .sep = ",")
+# test$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
+#   as.matrix() 
  
 
 # cruise data header_info cruise_id 
@@ -323,53 +323,13 @@ test %>%
         pun <- glue(!!!units_extr,
                     paste(first(y$units), collapse = ","), .sep = ",")
         
-        # cat(file_name, fields, pun, sep = "\n\n")
-        cat(x$start_date, "\n", x$end_date, "\n\n\n")
         with(x, eval(header_skeleton)) %T>% print()
+        
         readline("Ready?")
       }
      )
   )
     
-  #   (
-  #   heads = pmap(
-  #     # .progress = TRUE,
-  #     .l = list(base, header_info, cruise_id, data, param_name, units, base),
-  #     function(files, x, y, dat, names, p_unit, fbase) {
-  #       
-  #       cat("\n---\nNEXT\n", files, "\n---\n")
-  # 
-  #       temp   <- x
-  #       no_lat <- round(x$north_latitude, 3)
-  #       so_lat <- round(x$south_latitude, 3)
-  #       es_lon <- round(x$east_longitude, 3)
-  #       ws_lon <- round(x$west_longitude, 3)
-  #       st_t   <- x$start_time
-  #       end_t  <- x$end_time
-  #       st_dt  <- format(x$start_date, "%Y%m%d")
-  #       end_dt <- format(x$end_date, "%Y%m%d")
-  #       cruise_id <- y
-  #       fbase <- str_replace_all(fbase, " ", "_")
-  # 
-  #       file_name <-
-  #       glue("{expri}", "{cruise_id}", "{type}", "{st_dt}.sb", .sep = "_")
-  # 
-  #       fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
-  #       fields <- glue(!!!fields_extr,
-  #                      paste(names, collapse = ","), .sep = ",")
-  # 
-  #       pun <- glue(!!!units_extr,
-  #                       paste(p_unit, collapse = ","), .sep = ",")
-  # 
-  # 
-  #      
-  #       
-  #       
-  #       eval(header_skeleton) %T>% print()
-  #       readline("Ready?")
-  #     }
-  #   )
-  # ) 
 
 
  # dat <- 
