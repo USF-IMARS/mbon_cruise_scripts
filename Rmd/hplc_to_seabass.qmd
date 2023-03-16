@@ -247,14 +247,6 @@ pig_w_head <-
                          # new way using lambda notation
                          .fns = list(min = (\(x) min(x, na.rm = TRUE)),
                                      max = (\(x) max(x, na.rm = TRUE))),
-                         # alternate using ~
-                         # .fns = list(min = ~ min(.x, na.rm = TRUE), 
-                         #             max = ~ max(.x, na.rm = TRUE)),
-                         
-                         # creates warning because `...` in across is deprecated?
-                         # .fns = list(min = min, 
-                         #             max = max),
-                         # na.rm = TRUE,
                          .names = "{.col}_{.fn}")) %>%
 
         # split datetime to date and time separately
