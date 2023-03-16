@@ -160,8 +160,8 @@ wtr_dpth  <- stn <- "na"
 # add more when needed
 fields_extr <- 
   tibble(
-    field_extr = c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
-                 "water_depth","volfilt")) %>%
+    field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
+                   "lon","lat","depth", "water_depth","volfilt")) %>%
   left_join(sb_field, by = c("field_extr" = "field_name"))
 
 # units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
@@ -234,7 +234,7 @@ header_skeleton <-
 
 ## Extract Header Information
 ```{r header-info}
-test <-
+pig_w_head <-
   pigment_data %>%
   mutate(
     header_info = map(
@@ -268,7 +268,7 @@ test <-
           south_latitude = round(lat_min, 3),
           east_longitude = round(lon_max, 3),
           west_longitude = round(lon_min, 3),
-          .keep      = "unused"
+          .keep = "unused"
         )
       }
     )
@@ -292,18 +292,18 @@ This warning is displayed once every 8 hours.
 Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
 
 ```{r header-info}
-# test$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
+# pig_w_head$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
 #   as.matrix() 
  
 # cruise data header_info cruise_id 
-# final <-
-  test %>%
+final <-
+  pig_w_head %>%
   slice(c(1,5,17, 25)) %>%
   mutate(
     cruise_id = case_when(
-      str_detect(cruise, "(?i)walton") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
-      str_detect(cruise, "(?i)weath") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
       TRUE ~ "no"
     ),
      heads = pmap(
@@ -327,8 +327,8 @@ Call `lifecycle::last_lifecycle_warnings()` to see where this warning was genera
         fields <- glue(!!!fields_extr$field_extr,
                        paste(field_nm$field_name, collapse = ","), .sep = ",")
         
-        pun <- glue(!!!fields_extr$units,
-                    paste(field_nm$units, collapse = ","), .sep = ",")
+        pun    <- glue(!!!fields_extr$units,
+                       paste(field_nm$units, collapse = ","), .sep = ",")
         
         header <- 
           with(x, eval(header_skeleton)) %T>% 
@@ -336,22 +336,66 @@ Call `lifecycle::last_lifecycle_warnings()` to see where this warning was genera
         
         # readline("Ready?")
         
-        return(list(header = header,
-                    file_name = file_name))
+        return(
+          list(header    = header,
+               file_name = file_name,
+               fld_use   = paste(c(fields_extr$field_extr, field_nm$field_name)),
+               fields    = field_nm)
+          )
       }
      )
   )
     
-final$heads[[1]]$header
 
- # dat <- 
+final1 <- 
+  final %>%
+  slice(1) %>%
+  mutate(
+    cols = map2(.x = data, .y = heads, 
+               function(.x, .y) {
+                 select(.x, any_of(c(fields_extr$field_extr, 
+                                     final$heads[[1]]$fields$param_name))) %>%
+                 set_names(.y$fld_use)
+                 
+                 }
+             )) 
+ final1 %>%
+  mutate(
+    cols2 = map2(.x = cols, .y = heads,
+                function(.x, .y) {
+                  # print(names(.y))
+                  #print((.y$fields$field_name))
+                  # print(.x)
+                  
+                  cat(.y$header, "\n", #delim = ",",
+                      file = here(.y$file_name))
+                  .x %>%
+                   mutate(
+                     date = format(date,"%Y%m%d")
+                     ) %>%
+
+                  write_delim(., delim = ",",
+                              here(.y$file_name),
+                              append = TRUE,
+                              col_names = TRUE)
+                  
+                  }
+                )
+  ) 
+
+
+final$heads[[1]]$file_name
+#[1] "hplc_gsfc_id" "sample"       "date"         "station"      "lon"         
+# [6] "lat"          "depth"        "water_depth"  "volfilt"  
+ 
+# dat <- 
  #          dat %>%
  #          remove_empty(which = "cols") %>%
  #          mutate(
  #          volfilt = volfilt/1000 # convert mL to L
  #        ) %>%
  #          as.matrix()
-test$data[[1]] %$%
+pig_w_head$data[[1]] %$%
   unique(base) %T>%
   print() %>%
   str_replace_all(., " ", "_") %T>%
@@ -360,10 +404,31 @@ test$data[[1]] %$%
 
 
 
-test$data %>%
+pig_w_head$data %>%
   map(.progress = TRUE,
       .f = ~ unique(.$base)  %T>% cat("---", ., "\n\n"))
 ```
+```{r}
+test <- 
+  tibble(
+    head = c("hplc_gsfc_id", "sample", "date", "time", "station", "lon", "lat", "depth", "water_depth", "volfilt", "Tot_Chl_a", "Tot_Chl_b", "Tot_Chl_c", "alpha-beta-Car", "But-fuco", "Hex-fuco", "Allo", "Diadino", "Diato", "Fuco", "Perid", "Zea", "MV_Chl_a", "DV_Chl_a", "Chlide_a", "MV_Chl_b", "DV_Chl_b", "Chl_c1c2", "Chl_c3", "Lut", "Neo", "Viola", "Phytin_a", "Phide_a", "Pras", "Gyro", "Tchl", "PPC", "PSC", "PSP", "Tcar", "Tacc", "Tpg", "DP", "Tacc_Tchla", "PSC_Tcar", "PPC_Tcar", "TChl_Tcar", "PPC_Tpg", "PSP_Tpg", "Tchla_Tpg", "NA")
+,
+
+
+    body = c("hplc_gsfc_id", "sample", "date", "time", "station", "lon", "lat", "depth", "water_depth", "volfilt", "Tot_Chl_a", "Tot_Chl_b", "Tot_Chl_c", "alpha-beta-Car", "But-fuco", "Hex-fuco", "Allo", "Diadino", "Diato", "Fuco", "Perid", "Zea", "MV_Chl_a", "DV_Chl_a", "Chlide_a", "MV_Chl_b", "DV_Chl_b", "Chl_c1c2", "Chl_c3", "Lut", "Neo", "Viola", "Phytin_a", "Phide_a", "Pras", "Gyro", "Tchl", "PPC", "PSC", "PSP", "Tcar", "Tacc", "Tpg", "DP", "Tacc_Tchla", "PSC_Tcar", "PPC_Tcar", "TChl_Tcar", "PPC_Tpg", "PSP_Tpg", "Tchla_Tpg", "NA")
+
+
+) 
+
+identical(test[1,1][[1]], test[1,2][[1]])
+test %>%
+mutate(
+  check = if_else(head == body, "yes", "")
+)
+```
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # 3.0 Tests
 ## List Version Test
 ```{r test-default}
@@ -395,7 +460,7 @@ hd_def$cal_file <- "__TODO__"
 
 
 ```
-
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ```{r test-headr-skeleton}
 # "invest"      "affil"       "expri"       "hplc_lab"    "lab_tech"    "type"        
 # "status"      "wtr_dpth"    "comments"    "fields_extr"
