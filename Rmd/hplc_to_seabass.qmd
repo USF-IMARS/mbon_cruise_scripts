@@ -116,12 +116,11 @@ conflict_prefer("select", "dplyr")
   sort(decreasing = TRUE))[1] |>
   load() 
 
-pigment_data <- hplc_data
-# ocation to save files
+# location to save files
 loc <- 
-  here("data", "processed", "hplc", "ind_file")
+  here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
 
-dir_create(loc)
+dir_create(loc) # create dir for each day running
 ```
 
 ## All SeaBass Standard Fields 
@@ -138,9 +137,10 @@ sb_field <-
          )
 
 # extract all field names from data and map to Seabass standard names
-field_unit <- 
-  pigment_data %>% 
+hplc_data <- 
+  hplc_data %>% 
   mutate(
+    # edit old names from previous report to match current SeaBass
     sb_name = map(
       .x = names,
       (\(x) 
@@ -153,7 +153,6 @@ field_unit <-
            str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
            str_detect(low_name, "t_chl_a_tpg") ~ "tchla_tpg",
            str_detect(low_name, "tchl_a") ~ str_replace(low_name, "tchl_a", "tchla"),
-           # str_detect(low_name, "t_pg|t_pig") ~ str_replace(low_name, "t_pg|t_pig", "tpg"),
            str_detect(low_name, "^t_chl") ~ str_replace(low_name, "t_chl", "tchl"),
            str_detect(low_name, "t_acc") ~ str_replace(low_name, "t_acc", "tacc"),
            .default = low_name)
@@ -161,94 +160,57 @@ field_unit <-
   left_join(sb_field, by = c("low_name")) )
     )
   ) 
-
-pigment_data <- field_unit
-
-field_unit$sb_name %>%
-  list_rbind() %>%
-  distinct()
-
-  # pull(names) %>%
-  # list_c() %>%
-  # unique() %>%
-  # tibble(param_name = .) %>%
-  # mutate(
-  #        low_name = str_replace(param_name, "(?i)t_caro", "tcar"),
-  #        low_name = case_when(
-  #          str_detect(low_name, "chl_c12") ~ "chl_c1c2",
-  #          str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
-  #          # str_detect(low_name, "tchl_a_tpig|tchl_a_tpg") ~ "tchla_tpg",
-  #          str_detect(low_name, "tchl_a") ~ str_replace(low_name, "tchl_a", "tchla"),
-  #          str_detect(low_name, "t_pg") ~ "tpg",
-  #          str_detect(low_name, "t_chl") ~ "tchl",
-  #          str_detect(low_name, "t_acc") ~ "tacc",
-  #          .default = low_name)
-  #        ) %>%
-  # left_join(sb_field, by = c("low_name")) 
-
-# field_unit <- 
-#   pigment_data %>%
-#   unnest(data) %>%
-#   unnest(param_name) %>%
-#   distinct(param_name) %>%
-#   arrange(param_name) %>%
-#   mutate(low_name = str_to_lower(param_name),
-#          low_name = str_replace(low_name, "(?i)caro", "car"),
-#          low_name = case_when(
-#            str_detect(low_name, "chl_c12") ~ "chl_c1c2",
-#            str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
-#            str_detect(low_name, "tchl_a_tpig|tchl_a_tpg") ~ "tchla_tpg",
-#            .default = low_name)
-#          ) %>%
-#   left_join(sb_field, by = c("low_name"))
 ```
 ## Header Information
-```{r defaults}
-investor  <- "Frank_Muller-Karger,Enrique_Montes"
-affil     <- "University_of_South_Florida,USA"
-expri     <- "MBON"
-hplc_lab  <- "NASA_GSFC"	
-lab_tech  <- "Crystal_Thomas"	
-type      <- "pigment"
-status    <- "final" # final - not intending to revisit
-wtr_dpth  <- stn <- "na"
+```{r test-default}
+hd_def <- list()
+hd_def$invest  <- "Frank_Muller-Karger,Enrique_Montes"
 
-# fields 
-# has seabass version and original version to map to
-# add more when needed
-fields_extr <- 
-  tibble(
-    field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
-                   "lon","lat","depth", "water_depth","volfilt")) %>%
-  left_join(sb_field, by = c("field_extr" = "field_name"))
-
-
-# TODO:
-contact  <- "__TODO__"
-docs     <- "__TODO__"
-cal_file <- "__TODO__"
-comments <- 
+hd_def$affil     <- "University_of_South_Florida,USA"
+hd_def$expri     <- "MBON"
+hd_def$hplc_lab  <- "NASA_GSFC"	
+hd_def$lab_tech  <- "Crystal_Thomas"	
+hd_def$type      <- "pigment"
+hd_def$status    <- "final" # final - not intending to revisit
+hd_def$wtr_dpth  <- hd_def$stn <- "na"
+hd_def$comments <- 
   glue(.sep = "\n",
        "!",
        "! test",
        "!")
+
+hd_def$fields_extr <- 
+  tibble(
+    field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
+                   "lon","lat","depth", "water_depth","volfilt")) %>%
+  left_join(sb_field, by = c("field_extr" = "field_name"))
+# hd_def$fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
+#                  "water_depth","volfilt")
+# hd_def$units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
+
+# TODO:
+hd_def$contact  <- "__TODO__"
+hd_def$docs     <- "__TODO__"
+hd_def$cal_file <- "__TODO__"
+
+
 ```
 
-```{r headr-skeleton}
+```{r test-headr-skeleton}
 header_skeleton <-
   glue::glue(
     "/begin_header",
     # required  
-    "/investigators={investor}",
-    "/affiliations={affil}",
-    "/contact={contact}",
-    "/experiment={expri}",
+    "/investigators={hd_def$invest}",
+    "/affiliations={hd_def$affil}",
+    "/contact={hd_def$contact}",
+    "/experiment={hd_def$expri}",
     "/cruise={cruise_id}",
-    "/station={stn}",
+    "/station={hd_def$stn}",
     "/data_file_name={file_name}", # current name of data file, self-reference
-    "/documents={docs}",           # additional info about experiment and cruise
-    "/data_type={type}",
-    "/calibration_files={cal_file}",
+    "/documents={hd_def$docs}",           # additional info about experiment and cruise
+    "/data_type={hd_def$type}",
+    "/calibration_files={hd_def$cal_file}",
     "/start_date={start_date}",
     "/end_date={end_date}",
     "/start_time={start_time}[GMT]",
@@ -257,42 +219,130 @@ header_skeleton <-
     "/south_latitude={south_latitude}[DEG]",
     "/east_longitude={east_longitude}[DEG]",
     "/west_longitude={west_longitude}[DEG]",
-    "/water_depth={wtr_dpth}",
+    "/water_depth={hd_def$wtr_dpth}",
     "/missing=-9999",
     "/delimiter=comma",
-    "/fields={fields}", # fields of data 
-    "/units={pun}",  # units for each column 
+    
     
     # HPLC required
-    "/HPLC_lab={hplc_lab}",
-    "/HPLC_lab_technician={lab_tech}",
+    "/HPLC_lab={hd_def$hplc_lab}",
+    "/HPLC_lab_technician={hd_def$lab_tech}",
     "/below_detection_limit=-8888",
     
     # conditional 
     # "/measurement_depth=___", # only need if don't supply depth field
     
     # optional recommened
-    "/data_status={status}",
+    "/data_status={hd_def$status}",
     
     # optional
-    # "/identifier_product_doi=", # entered by SeaBass Staff
     "/original_file_name={fbase}", 
     
-    "{comments}",
-
+    "{hd_def$comments}",
     
+    "/fields={fields}", # fields of data 
+    "/units={pun}",  # units for each column 
     "/end_header", 
     # "{dat}",
     .sep = "\n") |>
   
   expression()
+
+
+
+# header_skeleton
+# eval(header_skeleton)
+```
+```{r defaults}
+# investor  <- "Frank_Muller-Karger,Enrique_Montes"
+# affil     <- "University_of_South_Florida,USA"
+# expri     <- "MBON"
+# hplc_lab  <- "NASA_GSFC"	
+# lab_tech  <- "Crystal_Thomas"	
+# type      <- "pigment"
+# status    <- "final" # final - not intending to revisit
+# wtr_dpth  <- stn <- "na"
+# 
+# # fields 
+# # has seabass version and original version to map to
+# # add more when needed
+# fields_extr <- 
+#   tibble(
+#     field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
+#                    "lon","lat","depth", "water_depth","volfilt")) %>%
+#   left_join(sb_field, by = c("field_extr" = "field_name"))
+# 
+# 
+# # TODO:
+# contact  <- "__TODO__"
+# docs     <- "__TODO__"
+# cal_file <- "__TODO__"
+# comments <- 
+#   glue(.sep = "\n",
+#        "!",
+#        "! test",
+#        "!")
+```
+
+```{r headr-skeleton}
+# header_skeleton <-
+#   glue::glue(
+#     "/begin_header",
+#     # required  
+#     "/investigators={investor}",
+#     "/affiliations={affil}",
+#     "/contact={contact}",
+#     "/experiment={expri}",
+#     "/cruise={cruise_id}",
+#     "/station={stn}",
+#     "/data_file_name={file_name}", # current name of data file, self-reference
+#     "/documents={docs}",           # additional info about experiment and cruise
+#     "/data_type={type}",
+#     "/calibration_files={cal_file}",
+#     "/start_date={start_date}",
+#     "/end_date={end_date}",
+#     "/start_time={start_time}[GMT]",
+#     "/end_time={end_time}[GMT]",
+#     "/north_latitude={north_latitude}[DEG]",
+#     "/south_latitude={south_latitude}[DEG]",
+#     "/east_longitude={east_longitude}[DEG]",
+#     "/west_longitude={west_longitude}[DEG]",
+#     "/water_depth={wtr_dpth}",
+#     "/missing=-9999",
+#     "/delimiter=comma",
+#     
+#     
+#     # HPLC required
+#     "/HPLC_lab={hplc_lab}",
+#     "/HPLC_lab_technician={lab_tech}",
+#     "/below_detection_limit=-8888",
+#     
+#     # conditional 
+#     # "/measurement_depth=___", # only need if don't supply depth field
+#     
+#     # optional recommend
+#     "/data_status={status}",
+#     
+#     # optional
+#     "/original_file_name={fbase}", 
+#     
+#     "{comments}",
+# 
+#     "/fields={fields}", # fields of data 
+#     "/units={pun}",     # units for each column 
+#     
+#     "/end_header", 
+#     # "{dat}",
+#     .sep = "\n") |>
+#   
+#   expression()
 ```
 
 
 ## Extract Header Information
 ```{r header-info}
-pig_w_head <-
-  pigment_data %>%
+hplc_w_head <-
+  hplc_data %>%
   mutate(
     header_info = map(
       .x = data,
@@ -331,44 +381,12 @@ pig_w_head <-
       )
     )
 ```
-Warning: There was 1 warning in `mutate()`.
-ℹ In argument: `across(...)`.
-Caused by warning:
-! There was 1 warning in `summarise()`.
-ℹ In argument: `across(...)`.
-Caused by warning:
-! The `...` argument of `across()` is deprecated as of dplyr 1.1.0.
-Supply arguments directly to `.fns` through an anonymous function instead.
-
-  # Previously
-  across(a:b, mean, na.rm = TRUE)
-
-  # Now
-  across(a:b, \`(x) mean(x, na.rm = TRUE))
-This warning is displayed once every 8 hours.
-Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
 
 ```{r header-info}
-# pig_w_head$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
-#   as.matrix() 
- 
-(c("hplc_gsfc_id,sample,date,time,station,lon,lat,depth,water_depth,volfilt,Tot_Chl_a,Tot_Chl_b,Tot_Chl_c,alpha-beta-Car,But-fuco,Hex-fuco,Allo,Diadino,Diato,Fuco,Perid,Zea,MV_Chl_a,DV_Chl_a,Chlide_a,MV_Chl_b,DV_Chl_b,Chl_c1c2,Chl_c3,Lut,Neo,Viola,Phytin_a,Phide_a,Pras,Gyro,Tchl,PPC,PSC,PSP,Tcar,Tacc,Tpg,DP,Tacc_Tchla,PSC_Tcar,PPC_Tcar,TChl_Tcar,PPC_Tpg,PSP_Tpg,Tchla_Tpg,NA,NA") %>%
-  str_split(",", simplify = TRUE) %>%
-  as.vector()) %>%
-  duplicated
-
-
-names(pigment_data[[2]][[5]])[-c(1:15)][-c(42, 43)]
-(pigment_data[[2]][[5]]$param_name)[[1]]
-
-
-(pig_w_head$data[[5]] %>%
-  names())
-
 # cruise data header_info cruise_id 
 final <-
-  pig_w_head %>%
-  slice(c(1,5,17, 25)) %>%
+  hplc_w_head %>%
+  # slice(c(1,5,17, 25)) %>%
   mutate(
      heads = pmap(
       .progress = TRUE,
@@ -384,12 +402,13 @@ final <-
         
         # create file name based on cruise ID
         file_name <-
-          glue("{expri}", "{cruise_id}", "{type}", "{x$start_date}.sb", 
+          glue("{hd_def$expri}", "{cruise_id}", 
+               "{hd_def$type}", "{x$start_date}.sb", 
                .sep = "_")
         
         # fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
         # SeaBass standard fields
-        field_nm <- c(fields_extr$field_extr, sb_name$field_name)
+        field_nm <- c(hd_def$fields_extr$field_extr, sb_name$field_name)
         fields <- 
           str_c(
             field_nm, 
@@ -399,13 +418,13 @@ final <-
         pun <-   
           str_c(
             c(
-              fields_extr$units,
+              hd_def$fields_extr$units,
               sb_name$units), 
             collapse = ",")# %T>% print()
  
         # evaluate header
         header <- 
-          with(x, eval(header_skeleton)) %T>% print()
+          with(x, eval(header_skeleton)) #%T>% print()
         
         # readline("Ready?")
 
@@ -421,21 +440,24 @@ final <-
      cols = pmap(
       list(data, heads, sb_name),
       function(.x, .y, .z) {
-        select(.x, any_of(c(fields_extr$field_extr,
+        select(.x, any_of(c(hd_def$fields_extr$field_extr,
                             .z$param_name))
                ) %>%
           set_names(.y$fld_use[[1]])
                  }
                )
   )
+```
 
+## Saving Files in SeaBass Format
+```{r save-files}
+# save files
 pwalk(list(final$cols, final$heads),
-      .f = function(x, y) {
+      function(x, y) {
         # write header
         cat(y$header, "\n",
             file = here(loc, y$file_name))
         
-       
         x %>%
          mutate(
            date = format(date,"%Y%m%d"),
@@ -451,11 +473,10 @@ pwalk(list(final$cols, final$heads),
                     delim     = ",",
                     file      = here(loc, y$file_name),
                     append    = TRUE,
-                    col_names = TRUE
+                    col_names = FALSE
                     )
         }
       )
-
 ```
 
 
@@ -480,10 +501,14 @@ hd_def$comments <-
        "! test",
        "!")
 
-
-hd_def$fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
-                 "water_depth","volfilt")
-hd_def$units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
+hd_def$fields_extr <- 
+  tibble(
+    field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
+                   "lon","lat","depth", "water_depth","volfilt")) %>%
+  left_join(sb_field, by = c("field_extr" = "field_name"))
+# hd_def$fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
+#                  "water_depth","volfilt")
+# hd_def$units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
 
 # TODO:
 hd_def$contact  <- "__TODO__"
@@ -494,10 +519,6 @@ hd_def$cal_file <- "__TODO__"
 ```
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ```{r test-headr-skeleton}
-# "invest"      "affil"       "expri"       "hplc_lab"    "lab_tech"    "type"        
-# "status"      "wtr_dpth"    "comments"    "fields_extr"
-# "units_extr"  "contact"     "docs"        "cal_file"   
-
 header_skeleton <-
   glue::glue(
     "/begin_header",
@@ -512,19 +533,18 @@ header_skeleton <-
     "/documents={hd_def$docs}",           # additional info about experiment and cruise
     "/data_type={hd_def$type}",
     "/calibration_files={hd_def$cal_file}",
-    "/start_date={st_dt}",
-    "/end_date={end_dt}",
-    "/start_time={st_t}[GMT]",
-    "/end_time={end_t}[GMT]",
-    "/north_latitude={no_lat}[DEG]",
-    "/south_latitude={so_lat}[DEG]",
-    "/east_longitude={es_lon}[DEG]",
-    "/west_longitude={ws_lon}[DEG]",
+    "/start_date={start_date}",
+    "/end_date={end_date}",
+    "/start_time={start_time}[GMT]",
+    "/end_time={end_time}[GMT]",
+    "/north_latitude={north_latitude}[DEG]",
+    "/south_latitude={south_latitude}[DEG]",
+    "/east_longitude={east_longitude}[DEG]",
+    "/west_longitude={west_longitude}[DEG]",
     "/water_depth={hd_def$wtr_dpth}",
     "/missing=-9999",
     "/delimiter=comma",
-    "/fields={fields}", # fields of data 
-    "/units={pun}",  # units for each column 
+    
     
     # HPLC required
     "/HPLC_lab={hd_def$hplc_lab}",
@@ -540,10 +560,10 @@ header_skeleton <-
     # optional
     "/original_file_name={fbase}", 
     
-    "{comments}",
+    "{hd_def$comments}",
     
-    #"/received=",
-    
+    "/fields={fields}", # fields of data 
+    "/units={pun}",  # units for each column 
     "/end_header", 
     # "{dat}",
     .sep = "\n") |>
