@@ -294,73 +294,6 @@ hplc_data <-
                tibble(param_name = .))
               )
   )
-  
-
-# map(nw$data,  
-#     (\(x) names(x)  %>% length()))
-# 
-# for (i in seq(nrow(nw))) {
-#   cat(
-#     length(nw$names[[i]]$data2),
-#     ncol(nw$data2[[i]]), 
-#     ncol(nw$data[[i]]),
-#     "\n\n" )
-# }
-
-   
-  #   field_units = map(
-  #     .x = file,
-  #     function(x) {
-  #       # read sheet for column names 
-  #       temp <-
-  #         read_xlsx(
-  #           x,
-  #           sheet = "Report",
-  #           skip  = 8,
-  #           na    = "-9999"
-  #           # .name_repair = janitor::make_clean_names
-  #           ) %>%
-  #         select(contains("Tot_Chl_a"):last_col()) 
-  #       
-  #       # fix column names
-  #       fix_name <- names(temp)
-  #       fix_name <- str_remove_all(fix_name, "\\[|\\]")
-  #       fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
-  #       fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
-  #       
-  #       # read sheet for units 
-  #       p_units <-
-  #         read_xlsx(
-  #           x,
-  #           sheet     = "Report",
-  #           skip      = 6,
-  #           col_names = TRUE,
-  #           n_max     = 2,
-  #           na        = "-9999",
-  #           .name_repair = janitor::make_clean_names
-  #         ) %>%
-  #         select(primary_pigments:last_col()) %>%
-  #         slice(1) %>%
-  #         c(., recursive = TRUE) %>%
-  #         unname()
-  #       
-  #       # if na, then equals none
-  #       p_units <- replace_na(p_units, "none")
-  #       p_units <- str_replace_all(p_units, "ug/l", "mg/m^3")
-  #       
-  #       temp <- set_names(temp,fix_name)  
-  #       
-  #       return(
-  #         tibble(
-  #           nest(temp, .key = "pigment_data"),
-  #           param_name = list(param_name = names(temp)),
-  #           units      = list(unit = p_units)
-  #           )
-  #         )
-  #     }
-  #   )
-  # ) %>%
-  #   unnest(field_units) 
 ```
 ```{r}
 dir_create( here("data", "processed", "hplc"))
@@ -372,6 +305,20 @@ save(hplc_data,
 ```
 
 ```{r}
+# test <- 
+  (here("data", "raw") %>%
+  dir_ls(regexp = "WSMasterSampleLog",
+         recurse = TRUE))[1] %>%
+  read_xlsx(
+    guess_max = 7000,
+    na = "Skip too shallow",
+    .name_repair = make_clean_names
+    ) %>%
+  mutate(
+    time_gmt = as_hms(time_gmt),
+  ) %>%
+  select(1:depth) %$% unique(station)
+
 
 ```
 
