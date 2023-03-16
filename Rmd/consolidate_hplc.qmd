@@ -6,11 +6,10 @@ format: html
 ---
 
 # Load Libraries
-```{r}
+```{r library}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
   readxl
@@ -174,12 +173,21 @@ hplc_data <-
 ```
 
 ```{r}
+hplc_data$param_name %>%
+  map(\(x) length(x))
+
 pigment_data <-
   hplc_data %>%
   unnest(c(metadata, pigment_data)) %>%
-  nest(.by = c(cruise))
+  nest(.by = cruise) %>%
+  mutate(
+    data = map(data, 
+                (\(x) janitor::remove_empty(x, which = "cols")))
+    )
+```
 
 
+```{r}
 dir_create( here("data", "processed", "hplc"))
 save(pigment_data,
       file =  here("data", "processed", "hplc", 
