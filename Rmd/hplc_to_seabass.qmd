@@ -100,7 +100,6 @@ An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC 
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
   hms, janitor
@@ -116,7 +115,15 @@ conflict_prefer("select", "dplyr")
        regexp = "RData") %>%
   sort(decreasing = TRUE))[1] |>
   load() 
+
+pigment_data <- hplc_data
+# ocation to save files
+loc <- 
+  here("data", "processed", "hplc", "ind_file")
+
+dir_create(loc)
 ```
+
 ## All SeaBass Standard Fields 
 https://seabass.gsfc.nasa.gov/wiki/stdfields
 ```{r}
@@ -130,21 +137,70 @@ sb_field <-
     low_name = str_replace_all(low_name, "-", "_")
          )
 
+# extract all field names from data and map to Seabass standard names
 field_unit <- 
-  pigment_data %>%
-  unnest(data) %>%
-  unnest(param_name) %>%
-  distinct(param_name) %>%
-  arrange(param_name) %>%
-  mutate(low_name = str_to_lower(param_name),
-         low_name = str_replace(low_name, "(?i)caro", "car"),
+  pigment_data %>% 
+  mutate(
+    sb_name = map(
+      .x = names,
+      (\(x) 
+            x  %>%
+            mutate(
+              low_name = str_replace(param_name, "(?i)t_caro", "tcar"),
+              low_name = str_replace(low_name, "t_pg|t_pig", "tpg"),     
          low_name = case_when(
            str_detect(low_name, "chl_c12") ~ "chl_c1c2",
            str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
-           str_detect(low_name, "tchl_a_tpig|tchl_a_tpg") ~ "tchla_tpg",
-           .default = low_name
-         )) %>%
-  left_join(sb_field, by = c("low_name"))
+           str_detect(low_name, "t_chl_a_tpg") ~ "tchla_tpg",
+           str_detect(low_name, "tchl_a") ~ str_replace(low_name, "tchl_a", "tchla"),
+           # str_detect(low_name, "t_pg|t_pig") ~ str_replace(low_name, "t_pg|t_pig", "tpg"),
+           str_detect(low_name, "^t_chl") ~ str_replace(low_name, "t_chl", "tchl"),
+           str_detect(low_name, "t_acc") ~ str_replace(low_name, "t_acc", "tacc"),
+           .default = low_name)
+         ) %>%
+  left_join(sb_field, by = c("low_name")) )
+    )
+  ) 
+
+pigment_data <- field_unit
+
+field_unit$sb_name %>%
+  list_rbind() %>%
+  distinct()
+
+  # pull(names) %>%
+  # list_c() %>%
+  # unique() %>%
+  # tibble(param_name = .) %>%
+  # mutate(
+  #        low_name = str_replace(param_name, "(?i)t_caro", "tcar"),
+  #        low_name = case_when(
+  #          str_detect(low_name, "chl_c12") ~ "chl_c1c2",
+  #          str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
+  #          # str_detect(low_name, "tchl_a_tpig|tchl_a_tpg") ~ "tchla_tpg",
+  #          str_detect(low_name, "tchl_a") ~ str_replace(low_name, "tchl_a", "tchla"),
+  #          str_detect(low_name, "t_pg") ~ "tpg",
+  #          str_detect(low_name, "t_chl") ~ "tchl",
+  #          str_detect(low_name, "t_acc") ~ "tacc",
+  #          .default = low_name)
+  #        ) %>%
+  # left_join(sb_field, by = c("low_name")) 
+
+# field_unit <- 
+#   pigment_data %>%
+#   unnest(data) %>%
+#   unnest(param_name) %>%
+#   distinct(param_name) %>%
+#   arrange(param_name) %>%
+#   mutate(low_name = str_to_lower(param_name),
+#          low_name = str_replace(low_name, "(?i)caro", "car"),
+#          low_name = case_when(
+#            str_detect(low_name, "chl_c12") ~ "chl_c1c2",
+#            str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
+#            str_detect(low_name, "tchl_a_tpig|tchl_a_tpg") ~ "tchla_tpg",
+#            .default = low_name)
+#          ) %>%
+#   left_join(sb_field, by = c("low_name"))
 ```
 ## Header Information
 ```{r defaults}
@@ -157,6 +213,8 @@ type      <- "pigment"
 status    <- "final" # final - not intending to revisit
 wtr_dpth  <- stn <- "na"
 
+# fields 
+# has seabass version and original version to map to
 # add more when needed
 fields_extr <- 
   tibble(
@@ -164,7 +222,6 @@ fields_extr <-
                    "lon","lat","depth", "water_depth","volfilt")) %>%
   left_join(sb_field, by = c("field_extr" = "field_name"))
 
-# units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
 
 # TODO:
 contact  <- "__TODO__"
@@ -241,21 +298,23 @@ pig_w_head <-
       .x = data,
       function(x) {
         x %>%
-        mutate(datetime = date + time) %>%
+        mutate(datetime = date + time) %>% # create datetime 
+          
         # get min and max of head per cruise header info
         summarise(across(.cols = c(datetime, lon, lat), 
                          # new way using lambda notation
                          .fns = list(min = (\(x) min(x, na.rm = TRUE)),
                                      max = (\(x) max(x, na.rm = TRUE))),
                          .names = "{.col}_{.fn}")) %>%
-
-        # split datetime to date and time separately
+        
         mutate(
+          # split datetime to date and time separately
           start_date = format(ymd(as_date(datetime_min)),"%Y%m%d"),
           end_date   = format(ymd(as_date(datetime_max)),"%Y%m%d"),
           start_time = as_hms(datetime_min),
           end_time   = as_hms(datetime_max),
           
+          # rename bound box variable names
           north_latitude = round(lat_max, 3),
           south_latitude = round(lat_min, 3),
           east_longitude = round(lon_max, 3),
@@ -263,8 +322,14 @@ pig_w_head <-
           .keep = "unused"
         )
       }
+    ), 
+    cruise_id = case_when(
+      str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
+      TRUE ~ "no"
+      )
     )
-  ) 
 ```
 Warning: There was 1 warning in `mutate()`.
 ℹ In argument: `across(...)`.
@@ -287,137 +352,112 @@ Call `lifecycle::last_lifecycle_warnings()` to see where this warning was genera
 # pig_w_head$data[[1]] %>% janitor::remove_empty(which = "cols") %>%
 #   as.matrix() 
  
+(c("hplc_gsfc_id,sample,date,time,station,lon,lat,depth,water_depth,volfilt,Tot_Chl_a,Tot_Chl_b,Tot_Chl_c,alpha-beta-Car,But-fuco,Hex-fuco,Allo,Diadino,Diato,Fuco,Perid,Zea,MV_Chl_a,DV_Chl_a,Chlide_a,MV_Chl_b,DV_Chl_b,Chl_c1c2,Chl_c3,Lut,Neo,Viola,Phytin_a,Phide_a,Pras,Gyro,Tchl,PPC,PSC,PSP,Tcar,Tacc,Tpg,DP,Tacc_Tchla,PSC_Tcar,PPC_Tcar,TChl_Tcar,PPC_Tpg,PSP_Tpg,Tchla_Tpg,NA,NA") %>%
+  str_split(",", simplify = TRUE) %>%
+  as.vector()) %>%
+  duplicated
+
+
+names(pigment_data[[2]][[5]])[-c(1:15)][-c(42, 43)]
+(pigment_data[[2]][[5]]$param_name)[[1]]
+
+
+(pig_w_head$data[[5]] %>%
+  names())
+
 # cruise data header_info cruise_id 
 final <-
   pig_w_head %>%
   slice(c(1,5,17, 25)) %>%
   mutate(
-    cruise_id = case_when(
-      str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
-      str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
-      str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
-      TRUE ~ "no"
-    ),
      heads = pmap(
       .progress = TRUE,
-      .l = list(data, header_info, cruise_id),
-      function(y, x, cruise_id){
+      .l = list(data, header_info, cruise_id, sb_name),
+      function(y, x, cruise_id, sb_name){
+        
         cat("\n---\nNEXT\n", unique(y$base), "\n---\n")
         
+        # remove spaces in original base name 
         fbase <- 
           str_replace_all(unique(y$base), " ", "_") %>%
           str_c(collapse = ",")
         
+        # create file name based on cruise ID
         file_name <-
-          glue("{expri}", "{cruise_id}", "{type}", "{x$start_date}.sb", .sep = "_")
+          glue("{expri}", "{cruise_id}", "{type}", "{x$start_date}.sb", 
+               .sep = "_")
         
         # fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
-        field_nm <- 
-          tibble(param_name = y$param_name[[1]]) %>%
-          left_join(., !!field_unit, by = "param_name") %T>% print() 
+        # SeaBass standard fields
+        field_nm <- c(fields_extr$field_extr, sb_name$field_name)
+        fields <- 
+          str_c(
+            field_nm, 
+            collapse = ",")# %T>% print()
         
-        fields <- glue(!!!fields_extr$field_extr,
-                       paste(field_nm$field_name, collapse = ","), .sep = ",")
-        
-        pun    <- glue(!!!fields_extr$units,
-                       paste(field_nm$units, collapse = ","), .sep = ",")
-        
+        # units each field
+        pun <-   
+          str_c(
+            c(
+              fields_extr$units,
+              sb_name$units), 
+            collapse = ",")# %T>% print()
+ 
+        # evaluate header
         header <- 
-          with(x, eval(header_skeleton)) %T>% 
-          print()
+          with(x, eval(header_skeleton)) %T>% print()
         
         # readline("Ready?")
-        
+
         return(
-          list(header    = header,
-               file_name = file_name,
-               fld_use   = paste(c(fields_extr$field_extr, field_nm$field_name)),
-               fields    = field_nm)
+          tibble(
+            header    = header,
+            file_name = file_name,
+            fld_use   = list(field_nm = field_nm)
+               )
           )
       }
-     )
-  )
-    
-
-final1 <- 
-  final %>%
-  slice(1) %>%
-  mutate(
-    cols = map2(.x = data, .y = heads, 
-               function(.x, .y) {
-                 select(.x, any_of(c(fields_extr$field_extr, 
-                                     final$heads[[1]]$fields$param_name))) %>%
-                 set_names(.y$fld_use)
-                 
+     ),
+     cols = pmap(
+      list(data, heads, sb_name),
+      function(.x, .y, .z) {
+        select(.x, any_of(c(fields_extr$field_extr,
+                            .z$param_name))
+               ) %>%
+          set_names(.y$fld_use[[1]])
                  }
-             )) 
- final1 %>%
-  mutate(
-    cols2 = map2(.x = cols, .y = heads,
-                function(.x, .y) {
-                  # print(names(.y))
-                  #print((.y$fields$field_name))
-                  # print(.x)
-                  
-                  cat(.y$header, "\n", #delim = ",",
-                      file = here(.y$file_name))
-                  .x %>%
-                   mutate(
-                     date = format(date,"%Y%m%d")
-                     ) %>%
+               )
+  )
 
-                  write_delim(., delim = ",",
-                              here(.y$file_name),
-                              append = TRUE,
-                              col_names = TRUE)
-                  
-                  }
-                )
-  ) 
+pwalk(list(final$cols, final$heads),
+      .f = function(x, y) {
+        # write header
+        cat(y$header, "\n",
+            file = here(loc, y$file_name))
+        
+       
+        x %>%
+         mutate(
+           date = format(date,"%Y%m%d"),
+           across(everything(), \(x) as.character(x)), # convert to char
+           across(everything(), \(x) case_when(
+                                        is.na(x) ~ "-9999", # chg NA to -9999
+                                        .default = x)
+                  )
+           
+           ) %>%
+        # write data after header
+        write_delim(.,
+                    delim     = ",",
+                    file      = here(loc, y$file_name),
+                    append    = TRUE,
+                    col_names = TRUE
+                    )
+        }
+      )
 
-
-final$heads[[1]]$file_name
-#[1] "hplc_gsfc_id" "sample"       "date"         "station"      "lon"         
-# [6] "lat"          "depth"        "water_depth"  "volfilt"  
- 
-# dat <- 
- #          dat %>%
- #          remove_empty(which = "cols") %>%
- #          mutate(
- #          volfilt = volfilt/1000 # convert mL to L
- #        ) %>%
- #          as.matrix()
-pig_w_head$data[[1]] %$%
-  unique(base) %T>%
-  print() %>%
-  str_replace_all(., " ", "_") %T>%
-  print() %>%
-  str_c(collapse = ",")
-
-
-
-pig_w_head$data %>%
-  map(.progress = TRUE,
-      .f = ~ unique(.$base)  %T>% cat("---", ., "\n\n"))
 ```
-```{r}
-test <- 
-  tibble(
-    head = c("hplc_gsfc_id", "sample", "date", "time", "station", "lon", "lat", "depth", "water_depth", "volfilt", "Tot_Chl_a", "Tot_Chl_b", "Tot_Chl_c", "alpha-beta-Car", "But-fuco", "Hex-fuco", "Allo", "Diadino", "Diato", "Fuco", "Perid", "Zea", "MV_Chl_a", "DV_Chl_a", "Chlide_a", "MV_Chl_b", "DV_Chl_b", "Chl_c1c2", "Chl_c3", "Lut", "Neo", "Viola", "Phytin_a", "Phide_a", "Pras", "Gyro", "Tchl", "PPC", "PSC", "PSP", "Tcar", "Tacc", "Tpg", "DP", "Tacc_Tchla", "PSC_Tcar", "PPC_Tcar", "TChl_Tcar", "PPC_Tpg", "PSP_Tpg", "Tchla_Tpg", "NA")
-,
 
-
-    body = c("hplc_gsfc_id", "sample", "date", "time", "station", "lon", "lat", "depth", "water_depth", "volfilt", "Tot_Chl_a", "Tot_Chl_b", "Tot_Chl_c", "alpha-beta-Car", "But-fuco", "Hex-fuco", "Allo", "Diadino", "Diato", "Fuco", "Perid", "Zea", "MV_Chl_a", "DV_Chl_a", "Chlide_a", "MV_Chl_b", "DV_Chl_b", "Chl_c1c2", "Chl_c3", "Lut", "Neo", "Viola", "Phytin_a", "Phide_a", "Pras", "Gyro", "Tchl", "PPC", "PSC", "PSP", "Tcar", "Tacc", "Tpg", "DP", "Tacc_Tchla", "PSC_Tcar", "PPC_Tcar", "TChl_Tcar", "PPC_Tpg", "PSP_Tpg", "Tchla_Tpg", "NA")
-
-
-) 
-
-identical(test[1,1][[1]], test[1,2][[1]])
-test %>%
-mutate(
-  check = if_else(head == body, "yes", "")
-)
-```
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
