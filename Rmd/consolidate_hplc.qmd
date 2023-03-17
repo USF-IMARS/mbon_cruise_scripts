@@ -22,6 +22,11 @@ conflict_prefer("select", "dplyr")
 ```
 
 # Search for HPLC Files
+M-K 06-12 report.xlsx : may and sept 2016
+M-K 09-02 report.xlsx : nov16, mar17 jun17 oct17 jan18
+M-K 10-11 part1 report.xlsx
+M-K 10-11 part2 report.xlsx
+M-K_05-17_report.xlsx : mar16
 ```{r file-path}
 # pigment files
 file.pig <-
@@ -146,24 +151,6 @@ hplc_data <-
       str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
       TRUE ~ "no"
       ))
-
-  # nest(.by = cruise) %>%
-  # mutate(
-  # data = map(.x = data,
-  #     ~ remove_empty(.x, which = "cols")),
-  # names = map(.x = data,
-  #             (\(x) 
-  #              select(x, contains("Tot_Chl_a"):last_col())  %>%
-  #              names()  %>%
-  #              tibble(param_name = .))
-  #             ),
-  # cruise_id = case_when(
-  #     str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
-  #     str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
-  #     str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
-  #     TRUE ~ "no"
-  #     )
-  # )
 ```
 
 
@@ -237,6 +224,77 @@ save(hplc_data,
                    )
      )
 ```
+
+# Extract Comments from Sheets
+```{r}
+shelf(openxlsx)
+for (i in seq(nrow(file.pig))) {
+  temp_file <- file.pig$file[[i]]
+  
+  wb <- 
+    temp_file %>%
+    loadWorkbook()
+  sht <- which(names(wb) == "Report")
+  
+  # extract comment
+  comm <-
+   sapply(wb$comments[[sht]], "[[", "comment" )
+  
+  # determine class: none, list or matrix
+  # do appropriate action
+  if (identical(comm, list())) {
+    print("none")
+    next
+  } else if (any(class(comm) == "list")) {
+    print("list")
+    comm <-
+      tibble(comm = comm) %>%
+      unnest(comm) %>%
+      filter(!str_detect(comm, "csthoma1|ckenemer"))
+    
+  } else if (any(class(comm) == "matrix")) {
+    print("matrx")
+    comm <-
+      as_tibble(t(comm)) %>%
+      select("comm" = V2)
+  }
+ 
+  # combine info to comment
+  temp <- 
+    tibble(
+      file = temp_file,
+      base = basename(temp_file),
+      cell = sapply(wb$comments[[sht]], "[[", "ref" ), 
+      auth = sapply(wb$comments[[sht]], "[[", "author" ), 
+      comm = comm
+      ) %>%
+    unnest(comm)  %>%
+    filter(!str_detect(comm, "Thread"))
+  
+  # add comments to previous file
+  if (!exists("xlsx_comm") | i == 1) {
+    xlsx_comm <- temp
+    } else {
+      xlsx_comm <- bind_rows(xlsx_comm, temp)
+      }
+  
+}
+
+# filter out non-comment and save
+xlsx_comm %>%
+  mutate(
+    comm = str_remove(comm, "\n"),
+    comm = str_replace(comm, "\n", " "),
+    comm = str_replace(comm, ",", ";")
+  ) %>%
+  
+  {if (FALSE) {
+  write_csv(., file = here("data", "processed", "hplc", 
+                        glue("comments_report_{Sys.Date()}.csv")))
+  } else {.}
+    }
+```
+
 
 # Delete:
 ```{r}
