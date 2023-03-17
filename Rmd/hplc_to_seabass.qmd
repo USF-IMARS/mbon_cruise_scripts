@@ -167,7 +167,7 @@ hd_def <- list()
 hd_def$invest  <- "Frank_Muller-Karger,Enrique_Montes"
 
 hd_def$affil     <- "University_of_South_Florida,USA"
-hd_def$expri     <- "MBON"
+hd_def$expri     <- "MBON" # or "SFMBON"
 hd_def$hplc_lab  <- "NASA_GSFC"	
 hd_def$lab_tech  <- "Crystal_Thomas"	
 hd_def$type      <- "pigment"
@@ -192,6 +192,12 @@ hd_def$comments <-
        "! __TODO__",
        "!")
 
+# include?
+#!/experiment=SFP
+#!/experiment=Sanctuaries_Marine_Biodiversity_Observation_Network_(MBON)
+
+# hd_def$expr_ex1 = "SFP"
+# hd_def$expr_ex2 = "Sanctuaries_Marine_Biodiversity_Observation_Network_(MBON)"
 ```
 
 ```{r test-headr-skeleton}
@@ -203,6 +209,8 @@ header_skeleton <-
     "/affiliations={hd_def$affil}",
     "/contact={hd_def$contact}",
     "/experiment={hd_def$expri}",
+    #!/experiment={hd_def$expr_ex1} # <---- include?
+    #!/experiment={hd_def$expr_ex2} # <---- include?
     "/cruise={cruise_id}",
     "/station={hd_def$stn}",
     "/data_file_name={file_name}", # current name of data file, self-reference
@@ -342,12 +350,11 @@ final <-
       list(data, heads, sb_name),
       function(.x, .y, .z) {
         select(.x, any_of(c(hd_def$fields_extr$field_extr,
-                            .z$param_name))
-               ) %>%
+                            .z$param_name))) %>%
           set_names(.y$fld_use[[1]])
-                 }
-               )
-  )
+        }
+      )
+     )
 ```
 
 ## Saving Files in SeaBass Format
