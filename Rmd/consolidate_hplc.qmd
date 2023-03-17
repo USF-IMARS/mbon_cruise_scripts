@@ -36,166 +36,166 @@ file.pig <-
 ```
 
 ```{r}
-hplc_data <-
-  file.pig %>%
-  mutate(
-  metadata = map(
-    .x = file,
-    ~ suppressWarnings(read_xlsx(
-      .x,
-      sheet = "Report",
-      skip  = 8,
-      na    = "-9999",
-      .name_repair = janitor::make_clean_names
-      )) %>%
-      
-      select(1,
-        contains("cruise"), matches("original_pi_sample_label|^sample"),  
-        station, contains(c("vol")), contains("water_depth"), 
-        matches("sampling_depth_meters|^depth"), 
-        matches("gregorian_month|^month"), contains("time"), matches("^day"), 
-        contains(c("lon", "lat")), contains("replic"), matches("^year"),
-        -contains("extracted")
-             ) %>% 
-      
-      # rename to make all the same column names
-      rename(
-        any_of(
-          c(
-            hplc_gsfc_id = "gsfc_lab_sample_code",
-            hplc_gsfc_id = "gsfc_sample_code",
-            cruise      = "cruise_name",
-            day         = "day_of_gregorian_month",
-            depth       = "sampling_depth_meters",
-            month       = "gregorian_month",
-            lat         = "latitude",
-            lon         = "longitude",
-            sample      = "original_pi_sample_label",
-            time        = "gmt_time",
-            volfilt     = "volume_filtered_ml",
-            water_depth = "total_water_depth_meters",
-            year        = "year_of_sample"
-            )
-          )
-        ) %>%
-      
-      # change time to hh:mm:ss and add date
-      mutate(
-        time  = hms::as_hms(time),
-        month = str_extract(month, "\\w{3}"), # fix one month: Febuary
-        date  = ymd(glue("{year}-{month}-{day}"),
-                            tz = "utc")) %>%
-      
-      # fix one depth value to numeric
-      mutate(
-        depth = as.character(depth),
-        depth = case_when(
-                  str_detect(depth, "2..15") ~ "2.15",
-                  # TRUE ~ depth),
-                  .default = depth), # new way 
-        depth = as.numeric(depth),
-        indicate_if_filters_are_replicates = 
-          as.character(indicate_if_filters_are_replicates)
-        ) %>%
-      
-      # fix one character value to numeric
-      mutate(
-        water_depth = as.character(water_depth),
-        water_depth = case_when(
-                        str_detect(water_depth, "flow") ~ "1",
-                        # TRUE ~ water_depth),
-                        .default = water_depth), # new way 
-        water_depth = as.numeric(water_depth)
-      ) %>%
-    
-    # fix one set of cruise ID values  
-    mutate(
-       cruise = case_when(
-         str_detect(sample, "WS20278") ~ "Walton Smith 20278",
-         str_detect(sample, "WS16263") ~ "Walton Smith 16263",
-         # TRUE ~ cruise)
-         .default = cruise) # new way 
-       )
-    ),
-  
-  
-    field_units = map(
-      .x = file,
-      function(x) {
-        # read sheet for column names 
-        temp <-
-          read_xlsx(
-            x,
-            sheet = "Report",
-            skip  = 8,
-            na    = "-9999"
-            # .name_repair = janitor::make_clean_names
-            ) %>%
-          select(contains("Tot_Chl_a"):last_col()) 
-        
-        # fix column names
-        fix_name <- names(temp)
-        fix_name <- str_remove_all(fix_name, "\\[|\\]")
-        fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
-        fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
-        
-        # read sheet for units 
-        p_units <-
-          read_xlsx(
-            x,
-            sheet     = "Report",
-            skip      = 6,
-            col_names = TRUE,
-            n_max     = 2,
-            na        = "-9999",
-            .name_repair = janitor::make_clean_names
-          ) %>%
-          select(primary_pigments:last_col()) %>%
-          slice(1) %>%
-          c(., recursive = TRUE) %>%
-          unname()
-        
-        # if na, then equals none
-        p_units <- replace_na(p_units, "none")
-        p_units <- str_replace_all(p_units, "ug/l", "mg/m^3")
-        
-        temp <- set_names(temp,fix_name)  
-        
-        return(
-          tibble(
-            nest(temp, .key = "pigment_data"),
-            param_name = list(param_name = names(temp)),
-            units      = list(unit = p_units)
-            )
-          )
-      }
-    )
-  ) %>%
-    unnest(field_units) 
+# hplc_data <-
+#   file.pig %>%
+#   mutate(
+#   metadata = map(
+#     .x = file,
+#     ~ suppressWarnings(read_xlsx(
+#       .x,
+#       sheet = "Report",
+#       skip  = 8,
+#       na    = "-9999",
+#       .name_repair = janitor::make_clean_names
+#       )) %>%
+#       
+#       select(1,
+#         contains("cruise"), matches("original_pi_sample_label|^sample"),  
+#         station, contains(c("vol")), contains("water_depth"), 
+#         matches("sampling_depth_meters|^depth"), 
+#         matches("gregorian_month|^month"), contains("time"), matches("^day"), 
+#         contains(c("lon", "lat")), contains("replic"), matches("^year"),
+#         -contains("extracted")
+#              ) %>% 
+#       
+#       # rename to make all the same column names
+#       rename(
+#         any_of(
+#           c(
+#             hplc_gsfc_id = "gsfc_lab_sample_code",
+#             hplc_gsfc_id = "gsfc_sample_code",
+#             cruise      = "cruise_name",
+#             day         = "day_of_gregorian_month",
+#             depth       = "sampling_depth_meters",
+#             month       = "gregorian_month",
+#             lat         = "latitude",
+#             lon         = "longitude",
+#             sample      = "original_pi_sample_label",
+#             time        = "gmt_time",
+#             volfilt     = "volume_filtered_ml",
+#             water_depth = "total_water_depth_meters",
+#             year        = "year_of_sample"
+#             )
+#           )
+#         ) %>%
+#       
+#       # change time to hh:mm:ss and add date
+#       mutate(
+#         time  = hms::as_hms(time),
+#         month = str_extract(month, "\\w{3}"), # fix one month: Febuary
+#         date  = ymd(glue("{year}-{month}-{day}"),
+#                             tz = "utc")) %>%
+#       
+#       # fix one depth value to numeric
+#       mutate(
+#         depth = as.character(depth),
+#         depth = case_when(
+#                   str_detect(depth, "2..15") ~ "2.15",
+#                   # TRUE ~ depth),
+#                   .default = depth), # new way 
+#         depth = as.numeric(depth),
+#         indicate_if_filters_are_replicates = 
+#           as.character(indicate_if_filters_are_replicates)
+#         ) %>%
+#       
+#       # fix one character value to numeric
+#       mutate(
+#         water_depth = as.character(water_depth),
+#         water_depth = case_when(
+#                         str_detect(water_depth, "flow") ~ "1",
+#                         # TRUE ~ water_depth),
+#                         .default = water_depth), # new way 
+#         water_depth = as.numeric(water_depth)
+#       ) %>%
+#     
+#     # fix one set of cruise ID values  
+#     mutate(
+#        cruise = case_when(
+#          str_detect(sample, "WS20278") ~ "Walton Smith 20278",
+#          str_detect(sample, "WS16263") ~ "Walton Smith 16263",
+#          # TRUE ~ cruise)
+#          .default = cruise) # new way 
+#        )
+#     ),
+#   
+#   
+#     field_units = map(
+#       .x = file,
+#       function(x) {
+#         # read sheet for column names 
+#         temp <-
+#           read_xlsx(
+#             x,
+#             sheet = "Report",
+#             skip  = 8,
+#             na    = "-9999"
+#             # .name_repair = janitor::make_clean_names
+#             ) %>%
+#           select(contains("Tot_Chl_a"):last_col()) 
+#         
+#         # fix column names
+#         fix_name <- names(temp)
+#         fix_name <- str_remove_all(fix_name, "\\[|\\]")
+#         fix_name <- str_replace_all(fix_name, "/|[:space:]|-", "_")
+#         fix_name <- str_replace_all(fix_name, "MV_Chl__b", "MV_Chl_b")
+#         
+#         # read sheet for units 
+#         p_units <-
+#           read_xlsx(
+#             x,
+#             sheet     = "Report",
+#             skip      = 6,
+#             col_names = TRUE,
+#             n_max     = 2,
+#             na        = "-9999",
+#             .name_repair = janitor::make_clean_names
+#           ) %>%
+#           select(primary_pigments:last_col()) %>%
+#           slice(1) %>%
+#           c(., recursive = TRUE) %>%
+#           unname()
+#         
+#         # if na, then equals none
+#         p_units <- replace_na(p_units, "none")
+#         p_units <- str_replace_all(p_units, "ug/l", "mg/m^3")
+#         
+#         temp <- set_names(temp,fix_name)  
+#         
+#         return(
+#           tibble(
+#             nest(temp, .key = "pigment_data"),
+#             param_name = list(param_name = names(temp)),
+#             units      = list(unit = p_units)
+#             )
+#           )
+#       }
+#     )
+#   ) %>%
+#     unnest(field_units) 
 ```
 
 ```{r}
-hplc_data$param_name %>%
-  map(\(x) length(x))
-
-pigment_data <-
-  hplc_data %>%
-  unnest(c(metadata, pigment_data)) %>%
-  nest(.by = cruise) %>%
-  mutate(
-    data = map(data, 
-                (\(x) janitor::remove_empty(x, which = "cols")))
-    )
+# hplc_data$param_name %>%
+#   map(\(x) length(x))
+# 
+# pigment_data <-
+#   hplc_data %>%
+#   unnest(c(metadata, pigment_data)) %>%
+#   nest(.by = cruise) %>%
+#   mutate(
+#     data = map(data, 
+#                 (\(x) janitor::remove_empty(x, which = "cols")))
+#     )
 ```
 
 
 ```{r}
-dir_create( here("data", "processed", "hplc"))
-save(pigment_data,
-      file =  here("data", "processed", "hplc", 
-                   glue("consolidated_HPLC_{Sys.Date()}.RData")
-                   )
-     )
+# dir_create( here("data", "processed", "hplc"))
+# save(pigment_data,
+#       file =  here("data", "processed", "hplc", 
+#                    glue("consolidated_HPLC_{Sys.Date()}.RData")
+#                    )
+#      )
 ```
 
 ```{r}
@@ -250,6 +250,11 @@ hplc_data <-
       mutate(
         time  = hms::as_hms(time),
         month = str_extract(month, "\\w{3}"), # fix one month: Febuary
+        month = case_when(
+          # str_detect(cruise, "19210") & str_detect(month, "(?i)jul") ~ "Jun",
+          str_detect(cruise, "19210") & str_detect(month, "(?i)jun") ~ "Aug",
+          .default = month
+          ),
         date  = ymd(glue("{year}-{month}-{day}"),
                             tz = "utc"),
         .before = month) %>%
@@ -274,13 +279,30 @@ hplc_data <-
         water_depth = as.numeric(water_depth)
       ) %>%
     
-    # fix one set of cruise ID values  
-    mutate(
-       cruise = case_when(
-         str_detect(sample, "WS20278") ~ "Walton Smith 20278",
-         str_detect(sample, "WS16263") ~ "Walton Smith 16263",
-         .default = cruise)
-       )
+      # fix one set of cruise ID values  
+      mutate(
+         cruise = case_when(
+           str_detect(sample, "WS20278") ~ "Walton Smith 20278",
+           str_detect(sample, "WS16263") ~ "Walton Smith 16263",
+           .default = cruise)
+         ) %>%
+      
+      # edit station names to be uppercase and no spaces
+      mutate(
+        station = str_to_upper(station),
+        station = str_remove(station, "[:space:]"),
+        station = str_replace(station, "-", "_")
+      ) %>%
+      
+      # fix lat, lon
+      mutate(
+        lat = if_else(str_detect(cruise, "20278") 
+                      & station == "V8", 26.83457,lat),
+        lon = if_else(str_detect(cruise, "20278")
+                      & station == "V8", -82.95946,lon),
+        lat = if_else(lat < 0, -1 * lat, lat),
+        lon = if_else(lon > 0, -1 * lon, lon),
+      )
     )) %>%
   unnest(data) %>%
   nest(.by = cruise) %>%
@@ -292,7 +314,13 @@ hplc_data <-
                select(x, contains("Tot_Chl_a"):last_col())  %>%
                names()  %>%
                tibble(param_name = .))
-              )
+              ),
+  cruise_id = case_when(
+      str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
+      TRUE ~ "no"
+      )
   )
 ```
 ```{r}
@@ -305,7 +333,7 @@ save(hplc_data,
 ```
 
 ```{r}
-# test <- 
+aoml <- 
   (here("data", "raw") %>%
   dir_ls(regexp = "WSMasterSampleLog",
          recurse = TRUE))[1] %>%
@@ -314,10 +342,88 @@ save(hplc_data,
     na = "Skip too shallow",
     .name_repair = make_clean_names
     ) %>%
+  select(3:depth) %>%
   mutate(
     time_gmt = as_hms(time_gmt),
+    station = case_when(
+      str_detect(station, "(?i)naples") ~ "NBH",
+      str_detect(station, "(?i)casey") ~ "CBH",
+      .default = station
+    ),
+    station = str_replace(station, " |-", "_"),
+    # station = str_replace(station, "-", "_"),
+    station = if_else(str_detect(station, "LK|^21$"), "LK", station),
+    station = if_else(str_detect(cruise, "WS19210") 
+                      & str_detect(station, "9.5"), "9B", station),
+    cruise =  str_replace(cruise, "SAV", "SV"),
+    cruise = case_when(
+      str_detect(cruise, "WS18120") 
+      & date_gmt > as_date("2018-08-01") ~ "WS18218",
+      str_detect(cruise, "WS20231") ~ "WS20230",
+      str_detect(cruise, "SV1803") ~ "SV18067",
+      .default = cruise
+    ),
+    longitude_decimal = if_else(longitude_decimal > 0, -1 * longitude_decimal,
+                                longitude_decimal)
   ) %>%
-  select(1:depth) %$% unique(station)
+  filter(cruise %in% hplc_data$cruise_id) %>%
+  distinct(cruise, station, .keep_all = TRUE)
+
+imars <-
+  hplc_data %>%
+  unnest(data)
+
+# station names
+aoml_loc  <- unique(aoml$station)
+imars_loc <- unique(imars$station)
+
+inter_loc <- base::intersect(
+ imars_loc,
+  aoml_loc) 
+
+imars_loc[!str_detect(imars_loc, str_c(inter_loc, collapse = "|"))]
+
+# cruise ID
+aoml_cr <- unique(aoml$cruise)
+imars_cr <- unique(imars$cruise_id)
+
+inter_cr <- base::intersect(
+ imars_cr,
+  aoml_cr)
+
+imars_cr[!str_detect(imars_cr, str_c(inter_cr, collapse = "|"))]
+aoml_cr
+# SV1803 "WS20231"
+# 
+# imars: "SV18067" "WS18218" "WS20230"
+
+
+aoml_filt <- 
+  aoml %>%
+  filter(cruise %in% hplc_data$cruise_id) %>%
+  distinct(cruise, station, .keep_all = TRUE) %$% unique(cruise)
+
+
+imars %>%
+  select(cruise_id, sample, station, water_depth:lat) %>%
+  left_join(aoml_filt, by = join_by(cruise_id == cruise, station)) %>%
+  mutate(
+    lon = if_else(abs(lon - longitude_decimal) < 0.1, lon, longitude_decimal),
+    lat = if_else(abs(lat - latitude_decimal) < 0.1, lat, latitude_decimal),
+    date = if_else(abs(date - date_gmt) < "1 day", date, date_gmt), 
+    time = if_else(abs(time - time_gmt) < "600 secs", time, time_gmt),
+  ) %>%
+  mutate(
+    .keep = "used",
+    cruise_id,
+    station,
+    date = if_else(abs(date - date_gmt) < "1 day", date, date_gmt), 
+    time = if_else(abs(time - time_gmt) < "600 secs", time, time_gmt),
+    # test = if_else(date_dif >= "1 day", "y", "n")
+  ) %>%
+  arrange(desc(date_dif), desc(time_dif)) %>%
+  
+    view()
 
 
 ```
