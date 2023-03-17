@@ -193,7 +193,7 @@ hd_def$contact  <- "__TODO__"
 hd_def$docs     <- "__TODO__"
 hd_def$cal_file <- "__TODO__"
 
-
+hd_def$suffix <- "R1"
 ```
 
 ```{r test-headr-skeleton}
@@ -230,9 +230,8 @@ header_skeleton <-
     "/below_detection_limit=-8888",
     
     # conditional 
-    # "/measurement_depth=___", # only need if don't supply depth field
     
-    # optional recommened
+    # optional recommended
     "/data_status={hd_def$status}",
     
     # optional
@@ -247,97 +246,7 @@ header_skeleton <-
     .sep = "\n") |>
   
   expression()
-
-
-
-# header_skeleton
-# eval(header_skeleton)
 ```
-```{r defaults}
-# investor  <- "Frank_Muller-Karger,Enrique_Montes"
-# affil     <- "University_of_South_Florida,USA"
-# expri     <- "MBON"
-# hplc_lab  <- "NASA_GSFC"	
-# lab_tech  <- "Crystal_Thomas"	
-# type      <- "pigment"
-# status    <- "final" # final - not intending to revisit
-# wtr_dpth  <- stn <- "na"
-# 
-# # fields 
-# # has seabass version and original version to map to
-# # add more when needed
-# fields_extr <- 
-#   tibble(
-#     field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
-#                    "lon","lat","depth", "water_depth","volfilt")) %>%
-#   left_join(sb_field, by = c("field_extr" = "field_name"))
-# 
-# 
-# # TODO:
-# contact  <- "__TODO__"
-# docs     <- "__TODO__"
-# cal_file <- "__TODO__"
-# comments <- 
-#   glue(.sep = "\n",
-#        "!",
-#        "! test",
-#        "!")
-```
-
-```{r headr-skeleton}
-# header_skeleton <-
-#   glue::glue(
-#     "/begin_header",
-#     # required  
-#     "/investigators={investor}",
-#     "/affiliations={affil}",
-#     "/contact={contact}",
-#     "/experiment={expri}",
-#     "/cruise={cruise_id}",
-#     "/station={stn}",
-#     "/data_file_name={file_name}", # current name of data file, self-reference
-#     "/documents={docs}",           # additional info about experiment and cruise
-#     "/data_type={type}",
-#     "/calibration_files={cal_file}",
-#     "/start_date={start_date}",
-#     "/end_date={end_date}",
-#     "/start_time={start_time}[GMT]",
-#     "/end_time={end_time}[GMT]",
-#     "/north_latitude={north_latitude}[DEG]",
-#     "/south_latitude={south_latitude}[DEG]",
-#     "/east_longitude={east_longitude}[DEG]",
-#     "/west_longitude={west_longitude}[DEG]",
-#     "/water_depth={wtr_dpth}",
-#     "/missing=-9999",
-#     "/delimiter=comma",
-#     
-#     
-#     # HPLC required
-#     "/HPLC_lab={hplc_lab}",
-#     "/HPLC_lab_technician={lab_tech}",
-#     "/below_detection_limit=-8888",
-#     
-#     # conditional 
-#     # "/measurement_depth=___", # only need if don't supply depth field
-#     
-#     # optional recommend
-#     "/data_status={status}",
-#     
-#     # optional
-#     "/original_file_name={fbase}", 
-#     
-#     "{comments}",
-# 
-#     "/fields={fields}", # fields of data 
-#     "/units={pun}",     # units for each column 
-#     
-#     "/end_header", 
-#     # "{dat}",
-#     .sep = "\n") |>
-#   
-#   expression()
-```
-
 
 ## Extract Header Information
 ```{r header-info}
@@ -369,15 +278,8 @@ hplc_w_head <-
           south_latitude = round(lat_min, 3),
           east_longitude = round(lon_max, 3),
           west_longitude = round(lon_min, 3),
-          .keep = "unused"
-        )
-      }
-    ), 
-    cruise_id = case_when(
-      str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
-      str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
-      str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
-      TRUE ~ "no"
+          .keep = "unused")
+        }
       )
     )
 ```
@@ -386,14 +288,13 @@ hplc_w_head <-
 # cruise data header_info cruise_id 
 final <-
   hplc_w_head %>%
-  # slice(c(1,5,17, 25)) %>%
   mutate(
      heads = pmap(
       .progress = TRUE,
       .l = list(data, header_info, cruise_id, sb_name),
       function(y, x, cruise_id, sb_name){
         
-        cat("\n---\nNEXT\n", unique(y$base), "\n---\n")
+        
         
         # remove spaces in original base name 
         fbase <- 
@@ -403,7 +304,7 @@ final <-
         # create file name based on cruise ID
         file_name <-
           glue("{hd_def$expri}", "{cruise_id}", 
-               "{hd_def$type}", "{x$start_date}.sb", 
+               "{hd_def$type}", "{x$start_date}_{hd_def$suffix}.sb", 
                .sep = "_")
         
         # fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
@@ -427,7 +328,9 @@ final <-
           with(x, eval(header_skeleton)) #%T>% print()
         
         # readline("Ready?")
-
+        cat("\n---\nNEXT\n", unique(y$base), file_name,
+            "\n---\n", sep = "\n")
+        
         return(
           tibble(
             header    = header,
@@ -464,9 +367,7 @@ pwalk(list(final$cols, final$heads),
            across(everything(), \(x) as.character(x)), # convert to char
            across(everything(), \(x) case_when(
                                         is.na(x) ~ "-9999", # chg NA to -9999
-                                        .default = x)
-                  )
-           
+                                        .default = x))
            ) %>%
         # write data after header
         write_delim(.,
@@ -477,103 +378,6 @@ pwalk(list(final$cols, final$heads),
                     )
         }
       )
-```
-
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# 3.0 Tests
-## List Version Test
-```{r test-default}
-hd_def <- list()
-hd_def$invest  <- "Frank_Muller-Karger,Enrique_Montes"
-
-hd_def$affil     <- "University_of_South_Florida,USA"
-hd_def$expri     <- "MBON"
-hd_def$hplc_lab  <- "NASA_GSFC"	
-hd_def$lab_tech  <- "Crystal_Thomas"	
-hd_def$type      <- "pigment"
-hd_def$status    <- "final" # final - not intending to revisit
-hd_def$wtr_dpth  <- hd_def$stn <- "na"
-hd_def$comments <- 
-  glue(.sep = "\n",
-       "!",
-       "! test",
-       "!")
-
-hd_def$fields_extr <- 
-  tibble(
-    field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
-                   "lon","lat","depth", "water_depth","volfilt")) %>%
-  left_join(sb_field, by = c("field_extr" = "field_name"))
-# hd_def$fields_extr <- c("hplc_gsfc_id", "sample", "date","station","lon","lat","depth",
-#                  "water_depth","volfilt")
-# hd_def$units_extr <- c("none","none","yyyymmdd","none","degrees","degrees","m","m","L")
-
-# TODO:
-hd_def$contact  <- "__TODO__"
-hd_def$docs     <- "__TODO__"
-hd_def$cal_file <- "__TODO__"
-
-
-```
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-```{r test-headr-skeleton}
-header_skeleton <-
-  glue::glue(
-    "/begin_header",
-    # required  
-    "/investigators={hd_def$invest}",
-    "/affiliations={hd_def$affil}",
-    "/contact={hd_def$contact}",
-    "/experiment={hd_def$expri}",
-    "/cruise={cruise_id}",
-    "/station={hd_def$stn}",
-    "/data_file_name={file_name}", # current name of data file, self-reference
-    "/documents={hd_def$docs}",           # additional info about experiment and cruise
-    "/data_type={hd_def$type}",
-    "/calibration_files={hd_def$cal_file}",
-    "/start_date={start_date}",
-    "/end_date={end_date}",
-    "/start_time={start_time}[GMT]",
-    "/end_time={end_time}[GMT]",
-    "/north_latitude={north_latitude}[DEG]",
-    "/south_latitude={south_latitude}[DEG]",
-    "/east_longitude={east_longitude}[DEG]",
-    "/west_longitude={west_longitude}[DEG]",
-    "/water_depth={hd_def$wtr_dpth}",
-    "/missing=-9999",
-    "/delimiter=comma",
-    
-    
-    # HPLC required
-    "/HPLC_lab={hd_def$hplc_lab}",
-    "/HPLC_lab_technician={hd_def$lab_tech}",
-    "/below_detection_limit=-8888",
-    
-    # conditional 
-    # "/measurement_depth=___", # only need if don't supply depth field
-    
-    # optional recommened
-    "/data_status={hd_def$status}",
-    
-    # optional
-    "/original_file_name={fbase}", 
-    
-    "{hd_def$comments}",
-    
-    "/fields={fields}", # fields of data 
-    "/units={pun}",  # units for each column 
-    "/end_header", 
-    # "{dat}",
-    .sep = "\n") |>
-  
-  expression()
-
-
-
-# header_skeleton
-# eval(header_skeleton)
 ```
 
 x  hdr = {'/begin_header';
