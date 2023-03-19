@@ -163,16 +163,25 @@ hplc_data <-
 ```
 ## Header Information
 ```{r test-default}
-hd_def <- list()
-hd_def$invest  <- "Frank_Muller-Karger,Enrique_Montes"
+contacts <- 
+  tribble(
+    ~invest,               ~email,
+    "Frank_Muller-Karger", "carib@usf.edu", 
+    "Daniel_Otis",         "dotis@usf.edu", 
+    "Digna_Rueda_Roa",     "druedaro@usf.edu"
+)
 
-hd_def$affil     <- "University_of_South_Florida,USA"
-hd_def$expri     <- "MBON" # or "SFMBON"
-hd_def$hplc_lab  <- "NASA_GSFC"	
-hd_def$lab_tech  <- "Crystal_Thomas"	
-hd_def$type      <- "pigment"
-hd_def$status    <- "final" # final - not intending to revisit
-hd_def$wtr_dpth  <- hd_def$stn <- "na"
+
+hd_def <- list()
+hd_def$invest   <- str_c(contacts$invest, collapse = ",")
+hd_def$contact  <- str_c(contacts$email, collapse = ",")
+hd_def$affil    <- "University_of_South_Florida,USA"
+hd_def$expri    <- "SFMBON"
+hd_def$hplc_lab <- "NASA_GSFC"	
+hd_def$lab_tech <- "Crystal_Thomas"	
+hd_def$type     <- "pigment"
+hd_def$status   <- "final" # final - not intending to revisit
+hd_def$wtr_dpth <- hd_def$stn <- "na"
 
 hd_def$suffix <- "R1"
 hd_def$fields_extr <- 
@@ -182,15 +191,50 @@ hd_def$fields_extr <-
   left_join(sb_field, by = c("field_extr" = "field_name"))
 
 # TODO: fill in
-hd_def$contact  <- "__TODO__"
 hd_def$docs     <- "__TODO__"
 hd_def$cal_file <- "__TODO__"
 
 hd_def$comments <- 
   glue(.sep = "\n",
        "!",
-       "! __TODO__",
-       "!")
+       "! COMMENTS",
+       "!",
+       "! Measurements below detection limits are assigned the value -8888",
+       "! ",
+       "!Samples were processed at NASA GSFC by Crystal Thomas",
+       "!Measurements below detection limit are assigned the value -9999; this represents pigments not detected",
+       "!as well as pigments present but with concentrations less than 0.0005?g/L."
+       ) |>
+  expression()
+
+xl <- hplc_data$precision[[5]]
+xl <- hplc_data$precision[[1]]
+
+for (i in 1:25) {
+  xl <- hplc_data$precision[[i]]
+  cat(i, hplc_data$cruise_id[[i]], sep = "\n")
+  
+  if (any(str_detect(xl, "replicate"), na.rm = TRUE)) {
+    glue("!") %T>% print()
+  } else if (nrow(xl) > 1) {
+    
+    glue("!Coefficient of variation (replicate filter precision) for",
+         "TChl a = {str_c(xl$t_chl_a, collapse = \", \")}",
+         "; Ppig = {str_c(xl$ppig, collapse = \", \")}",
+         "\n!",
+        .sep = " ") 
+  } else {
+    glue("!Coefficient of variation (replicate filter precision) for",
+         "TChl a = {xl$t_chl_a}",
+         "; Ppig = {xl$ppig}",
+         "\n!",
+        .sep = " ") %T>% print()
+  } 
+
+  cat("\n\n")
+  }
+pss <- "yes"
+glue("{if_else(str_detect(xl$x, 'rep'), 'yes{pss}', 'false')}")
 
 # include?
 #!/experiment=SFP
