@@ -14,7 +14,7 @@ librarian::shelf(
   # additional
   readxl, cellranger, 
   janitor,
-  scales
+  scales, hms
 )
 
 library("conflicted")
@@ -30,6 +30,12 @@ M-K 10-11 part1 report.xlsx
 M-K 10-11 part2 report.xlsx
 M-K_05-17_report.xlsx : mar16
 ```{r file-path}
+# cal files
+cal_file <- 
+  here("data", "raw", "hplc") %>%
+  dir_ls(regexp = "method") %>%
+  basename()
+
 # pigment files
 file.pig <-
     here("data", "raw", "hplc") %>%
@@ -42,15 +48,17 @@ file.pig <-
     tibble(file = ., base = basename(.)) %>%
   mutate(
     sheets = map(file, 
-                 \(x) excel_sheets(x))
+                 \(x) excel_sheets(x)),
+    cal_files = case_when(str_detect(base, "10-11") ~ cal_file[1],
+                          .default = cal_file[2])
   ) %>%
   unnest(sheets) %>%
   pivot_wider(
-    id_cols      = c(file, base), # *optional* vector of unaffected columns,
+    id_cols      = c(file, base, cal_files), # *optional* vector of unaffected columns,
     names_from   = sheets, # category column(s) to pivot wide
     values_from  = sheets, # value column(s) that hold data for each category column
     names_repair = janitor::make_clean_names
-    )
+    ) 
 ```
 
 ```{r read-file-edit}
@@ -60,6 +68,7 @@ hplc_data <-
     .keep = "none",
     file,
     base,
+    cal_files, 
     data = map2(
       .x = file,
       .y = report,
