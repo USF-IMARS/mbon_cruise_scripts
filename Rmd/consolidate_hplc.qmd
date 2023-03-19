@@ -12,7 +12,9 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
-  readxl, janitor
+  readxl, cellranger, 
+  janitor,
+  scales
 )
 
 library("conflicted")
@@ -37,114 +39,129 @@ file.pig <-
            # included ^[^~]* to not match ~, means that a file is opened
            regexp = "^[^~]*\\.xlsx$") %>% 
     str_sort() %>%
-    tibble(file = ., base = basename(.))
+    tibble(file = ., base = basename(.)) %>%
+  mutate(
+    sheets = map(file, 
+                 \(x) excel_sheets(x))
+  ) %>%
+  unnest(sheets) %>%
+  pivot_wider(
+    id_cols      = c(file, base), # *optional* vector of unaffected columns,
+    names_from   = sheets, # category column(s) to pivot wide
+    values_from  = sheets, # value column(s) that hold data for each category column
+    names_repair = janitor::make_clean_names
+    )
 ```
 
 ```{r read-file-edit}
 hplc_data <-
   file.pig %>%
   mutate(
-  data = map(
-    .x = file,
-    ~ suppressWarnings(read_xlsx(
-      .x,
-      sheet = "Report",
-      skip  = 8,
-      na    = "-9999",
-      .name_repair = janitor::make_clean_names
-      )) %>%
-      select(1,
-        contains("cruise"), 
-        matches("original_pi_sample_label|^sample"),  
-        station, contains(c("vol", "water_depth")),
-        matches("sampling_depth_meters|^depth"), 
-        matches("gregorian_month|^month"), 
-        contains("time"), matches("^day"), matches("^year"),
-        contains(c("lon", "lat", "replic")), 
-        contains("Tot_Chl_a"):last_col(),
-        -contains(c("extracted", "comments", "sequential", "other"))
-        ) %>% 
-
-      # rename to make all the same column names
-      rename(
-        any_of(
-          c(
-            hplc_gsfc_id = "gsfc_lab_sample_code",
-            hplc_gsfc_id = "gsfc_sample_code",
-            cruise      = "cruise_name",
-            day         = "day_of_gregorian_month",
-            depth       = "sampling_depth_meters",
-            month       = "gregorian_month",
-            lat         = "latitude",
-            lon         = "longitude",
-            sample      = "original_pi_sample_label",
-            time        = "gmt_time",
-            volfilt     = "volume_filtered_ml",
-            water_depth = "total_water_depth_meters",
-            year        = "year_of_sample"
+    .keep = "none",
+    file,
+    base,
+    data = map2(
+      .x = file,
+      .y = report,
+      ~ suppressWarnings(read_xlsx(
+        .x,
+        # sheet = "Report",
+        sheet = .y,
+        skip  = 8,
+        na    = "-9999",
+        .name_repair = janitor::make_clean_names
+        )) %>%
+        select(1,
+          contains("cruise"), 
+          matches("original_pi_sample_label|^sample"),  
+          station, contains(c("vol", "water_depth")),
+          matches("sampling_depth_meters|^depth"), 
+          matches("gregorian_month|^month"), 
+          contains("time"), matches("^day"), matches("^year"),
+          contains(c("lon", "lat", "replic")), 
+          contains("Tot_Chl_a"):last_col(),
+          -contains(c("extracted", "comments", "sequential", "other"))
+          ) %>% 
+  
+        # rename to make all the same column names
+        rename(
+          any_of(
+            c(
+              hplc_gsfc_id = "gsfc_lab_sample_code",
+              hplc_gsfc_id = "gsfc_sample_code",
+              cruise       = "cruise_name",
+              day          = "day_of_gregorian_month",
+              depth        = "sampling_depth_meters",
+              month        = "gregorian_month",
+              lat          = "latitude",
+              lon          = "longitude",
+              sample       = "original_pi_sample_label",
+              time         = "gmt_time",
+              volfilt      = "volume_filtered_ml",
+              water_depth  = "total_water_depth_meters",
+              year         = "year_of_sample"
+              )
             )
-          )
+          ) %>%
+      
+        # change time to hh:mm:ss and add date
+        mutate(
+          time  = hms::as_hms(time),
+          month = str_extract(month, "\\w{3}"), # fix one month: Febuary
+          month = if_else(
+            str_detect(cruise, "19210") & str_detect(month, "(?i)jun"), 
+            "Aug", month),
+          date  = ymd(glue("{year}-{month}-{day}"),
+                              tz = "utc"),
+          .before = month) %>%
+        
+        # fix one depth value to numeric
+        mutate(
+          depth = as.character(depth),
+          depth = case_when(
+                    str_detect(depth, "2..15") ~ "2.15",
+                    .default = depth),
+          depth = as.numeric(depth),
+          indicate_if_filters_are_replicates = 
+            as.character(indicate_if_filters_are_replicates)
+          ) %>%
+        
+        # fix one character value to numeric
+        mutate(
+          water_depth = as.character(water_depth),
+          water_depth = case_when(
+                          str_detect(water_depth, "flow") ~ "1",
+                          .default = water_depth),
+          water_depth = as.numeric(water_depth)
         ) %>%
       
-      # change time to hh:mm:ss and add date
-      mutate(
-        time  = hms::as_hms(time),
-        month = str_extract(month, "\\w{3}"), # fix one month: Febuary
-        month = case_when(
-          # str_detect(cruise, "19210") & str_detect(month, "(?i)jul") ~ "Jun",
-          str_detect(cruise, "19210") & str_detect(month, "(?i)jun") ~ "Aug",
-          .default = month
-          ),
-        date  = ymd(glue("{year}-{month}-{day}"),
-                            tz = "utc"),
-        .before = month) %>%
-      
-      # fix one depth value to numeric
-      mutate(
-        depth = as.character(depth),
-        depth = case_when(
-                  str_detect(depth, "2..15") ~ "2.15",
-                  .default = depth),
-        depth = as.numeric(depth),
-        indicate_if_filters_are_replicates = 
-          as.character(indicate_if_filters_are_replicates)
+        # fix one set of cruise ID values  
+        mutate(
+           cruise = case_when(
+             str_detect(sample, "WS20278") ~ "Walton Smith 20278",
+             str_detect(sample, "WS16263") ~ "Walton Smith 16263",
+             .default = cruise)
+           ) %>%
+        
+        # edit station names to be uppercase and no spaces
+        mutate(
+          station = str_to_upper(station),
+          station = str_remove(station, "[:space:]"),
+          station = str_replace(station, "-", "_")
         ) %>%
-      
-      # fix one character value to numeric
-      mutate(
-        water_depth = as.character(water_depth),
-        water_depth = case_when(
-                        str_detect(water_depth, "flow") ~ "1",
-                        .default = water_depth),
-        water_depth = as.numeric(water_depth)
-      ) %>%
-    
-      # fix one set of cruise ID values  
-      mutate(
-         cruise = case_when(
-           str_detect(sample, "WS20278") ~ "Walton Smith 20278",
-           str_detect(sample, "WS16263") ~ "Walton Smith 16263",
-           .default = cruise)
-         ) %>%
-      
-      # edit station names to be uppercase and no spaces
-      mutate(
-        station = str_to_upper(station),
-        station = str_remove(station, "[:space:]"),
-        station = str_replace(station, "-", "_")
-      ) %>%
-      
-      # fix lat, lon
-      mutate(
-        lat = if_else(str_detect(cruise, "20278") 
-                      & station == "V8", 26.83457,lat),
-        lon = if_else(str_detect(cruise, "20278")
-                      & station == "V8", -82.95946,lon),
-        lat = if_else(lat < 0, -1 * lat, lat),
-        lon = if_else(lon > 0, -1 * lon, lon),
-      )
-    )) %>%
+        
+        # fix lat, lon
+        mutate(
+          lat = if_else(str_detect(cruise, "20278") 
+                        & station == "V8", 26.83457,lat),
+          lon = if_else(str_detect(cruise, "20278")
+                        & station == "V8", -82.95946,lon),
+          lat = if_else(lat < 0, -1 * lat, lat),
+          lon = if_else(lon > 0, -1 * lon, lon)
+          ))) %>%
   unnest(data) %>%
+  
+  # add cruise ID
   mutate(cruise_id = case_when(
       str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
@@ -167,27 +184,25 @@ aoml <-
   select(cruise, station, contains(c("gmt", "decimal"))) %>% 
   mutate(
     time_gmt = as_hms(time_gmt),
-    station = case_when(
-      str_detect(station, "(?i)naples") ~ "NBH",
-      str_detect(station, "(?i)casey") ~ "CBH",
-      .default = station
-    ),
+    station  = case_when(str_detect(station, "(?i)naples") ~ "NBH",
+                         str_detect(station, "(?i)casey")  ~ "CBH",
+                         .default = station),
     station = str_replace(station, " |-", "_"),
     station = if_else(str_detect(station, "LK|^21$"), "LK", station),
     station = if_else(str_detect(cruise, "WS19210") 
                       & str_detect(station, "9.5"), "9B", station),
     
-    cruise =  str_replace(cruise, "SAV", "SV"),
-    cruise = case_when(
-      str_detect(cruise, "WS18120") 
-      & date_gmt > as_date("2018-08-01") ~ "WS18218",
-      str_detect(cruise, "WS20231") ~ "WS20230",
-      str_detect(cruise, "SV1803") ~ "SV18067",
-      .default = cruise
-    ),
-    longitude_decimal = if_else(longitude_decimal > 0, -1 * longitude_decimal,
-                                longitude_decimal)
-  ) %>%
+    cruise = str_replace(cruise, "SAV", "SV"),
+    cruise = case_when(str_detect(cruise, "WS18120") 
+                       & date_gmt > as_date("2018-08-01") ~ "WS18218",
+                       str_detect(cruise, "WS20231")      ~ "WS20230",
+                       str_detect(cruise, "SV1803")       ~ "SV18067",
+                       .default = cruise),
+
+    longitude_decimal = if_else(longitude_decimal > 0, 
+                                -1 * longitude_decimal, # TRUE
+                                longitude_decimal       # FALSE
+                                )) %>%
   filter(cruise %in% hplc_data$cruise_id) %>%
   distinct(cruise, station, .keep_all = TRUE)
 
@@ -195,24 +210,71 @@ hplc_data <-
   hplc_data %>%
   left_join(aoml, by = join_by(cruise_id == cruise, station)) %>%
   mutate(
-    lon = if_else(abs(lon - longitude_decimal) < 0.1, lon, longitude_decimal),
-    lat = if_else(abs(lat - latitude_decimal) < 0.1, lat, latitude_decimal),
-    date = if_else(abs(date - date_gmt) < "1 day", date, date_gmt), 
-    time = if_else(abs(time - time_gmt) < "600 secs", time, time_gmt),
+    lon   = if_else(abs(lon - longitude_decimal) < 0.1, lon, longitude_decimal),
+    lat   = if_else(abs(lat - latitude_decimal) < 0.1, lat, latitude_decimal),
+    lon = round(lon, 4),
+    lat = round(lat, 4),
+    date  = if_else(abs(date - date_gmt) < "1 day", date, date_gmt), 
+    time  = if_else(abs(time - time_gmt) < "600 secs", time, time_gmt),
     .keep = "unused"
   ) %>%
   nest(.by = c(cruise, cruise_id)) %>%
   mutate(
-  data = map(.x = data,
-      ~ remove_empty(.x, which = "cols")),
-  names = map(.x = data,
-              (\(x) 
-               select(x, contains("Tot_Chl_a"):last_col())  %>%
-               names()  %>%
-               tibble(param_name = .))
-              )
-  )
+    data  = map(.x = data,
+                ~ remove_empty(.x, which = "cols")),
+    names = map(.x = data,
+                (\(x) 
+                 select(x, contains("Tot_Chl_a"):last_col())  %>%
+                 names()  %>%
+                 tibble(param_name = .))),
+    
+    base  = map(.x = data, \(x) pull(x, base) %>% unique())
+    )
+```
 
+
+```{r precision}
+precise <-
+  mutate(
+    .data = file.pig,
+    .keep = "none",
+    base,
+    precison = map2(
+      .x = file,
+      .y = replicate_filter_precision,
+      (\(.x, .y) 
+       read_xlsx(
+         path  = .x,
+         sheet = .y,
+         range = cellranger::cell_limits(c(1,1), c(3,3)),
+         na    = "-9999",
+         col_names    = FALSE,
+         .name_repair = make_clean_names)))
+  ) %>%
+  
+  unnest(precison, keep_empty = TRUE) %>%
+  mutate(
+    x_2 = str_remove(x_2, " ="),
+    x   = case_when(is.na(x_2) ~ "no replicates",
+                    .default = x)) %>%
+  fill(x) %>%
+  pivot_wider(
+    names_from   = x_2, 
+    values_from  = x_3, 
+    names_sep    = "_",
+    names_repair = make_clean_names) %>%
+  
+   remove_empty(which = "cols") %>%
+   mutate(across(c(t_chl_a, ppig), ~ scales::percent(., 0.01)))
+
+hplc_data <- 
+  hplc_data %>%
+  unnest(base)   %>%
+  left_join(., precise, by = join_by(base)) %>%
+  nest(precision = base:n, 
+       .by = c(cruise, cruise_id)) %>%
+  left_join(hplc_data, ., by = join_by(cruise, cruise_id)) %>%
+  select(-base)
 
 ```
 
@@ -226,7 +288,7 @@ save(hplc_data,
 ```
 
 # Extract Comments from Sheets
-```{r}
+```{r comments}
 shelf(openxlsx)
 for (i in seq(nrow(file.pig))) {
   temp_file <- file.pig$file[[i]]
