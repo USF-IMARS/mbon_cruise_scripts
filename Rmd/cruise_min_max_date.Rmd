@@ -1,0 +1,60 @@
+---
+title: "Min and Max Date per Cruise"
+author: "Sebastian DiGeronimo"
+date: "2023-03-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  readxl, openxlsx, janitor
+)
+
+library("conflicted")
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+```{r}
+(here("data", "raw") %>%
+dir_ls(regexp = "WSMasterSampleLog",
+       recurse = TRUE))[1] %>%
+read_xlsx(
+  guess_max = 7000,
+  na = "Skip too shallow",
+  .name_repair = make_clean_names
+  ) %>%
+select(cruise, date_gmt) %>%
+mutate(
+  cruise   = str_replace(cruise, "SAV", "SV"),
+  cruise   = case_when(str_detect(cruise, "WS18120")
+                       & date_gmt > as_date("2018-08-01") ~ "WS18218",
+                       str_detect(cruise, "WS20231")      ~ "WS20230",
+                       str_detect(cruise, "SV1803")       ~ "SV18067",
+                       str_detect(cruise, "WS1717")       ~ "WS17170",                   
+                       .default = cruise),
+  
+  date_gmt = if_else(year(date_gmt) < 2017 
+                     & str_detect(cruise, "WS17030"),
+                     as_date(str_replace(date_gmt, "2016", " 2017")),
+                     date_gmt),
+  .keep    = "used"
+) %>%
+summarise(.by = cruise,
+          min_date = min(date_gmt, na.rm = TRUE),
+          max_date = max(date_gmt, na.rm = TRUE),
+          ) %>%
+arrange(min_date) %>%
+mutate(
+  min_date = format(min_date, "%m/%d/%Y"),
+  max_date = format(max_date, "%m/%d/%Y"),
+) %>%
+write_csv(file = here("data", "metadata","cruise_date.csv"))
+```
