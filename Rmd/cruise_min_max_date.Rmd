@@ -4,7 +4,30 @@ author: "Sebastian DiGeronimo"
 date: "2023-03-20"
 output: html_document
 ---
+# Info
 
+This script will create a fill with cruise ID, min date and max date. This data
+used here is from NOAA AOML. It is summarized per cruise for the min data and
+max date. This is used to verify the date written on zooplankton cod ends with a 
+cruise ID when not written. This info will be used to print labels to be placed
+on vials when transfering zooplankton in formalin to zooplankton in Ethanol.
+
+Errors found:
+- WS18120 has two different months
+  - WS18120 is before Aug 2018 and WS18218 is after Aug 2018
+- WS17170 
+  - had multiple names:
+     WS17171, WS17172, WS17173
+- WS17030
+  - had half of cruise with the year `2016`
+
+Modified info to match IMaRS:
+- SAV (NOAA) vs SV (IMaRS) in cruise ID
+- SV1803 (NOAA) vs SV18067 (IMaRS) 
+- WS20231 (NOAA) vs WS20230 (IMaRS)
+
+
+# Load Libraries
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
@@ -22,6 +45,7 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
 
+# Create Dates File
 ```{r}
 (here("data", "raw") %>%
 dir_ls(regexp = "WSMasterSampleLog",
