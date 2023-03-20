@@ -4,16 +4,49 @@ author: "Sebastian DiGeronimo"
 date: "2023-02-13"
 output: html_document
 ---
+# Info
+This script will write files per cruise with following information:
+- identifier	
+- station	
+- collection_date
+- collected_by
+- present 
+- absent
+- maybe
 
+These files will be printed out and used to verify the location of the each 
+filter pad sample prior to lab processing. It will also serve as the schedule
+for the cruise processing only the odd numbered samples.
+
+When verifying, 
+present: sample was in correct bag when verifying, and split into even and odd 
+         afterwards
+missing: samples may not be present because were left in dewar, or written 
+         improperly and will need to see if any duplicated samples are present
+         and easily distinguished (usually hand writing). 
+         You may need to unwrap the sample and read the histoprep capsule.
+         It should be labeled as:
+         - "missing" if no evidence of it exists
+         - "found; not running" if sample was found later and not cold
+         
+maybe: if found two samples with same name and cannot be distinguished
+       - "duplicate name; not running"
+
+A sample may be present with the correct cruise ID, but not written on the 
+sheet, this sample will need to be verified with the original log sheet.
+Usually this occurs if no volume was recorded and may not be useful to process. 
+It can be moved into the evens bag and labeled as:
+- "present but not running" if no volume was recorded
+
+# Load Librarys
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
-  readxl
+  readxl, cli
 )
 
 library("conflicted")
@@ -22,28 +55,52 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
 
-```{r}
-cruise <- "WS19266"
+# Create Crusie File 
+This file is located in:
+box > imars_imars_cruises > imars_inventory_chl_hplc_cdom_updated_<date>.xlsx
+
+https://usf.app.box.com/folder/179388329770?s=f6kujckfibt78al222ied0w2m6dxa529
+```{r create_file}
 dir.create(here("data", "print"))
-meta <- 
+meta <-
   dir_ls(here(cloud_dir), 
          regexp = "imars_inventory_chl_hplc_cdom") %>%
-  read_xlsx(sheet = "chl_progress") %>%
-  filter(str_detect(cruise_id, cruise)) %>%
-  select(3, 2, 5, 6) %>%
+  
+  read_xlsx(sheet     = "chl_progress",
+            guess_max = 10000) %>%
+  
+  filter(collection_date > as_date("2019-09-01")) %>%
+  select(1, 3, 2, 5, 6)  %>%
   mutate(
+    collection_date = format(collection_date, "%b %d, %Y"),
+    
     present = NA_character_,
     absent  = NA_character_,
     maybe   = NA_character_
   )
 
-sink(here("data", "print", glue("{cruise}_pres_abs.csv")))
- 
-cat(paste(cruise, "\n\n"))
-write.csv(meta, row.names = FALSE, na = "")
-
-sink()
+for (i  in seq(unique(meta$cruise_id))) {
+  cruise    <- unique(meta$cruise_id)[i]
+  file_name <- here("data", "print", glue("{cruise}_pres_abs.csv"))
   
-shell.exec(here("data", "print", glue("{cruise}_pres_abs.csv")))
+  if (file_exists(file_name)) {
+    cli_alert_warning("Skipping: {basename(file_name)}; already exists")
+    next
+  }
+  
+  cli_alert_info("Creating file: {basename(file_name)}")
+  sink(file_name)
+
+  cat(paste(cruise, "\n\n"))
+
+  meta %>%
+  filter(cruise_id == {{cruise}}) %>%
+  select(-cruise_id) %>%
+  write.csv(. , row.names = FALSE, na = "")
+
+  sink()
+}
+
+# shell.exec(here("data", "print", glue("{cruise}_pres_abs.csv")))
 ```
 
