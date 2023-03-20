@@ -162,7 +162,7 @@ hplc_data <-
   ) 
 ```
 ## Header Information
-```{r test-default}
+```{r default}
 contacts <- 
   tribble(
     ~invest,               ~email,
@@ -191,7 +191,9 @@ hd_def$fields_extr <-
   left_join(sb_field, by = c("field_extr" = "field_name"))
 
 # TODO: fill in
+# needs: checklist, cruises report?
 hd_def$docs     <- "__TODO__"
+
 
 hd_def$comments <-
   glue(.sep = "\n",
@@ -207,7 +209,8 @@ hd_def$comments <-
        "! concentrations less than 0.0005 mg/m^3."
        ) 
 
-hplc_data <- hplc_data %>%
+hplc_data <- 
+  hplc_data %>%
   mutate(
     precise_comm = map_chr(
       precision,
@@ -227,13 +230,12 @@ hplc_data <- hplc_data %>%
            "\n! Ppig   = {xl$ppig}",
            "\n!")
         }
-       )
-     ),
+       )),
     cal_file = map_chr(data, \(x) x$cal_files[[1]])
     )
 ```
 
-```{r test-headr-skeleton}
+```{r headr-skeleton}
 header_skeleton <-
   glue::glue(
     "/begin_header",
@@ -247,7 +249,6 @@ header_skeleton <-
     "/data_file_name={file_name}", # current name of data file, self-reference
     "/documents={hd_def$docs}",    # additional info about experiment and cruise
     "/data_type={hd_def$type}",
-    # "/calibration_files={hd_def$cal_file}",
     "/calibration_files={cal_file}",
     "/start_date={start_date}",
     "/end_date={end_date}",
