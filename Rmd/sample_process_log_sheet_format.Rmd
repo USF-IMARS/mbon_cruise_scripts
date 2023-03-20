@@ -13,7 +13,7 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  openxlsx
+  openxlsx, cli
 )
 
 library("conflicted")
@@ -24,8 +24,6 @@ conflict_prefer("select", "dplyr")
 
 source(here("scripts/process_log_sheet.R"))
 
-# cruise <- "WS21338"
-cruise <- "WS19266"
 
 sht_nm <- c("metadata", "Chl-a")
 ```
@@ -40,8 +38,13 @@ cal <- tibble(
 ```
 
 ```{r}
-# file_examp <- here() %>%
-#   dir_ls(regexp = "2021_12")
+# cruise IDs that already have process logs
+crs_log_exst <- 
+  here(cloud_dir, "process_logs") %>%
+  dir_ls() %>%
+  as.character() %>%
+  basename()  %>%
+  str_extract("[A-Z0-9]{6,7}")
 
 meta_all <- 
   dir_ls(here(cloud_dir), 
@@ -49,80 +52,58 @@ meta_all <-
   readxl::read_xlsx(sheet = "sample_meta_data",
                     col_types = c(rep("guess", 14), 
                                   "numeric", "text", "numeric")) %>%
+  
+  # remove cruises fully completed pre-COVID
   filter(
-    year >= 2019
-    & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))) 
+    year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
+    & !(cruise_id %in% crs_log_exst)
+    )
 
-
-# meta <- 
-#   meta_all %>% filter(str_detect(cruise_id, cruise))
+stopifnot("No files need creating" = nrow(meta_all) > 1)
 
 meta <-
   meta_all %>% 
-  group_by(cruise_id) %>%
-  nest() %>%
+  nest(.by = cruise_id) %>%
   mutate(
     sheets = map2(data, cruise_id,
       ~ tryCatch({
-        # cli::cli_inform("-----")
-        cli::cli_alert_info(c("-----\n Cruise ID: ", .y))
-        
+        cli_alert_info(c("-----\n Cruise ID: ", .y))
         process_log_sheet(.meta = .x, cal = cal, cruise = .y)
       }, error = function(e) {
-        cli::cli_alert_danger("Cruise has issue unnesting!")
-        cli::cli_alert_danger(sprintf("Error in %s: %s", 
-                                      deparse(e[["call"]]), 
-                                      e[["message"]])
+        cli_alert_danger("Cruise has issue unnesting!")
+        cli_alert_danger(sprintf("Error in %s: %s",
+                                 deparse(e[["call"]]),
+                                 e[["message"]])
                               )
         NULL
       })
     )
   )
-
-# for (i in seq(nrow(meta))) {
-#   try(openXL(meta$sheets[[i]]), silent = TRUE)
-# }
-
-```
-```{r create-workbook}
-wb <- process_log_sheet(.meta = meta$data[[i]], cal = cal, cruise = meta$cruise_id[[i]])
-worksheetOrder(wb) <- c(2, 1)
-openXL(wb)
 ```
 
 
 ```{r save}
-# ---- save ----
-# saveWorkbook(wb, 
-#              here(glue("{cruise}_{meta$year[[1]]}_",
-#                        "{min(format(meta$date_mm_dd_yy, '%m'))}_abs.xlsx")), 
-#              overwrite = TRUE)
+ignore  <- FALSE # redo all or ignore some
+overwrt <- FALSE
+dir_loc <- here(cloud_dir, "process_logs")
+# dir_loc <- here("data", "process_logs") # test location 
 
-# for (i in seq(nrow(meta))) {
-#   try(
-#     saveWorkbook(meta$sheets[[i]], 
-#                  here(glue("{meta$cruise_id[i]}_{meta$data[[i]]$year[[1]]}_",
-#                           "{min(format(meta$data[[i]]$",
-#                           "date_mm_dd_yy, '%m'), na.rm = TRUE)}_abs.xlsx")), 
-#                  overwrite = TRUE), silent = TRUE)
-# }
+dir_create(dir_loc)
 
-ignore <- FALSE # redo all or ignore some
-dir_create(here(cloud_dir, "process_logs"))
 for (i in seq(nrow(meta))) {
-   file_name <- here(cloud_dir, "process_logs", 
+   file_name <- here(dir_loc,
                       glue("{meta$cruise_id[i]}_",
                            "{meta$data[[i]]$year[[1]]}_",
                            "{min(format(meta$data[[i]]$date_mm_dd_yy, '%m'),", 
                            "na.rm = TRUE)}_abs.xlsx"))
    if (!file_exists(file_name) | ignore) {
-     cli::cli_alert_info("Trying to create file {.file {basename(file_name)}}")
+     cli_alert_info("Trying to create file {.file {basename(file_name)}}")
      try(
        saveWorkbook(meta$sheets[[i]],
                     file_name,
-                    overwrite = TRUE), silent = TRUE)
+                    overwrite = overwrt), silent = FALSE)
    } else {
-     cli::cli_alert_info("Ignoring file {.file {basename(file_name)}}")
+     cli_alert_info("Ignoring file {.file {basename(file_name)}}")
    }
   
 }
