@@ -4,7 +4,13 @@ author: "Sebastian DiGeronimo"
 date: "2023-02-13"
 output: html_document
 ---
-# ---- Load Libraries ----
+# Info:
+This script creates process logs sheets within box. These are formatted from the
+file imars_inventory_chl_hplc_cdom_update_<date>.xlsx. They are used to fill in
+file name and Turner Triology values.
+
+
+# Load Libraries ----
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 librarian::shelf(
@@ -27,7 +33,9 @@ source(here("scripts/process_log_sheet.R"))
 
 sht_nm <- c("metadata", "Chl-a")
 ```
-```{r calibration}
+# Triology Calibration Information ----
+This will need to be updated over time
+```{r triology-calibration}
 cal <- tibble(
   cal_date         = as_date("2022-04-29"),
   no_acid_slop     = 0.17441,
@@ -37,7 +45,8 @@ cal <- tibble(
 )
 ```
 
-```{r}
+# Read Log and filter Cruise IDs without Process Log File ----
+```{r read-log}
 # cruise IDs that already have process logs
 crs_log_exst <- 
   here(cloud_dir, "process_logs") %>%
@@ -60,7 +69,13 @@ meta_all <-
     )
 
 stopifnot("No files need creating" = nrow(meta_all) > 1)
+```
 
+## Create Workbook ----
+function: process_log_sheet(.meta, cal, cruise)
+Uses logsheet info for data and cruise ID
+Uses calibration variable to input into new ones
+```{r create-workbook}
 meta <-
   meta_all %>% 
   nest(.by = cruise_id) %>%
