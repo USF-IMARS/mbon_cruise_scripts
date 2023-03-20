@@ -59,26 +59,27 @@ process_log_sheet <- function(.meta, cal, cruise,
   #' @examples
   #' NA
 
-  # ============================================================================ #
+  # ========================================================================== #
   # ---- Load Libraries ----
-  # ============================================================================ #  
-  librarian::shelf(
+  # ========================================================================== #  
+  library("librarian")
+  shelf(
     librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
-    # broom # optional
     
     # additional
-    openxlsx
+    openxlsx, hms, janitor, cli
   )
-  
+
   # ========================================================================== #
   # ---- Filter Data ----
   # ========================================================================== #  
-  cli::cli_alert_info("Filtering Data")
+  cli_alert_info("Filtering Data")
   .meta <- .meta %>%
     select(-1, -sample_number) %>%
-    mutate(sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt)) 
-
+    mutate(sample_collection_time_gmt = as_hms(sample_collection_time_gmt)) 
+  
+  # browser()
   # ---- Format 1st Sheet Info ----
   meta <-
     .meta %>%
@@ -98,7 +99,7 @@ process_log_sheet <- function(.meta, cal, cruise,
       names_from   = sample_type, 
       values_from  = identifier,
       values_fn    = list,
-      names_repair = janitor::make_clean_names
+      names_repair = make_clean_names
     ) %>%
     unnest(c(chl_a, cdom)) %>%
     group_by(station, depth_m) %>%
@@ -174,7 +175,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ========================================================================== #
   # ---- Setup ----
   # ========================================================================== #  
-  cli::cli_alert_info("Setup")
+  cli_alert_info("Setup")
   # ---- Styles for formatting ----
   sstyles <-
     list(
@@ -278,7 +279,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ========================================================================== #
   # ---- Create 1st Sheet ----
   # ========================================================================== #  
-  cli::cli_alert_info("Creating sheet: {.var {sht_nm[1]}}")
+  cli_alert_info("Creating sheet: {.var {sht_nm[1]}}")
   # ---- Create Worksheet ----
   wb <- createWorkbook(
     creator = creator, 
@@ -369,7 +370,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ========================================================================== #
   # ---- Create 2nd Sheet ----
   # ========================================================================== # 
-  cli::cli_alert_info("Creating sheet: {.var {sht_nm[2]}}")
+  cli_alert_info("Creating sheet: {.var {sht_nm[2]}}")
   # ---- Add sheet ----
   addWorksheet(wb, sheetName = sht_nm[2])
   
@@ -493,7 +494,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ---- end of function ----
   }
 
-library("docstring")
-docstring(process_log_sheet)
+# library("docstring")
+# docstring(process_log_sheet)
 
 
