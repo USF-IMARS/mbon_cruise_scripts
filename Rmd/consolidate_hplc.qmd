@@ -6,7 +6,7 @@ format: html
 ---
 
 # Load Libraries
-```{r library}
+```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
@@ -282,19 +282,136 @@ hplc_data <-
   left_join(., precise, by = join_by(base)) %>%
   nest(precision = base:n, 
        .by = c(cruise, cruise_id)) %>%
-  left_join(hplc_data, ., by = join_by(cruise, cruise_id)) %>%
-  select(-base)
-
+  left_join(hplc_data, ., by = join_by(cruise, cruise_id)) 
 ```
 
+# Create Checklist Files
+Experiment Name
+
+Cruise Name
+
+a. Filter type/pore size:
+b. Vacuum pressure:
+c. Replicates collected (# or no):   
+e. Flash frozen in L/N (y/n):
+f. Long term storage conditions/temperature:
+
+```{r}
+# pacman::p_load_gh("trinker/textreadr")
+shelf(r2rtf)
+
+chk_ls <- 
+  here("data", "raw", "hplc") %>%
+  dir_ls(regexp = "checklist",
+         type = "file") %>%
+  sort()
+
+srch_terms <-
+  tibble::tribble(
+                                     ~ search, ~info,
+                            "Experiment Name", "SFMBON",
+                                "Cruise Name", NA,
+                     "Filter type/pore size:", "Whatman GF/F, 0.7 um",
+                           "Vacuum pressure:", "< 5 atm??",
+       "Replicates collected \\(# or no\\): ", NA,
+             "Flash frozen in L/N \\(y/n\\):", "y",
+  "Long term storage conditions/temperature:", "-80 deg C Freezer"
+  )
+
+hplc_data <-
+  hplc_data %>%
+  mutate(
+    cruise_id, data,
+    check_f = map_chr(base,
+                  ~ case_when(
+                    .default = NA_character_,
+                    any(str_detect(.x, "09-02")) ~ chk_ls[[1]],
+                    any(str_detect(.x, "10-11")) ~ chk_ls[[2]])
+                  ),
+    rtf_file = map2_chr(
+      .x = check_f,
+      .y = cruise_id,
+      function(x, y) {
+        if (!is.na(x)) {
+          dir_create(here(dirname(x), "checklist"))
+          here(
+            dirname(x), "checklist",
+            glue(str_extract(basename(x), "check.*hplc"),
+                 "_", y, ".rtf"))
+          } else {
+            NA_character_
+          }
+        }))
+
+hplc_rtf <- hplc_data
+for (i in seq(nrow(hplc_data))) {
+  if (!is.na(hplc_data$check_f[[i]])) {
+    
+    file_copy(hplc_rtf$check_f[[i]], 
+              hplc_rtf$rtf_file[[i]],
+              overwrite = TRUE)
+  }
+}
+
+
+```
 ```{r save}
-dir_create( here("data", "processed", "hplc"))
+dir_create(here("data", "processed", "hplc"))
+hplc_data <- select(hplc_data, -check_f) 
 save(hplc_data,
       file =  here("data", "processed", "hplc", 
                    glue("consolidated_HPLC_{Sys.Date()}.RData")
                    )
      )
 ```
+
+```{r}
+hplc_rtf %>% 
+  filter(!is.na(rtf_file)) %>%
+  mutate(
+    .keep = "used",
+    cruise_id,
+    data,
+    rtf_file,
+    text = map(
+      .x = rtf_file,
+      ~ readLines(.x) %>%
+        tibble(text = .)
+    ),
+    text = pmap(
+      list(text, cruise_id, rtf_file, data),
+      (function(x, y, z, dat) {  
+       cat(y)
+         dupes <- 
+          dat %>%
+          summarise(.by = c(station, depth),
+                    counts = n() > 1) %>%
+          summarise(dups = sum(counts))  %>%
+          as.vector()
+       
+       x %>%
+        mutate(
+          text = str_replace(text, srch_terms$search[[1]], 
+                             glue("\\0: {srch_terms$info[1]}")),
+          text = str_replace(text, srch_terms$search[[2]], 
+                             glue("\\0: {y}")),
+          text = str_replace(text, srch_terms$search[[3]], 
+                             glue("\\0 {srch_terms$info[3]}")),
+          text = str_replace(text, srch_terms$search[[4]], 
+                             glue("\\0 {srch_terms$info[4]}")),
+          text = str_replace(text, srch_terms$search[[5]], 
+                             glue("\\0 {if_else(dupes != 0, as.character(dupes), 
+                                        'no')}")),
+          text = str_replace(text, srch_terms$search[[6]], 
+                             glue("\\0 {srch_terms$info[6]}")),
+          text = str_replace(text, srch_terms$search[[7]], 
+                             glue("\\0 {srch_terms$info[7]}"))
+    ) %T>% 
+    r2rtf::write_rtf(., z)
+    }))
+  )
+```
+
 
 # Extract Comments from Sheets
 ```{r comments}
