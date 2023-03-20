@@ -296,7 +296,7 @@ c. Replicates collected (# or no):
 e. Flash frozen in L/N (y/n):
 f. Long term storage conditions/temperature:
 
-```{r}
+```{r checklist}
 # pacman::p_load_gh("trinker/textreadr")
 shelf(r2rtf)
 
@@ -355,7 +355,7 @@ for (i in seq(nrow(hplc_data))) {
 
 
 ```
-```{r save}
+```{r save-hplc-data}
 dir_create(here("data", "processed", "hplc"))
 hplc_data <- select(hplc_data, -check_f) 
 save(hplc_data,
@@ -365,7 +365,7 @@ save(hplc_data,
      )
 ```
 
-```{r}
+```{r write-checklist}
 hplc_rtf %>% 
   filter(!is.na(rtf_file)) %>%
   mutate(
