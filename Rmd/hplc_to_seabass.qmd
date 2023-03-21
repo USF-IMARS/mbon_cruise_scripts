@@ -278,7 +278,7 @@ header_skeleton <-
     # optional recommended
     "/data_status={hd_def$status}",
     
-    # optional
+    optional
     "/original_file_name={fbase}", 
     
     "{hd_def$comments}",
@@ -414,6 +414,109 @@ pwalk(list(final$cols, final$heads),
         }
       )
 ```
+
+# Copy files to box
+If you want to copy files from local to cloud directory, you may run this
+chunk. 
+
+By default, it will skip. 
+```{r coy-to-box}
+shelf(cli)
+  cloud_loc <- here(cloud_dir, "hplc", "seabass_submit")
+  ovrwrt    <- FALSE
+  wrt_cld   <- FALSE
+  
+  # cloud_loc <- here("data", "test")
+if (!wrt_cld) {
+  cli_alert_info("Skipping all files!")
+  cli_alert_warning(c("If you want to save files to {.file {cloud_dir}}, ",
+                     "set {.var wrt_cld} = {.var TRUE}",
+                     "(currently set to {.var {wrt_cld}})"))
+  } else {
+  if (!ovrwrt) {
+    cli_text("\n\n")
+    cli_alert_warning("You might be overwriting previsouly saved data.")
+    cli_alert_warning(c("If this was a mistake, set {col_red(\"ovrwrt\")} ",
+                        "= {.var FALSE}"))
+    cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
+             {col_red(\"\\\"esc\\\"\")} to escape and correct.")
+    invisible(readline(""))
+  }
+
+  file_to_box <-
+    reduce(
+      .f = left_join, 
+      by = join_by(cruise_id),
+      list(
+        # extract location for each calibration file
+        select(hplc_data, cruise_id, cal_file) %>%
+        mutate(
+          cal_file = map_chr(.x = cal_file,
+                             ~ here("data", "raw", "hplc") %>%
+                               dir_ls(regexp = .x))
+          ),
+        
+        # extract cruise ID and path to individual seabass submission files
+        (here("data", "processed", "hplc") %>%
+           dir_ls(regexp = "ind_file") %>%
+           sort(decreasing = TRUE))[1] %>%
+          dir_ls() %>%
+          tibble(sb_file = .) %>%
+          mutate(
+            cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
+            ),
+        
+        # extract location for each cruise checklist      
+        here("data", "raw", "hplc", "checklist") %>%
+          dir_ls() %>%
+          tibble(chk_file = .) %>%
+        mutate(
+          cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
+          )
+        )
+      ) %>%
+    # add cloud directory for each cruise
+    mutate(cloud_dir = here(cloud_loc, cruise_id)) %>%
+    nest(.by = c(cruise_id, cloud_dir)) %$%
+    
+    pwalk(list(cruise_id, data, cloud_dir),
+          function(x, y, dir_loc) {
+            cli_h1(x)
+            cli_alert_info("Copy Location: {.file {dir_loc}}")
+            y <- 
+              pivot_longer(
+                data      = y,
+                cols      = everything(),  # columns to pivot long,
+                names_to  = "file_type", # desired name for category column
+                values_to = "file_path", # desired name for value column
+                )  %>%
+              filter(!is.na(file_path)) 
+            
+          walk2(
+            .x = y$file_path,
+            .y = dir_loc,
+            function(from, to) {
+           dir_create(to)
+           tryCatch({
+             file_copy(from, to, overwrite = ovrwrt)
+             cli_alert_success("Copying: {.file {basename(from)}}")
+             }, error = function(e) {
+               cli_alert_danger(c("Skipping: {.file {basename(from)}} ",
+                                  "{col_red(\"Already exists!\")}"))
+             })
+              })}
+        )
+  
+  if (!ovrwrt) {
+    cli_text("\n\n")
+    cli_alert_warning(c("If you want to {col_red(\"overwrite\")} existing ",
+                       "files, set {.var ovrwrt} = {.var TRUE}",
+                       "(currently set to {.var {ovrwrt}})"))
+  }
+} 
+```
+
+
 
 x  hdr = {'/begin_header';
   strcat('/received=',date_received);
