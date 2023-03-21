@@ -278,7 +278,7 @@ header_skeleton <-
     # optional recommended
     "/data_status={hd_def$status}",
     
-    optional
+    # optional
     "/original_file_name={fbase}", 
     
     "{hd_def$comments}",
