@@ -359,15 +359,18 @@ save(hplc_data,
 ```
 
 ```{r write-checklist}
+ovrwrt <- TRUE
 for (i in seq(nrow(hplc_rtf))) {
-  if (!is.na(hplc_rtf$check_f[[i]]) &
-      !file_exists(hplc_rtf$rtf_file[[i]])
+  if (
+    !is.na(hplc_rtf$check_f[[i]]) 
+    &
+    (!file_exists(hplc_rtf$rtf_file[[i]]) | ovrwrt)
       ) {
     cli_alert_info("Cruise ID: {hplc_rtf$cruise_id[[i]]}")
     cli_alert_info("Creating file: {basename(hplc_rtf$rtf_file[[i]])}")
-    # file_copy(hplc_rtf$check_f[[i]], 
-    #           hplc_rtf$rtf_file[[i]],
-    #           overwrite = FALSE)
+    file_copy(hplc_rtf$check_f[[i]],
+              hplc_rtf$rtf_file[[i]],
+              overwrite = ovrwrt)
   } else {
     cli_alert_info("Skipping Cruise ID: {hplc_rtf$cruise_id[[i]]}")
   }
