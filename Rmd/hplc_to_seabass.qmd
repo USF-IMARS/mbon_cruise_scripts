@@ -147,19 +147,21 @@ hplc_data <-
             x  %>%
             mutate(
               low_name = str_replace(param_name, "(?i)t_caro", "tcar"),
-              low_name = str_replace(low_name, "t_pg|t_pig", "tpg"),     
-         low_name = case_when(
-           str_detect(low_name, "chl_c12") ~ "chl_c1c2",
-           str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
-           str_detect(low_name, "t_chl_a_tpg") ~ "tchla_tpg",
-           str_detect(low_name, "tchl_a") ~ str_replace(low_name, "tchl_a", "tchla"),
-           str_detect(low_name, "^t_chl") ~ str_replace(low_name, "t_chl", "tchl"),
-           str_detect(low_name, "t_acc") ~ str_replace(low_name, "t_acc", "tacc"),
-           .default = low_name)
-         ) %>%
-  left_join(sb_field, by = c("low_name")) )
-    )
-  ) 
+              low_name = str_replace(low_name, "t_pg|t_pig", "tpg"),
+              low_name = case_when(
+                str_detect(low_name, "chl_c12") ~ "chl_c1c2",
+                str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
+                str_detect(low_name, "t_chl_a_tpg") ~ "tchla_tpg",
+                str_detect(low_name, "tchl_a") ~ str_replace(low_name, 
+                                                             "tchl_a", "tchla"),
+                str_detect(low_name, "^t_chl") ~ str_replace(low_name, 
+                                                             "t_chl", "tchl"),
+                str_detect(low_name, "t_acc") ~ str_replace(low_name, 
+                                                            "t_acc", "tacc"),
+                .default = low_name)
+              ) %>%
+              left_join(sb_field, by = c("low_name"))))
+    ) 
 ```
 ## Header Information
 ```{r default}
@@ -233,6 +235,8 @@ hplc_data <-
        )),
     cal_file = map_chr(data, \(x) x$cal_files[[1]])
     )
+
+
 ```
 
 ```{r headr-skeleton}
@@ -247,7 +251,8 @@ header_skeleton <-
     "/cruise={cruise_id}",
     "/station={hd_def$stn}",
     "/data_file_name={file_name}", # current name of data file, self-reference
-    "/documents={hd_def$docs}",    # additional info about experiment and cruise
+    # "/documents={hd_def$docs}",    # additional info about experiment and cruise
+    "/documents={doc}",    # additional info about experiment and cruise
     "/data_type={hd_def$type}",
     "/calibration_files={cal_file}",
     "/start_date={start_date}",
@@ -318,24 +323,30 @@ hplc_w_head <-
           west_longitude = round(lon_min, 3),
           .keep = "unused")
         }
-      )
+      ),
+    # edit doc when have more documents 
+    doc = glue("{rtf_file}", .na = "na")
     )
+
+hplc_w_head
 ```
 
 ```{r header-info}
 # cruise data header_info cruise_id 
-# final <-
+final <-
   hplc_w_head %>%
   # slice(1) %>%
   mutate(
      heads = pmap(
       .progress = TRUE,
-      .l = list(data, header_info, cruise_id, sb_name, precise_comm),
-      function(y, x, cruise_id, sb_name, pc_com){
+      .l = list(data, header_info, cruise_id, sb_name, precise_comm, cal_file,
+                doc),
+      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc){
         # remove spaces in original base name 
         fbase <- 
           str_replace_all(unique(y$base), " ", "_") %>%
           str_c(collapse = ",")
+        
         
         # create file name based on cruise ID
         file_name <-
@@ -350,10 +361,10 @@ hplc_w_head <-
         
         # units each field
         pun <- str_c(c(hd_def$fields_extr$units, sb_name$units), collapse = ",")
- 
+        
         # evaluate header
         header <- with(x, eval(header_skeleton)) %T>% print()
-        
+
         # return values
         return(
           tibble(
