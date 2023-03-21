@@ -12,6 +12,7 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
+  cli,
   readxl, cellranger, 
   janitor,
   scales, hms
@@ -344,20 +345,12 @@ hplc_data <-
         }))
 
 hplc_rtf <- hplc_data
-for (i in seq(nrow(hplc_data))) {
-  if (!is.na(hplc_data$check_f[[i]])) {
-    
-    file_copy(hplc_rtf$check_f[[i]], 
-              hplc_rtf$rtf_file[[i]],
-              overwrite = TRUE)
-  }
-}
-
-
 ```
 ```{r save-hplc-data}
 dir_create(here("data", "processed", "hplc"))
-hplc_data <- select(hplc_data, -check_f) 
+hplc_data <- 
+  select(hplc_data, -check_f) %>%
+  mutate(rtf_file = basename(rtf_file))
 save(hplc_data,
       file =  here("data", "processed", "hplc", 
                    glue("consolidated_HPLC_{Sys.Date()}.RData")
@@ -366,6 +359,20 @@ save(hplc_data,
 ```
 
 ```{r write-checklist}
+for (i in seq(nrow(hplc_rtf))) {
+  if (!is.na(hplc_rtf$check_f[[i]]) &
+      !file_exists(hplc_rtf$rtf_file[[i]])
+      ) {
+    cli_alert_info("Cruise ID: {hplc_rtf$cruise_id[[i]]}")
+    cli_alert_info("Creating file: {basename(hplc_rtf$rtf_file[[i]])}")
+    # file_copy(hplc_rtf$check_f[[i]], 
+    #           hplc_rtf$rtf_file[[i]],
+    #           overwrite = FALSE)
+  } else {
+    cli_alert_info("Skipping Cruise ID: {hplc_rtf$cruise_id[[i]]}")
+  }
+}
+
 hplc_rtf %>% 
   filter(!is.na(rtf_file)) %>%
   mutate(
