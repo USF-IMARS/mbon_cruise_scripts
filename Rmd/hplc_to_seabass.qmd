@@ -136,8 +136,8 @@ sb_field <-
     low_name = str_replace_all(low_name, "-", "_")
          )
 
-# extract all field names from data and map to Seabass standard names
-hplc_data <- 
+# extract all field names from data and map to SeaBass standard names
+hplc_data <- hplc_data2 <- 
   hplc_data %>% 
   mutate(
     # edit old names from previous report to match current SeaBass
@@ -516,7 +516,49 @@ if (!wrt_cld) {
 } 
 ```
 
+# Save Consolidated Info and Select Variables
+```{r}
+hplc_filt <-
+  hplc_data2 %>%
+  mutate(
+    data = map2(
+      .x = data,
+      .y = sb_name,
+      function(x, y) {
+        
+        x <- select(x, !contains(c("file", "base", "cal_files")))
+        
+        new_names <- tibble(og_names = names(x))  %>%
+        left_join(y, by = join_by(og_names == param_name)) %>%
+        mutate(
+          field_name = if_else(is.na(field_name), og_names, field_name)
+        )
+        
+        new_names$field_name
+      
+        names(x) <- new_names$field_name
+        return(x)
+        }
+      
+      )
+  ) %>%
+  select(1:3) %>%
+  unnest(data) 
 
+
+if (FALSE) {
+    write_csv(hplc_filt, here("data", "processed", "hplc", 
+                             glue("hplc_consolidate_select_vars_",
+                                  "{Sys.Date()}",
+                                  ".csv")))
+  if (FALSE) {
+    write_csv(hplc_filt, here(cloud_dir, "hplc",
+                              glue("hplc_consolidate_select_vars_",
+                                   "{Sys.Date()}",
+                                   ".csv")))
+    }
+  }
+```
 
 x  hdr = {'/begin_header';
   strcat('/received=',date_received);
