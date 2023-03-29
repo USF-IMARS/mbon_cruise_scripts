@@ -46,61 +46,268 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
-  readxl, cli
+  # readxl, # decided openxlsx is better to create file
+  openxlsx, cli
 )
 
 library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+
+# loads cloud directory in .Rprofile
+source(here(".Rprofile"))
 ```
 
-# Create Crusie File 
+# Create Cruise File 
 This file is located in:
 box > imars_imars_cruises > imars_inventory_chl_hplc_cdom_updated_<date>.xlsx
 
 https://usf.app.box.com/folder/179388329770?s=f6kujckfibt78al222ied0w2m6dxa529
-```{r create_file}
-dir.create(here("data", "print"))
+```{r load-meta-file}
+dir_create(here("data", "print"))
+
 meta <-
-  dir_ls(here(cloud_dir), 
+  dir_ls(here(cloud_dir),
          regexp = "imars_inventory_chl_hplc_cdom") %>%
-  
+
   read_xlsx(sheet     = "chl_progress",
             guess_max = 10000) %>%
-  
+
   filter(collection_date > as_date("2019-09-01")) %>%
-  select(1, 3, 2, 5, 6)  %>%
+  select(cruise_id, station, collection_date, collected_by, identifier)  %>%
   mutate(
+    # date format: ex Mar 23, 2023
     collection_date = format(collection_date, "%b %d, %Y"),
-    
+
     present = NA_character_,
     absent  = NA_character_,
-    maybe   = NA_character_
+    notes   = NA_character_
   )
 
-for (i  in seq(unique(meta$cruise_id))) {
-  cruise    <- unique(meta$cruise_id)[i]
-  file_name <- here("data", "print", glue("{cruise}_pres_abs.csv"))
-  
-  if (file_exists(file_name)) {
-    cli_alert_warning("Skipping: {basename(file_name)}; already exists")
-    next
+slice_head(meta, n = 5)
+```
+
+
+```{r load-create-wb}
+# change if another author
+author <- "Sebastian Di Geronimo" 
+
+# find previously saved files
+prev_f <- 
+  here("data", "print") %>%
+  dir_ls(regexp = "^[^~]*cruise.*\\.xlsx$")
+
+# select most recently saved
+prev_f <-
+  (file_info(prev_f) %>%
+  arrange(desc(birth_time)))[1,1][[1]]
+
+# if none, create,
+# else read previous file
+if (is_empty(prev_f)) {
+  cli_alert_info("Creating New Worksheet")
+  wb <- 
+  createWorkbook(
+    author,
+    "Filter Pad Presence/Absence"
+    )
+  } else {
+    cli_alert_info("Loading Previous File: {basename(prev_f)}")
+    wb <- 
+      prev_f %>%
+      loadWorkbook(.)
   }
+```
+
+```{r add-cruise-sheet}
+for (cruise  in unique(meta$cruise_id)) {
   
-  cli_alert_info("Creating file: {basename(file_name)}")
-  sink(file_name)
+  # ---- determine if cruise ID exists in previous file
+  if (cruise %in% names(wb)) {
+    cli_alert_warning("Skipping Cruise ID: {cruise}")
+    next
+  } 
 
-  cat(paste(cruise, "\n\n"))
+  cli_alert_info("Adding Cruise ID: {cruise}")
 
-  meta %>%
-  filter(cruise_id == {{cruise}}) %>%
-  select(-cruise_id) %>%
-  write.csv(. , row.names = FALSE, na = "")
+  # ---- filter for cruise ID in meta
+  temp_df <-
+    meta %>%
+    filter(cruise_id == {{cruise}}) %>%
+    select(-cruise_id)
+  
+  # ---- add cruise sheet name
+  addWorksheet(
+    wb, 
+    sheetName = cruise,
+    gridLines = openxlsx_getOp("gridLines", TRUE)
+    )
+  
+  # ---- add cruise info
+  writeData(
+    wb, 
+    sheet    = cruise,
+    x        = cbind(cruise, "Filter Pads"),
+    colNames = FALSE
+    )
+  
+  writeData(
+    wb, 
+    sheet    = cruise,
+    x        = temp_df,
+    startRow = 3,
+    borders  = openxlsx_getOp("borders", "all"),
+    headerStyle = createStyle(
+      halign = "CENTER", textDecoration = "bold",
+      border = "TopBottomLeftRight"
+      )
+    )
+  
+  # ---- set widths of columns 
+  setColWidths(
+    wb,
+    sheet  = cruise,
+    cols   = seq(temp_df),
+    widths = "auto"
+    )
 
-  sink()
+  setColWidths(
+    wb,
+    sheet  = cruise,
+    cols   = 1,
+    widths = 9
+    )
+
+  setColWidths(
+    wb,
+    sheet  = cruise,
+    cols   = ncol(temp_df),
+    widths = 42,
+  )
+ 
+  setColWidths(
+    wb,
+    sheet  = cruise,
+    cols   = 4,
+    widths = 13,
+  )
+  
+  # ---- set page setup for printing 
+  pageSetup(
+    wb,
+    sheet       = cruise, 
+    orientation = "portrait",
+    fitToWidth  = TRUE,
+    left        = 0.25,
+    right       = 0.25,
+    top         = 0.25,
+    bottom      = 0.25,
+    printTitleRows = c(1:3)
+    )
+  
+  freezePane(
+    wb,
+    sheet = cruise,
+    firstActiveRow = 4,
+    firstActiveCol = 1
+    )
 }
+
+
+# openXL(wb)
+rm(author, cruise, temp_df)
+```
+# Save Workbook Locally
+```{r local-wb-sv}
+saveWorkbook(
+  wb,
+  file =  here("data", "print", 
+               glue("cruise_pres_abs_updated_",
+                    format(Sys.time(), "%Y%m%dT%H%M"),
+                    ".xlsx")),
+  overwrite = TRUE
+  )
+
+rm(wb, prev_f, meta)
+```
+
+# Save Workbook in Cloud
+```{r cloud-wb-sv}
+# TODO: set location
+# loc <- here(cloud_dir, "")
+# dir_create(loc)
+
+if (!exists("loc")) {
+  cli_alert_danger(c("You need to set {.var loc} before continuing if you ",
+                   "want to copy file to cloud directory!"))
+  # invisible(return(""))
+  invisible(stop("\r       "))
+} 
+
+# find previously saved files
+prev_f <- 
+  here("data", "print") %>%
+  dir_ls(regexp = "^[^~]*cruise.*\\.xlsx$")
+
+# select most recently saved
+prev_f <-
+  (file_info(prev_f) %>%
+  arrange(desc(birth_time)))[1,1][[1]]
+
+if (is_empty(prev_f)) {
+  cli_alert_info("No File to Copy")
+  } else {
+    cli_alert_info(c("Copying file: {basename(prev_f)}\n to cloud location: ",
+                     "{.file {loc}}"))
+    file_copy(prev_f, loc, TRUE)
+  }
+```
+# OLD WAY CREATING csv in separate files
+I opted for .xlsx because it would contain all cruises in one file with the 
+correct formatting for printing each cruise
+```{r create_file}
+# ovt <- T
+# dir_create(here("data", "print", "verified"))
+# dir_create(here("data", "print", "unverified"))
+# meta <-
+#   dir_ls(here(cloud_dir), 
+#          regexp = "imars_inventory_chl_hplc_cdom") %>%
+#   
+#   read_xlsx(sheet     = "chl_progress",
+#             guess_max = 10000) %>%
+#   
+#   filter(collection_date > as_date("2019-09-01")) %>%
+#   select(1, 2, 5, 6, 3)  %>%
+#   mutate(
+#     collection_date = format(collection_date, "%b %d, %Y"),
+#     
+#     present = NA_character_,
+#     absent  = NA_character_,
+#     notes   = NA_character_
+#   )
+# 
+# for (i  in seq(unique(meta$cruise_id))) {
+#   cruise    <- unique(meta$cruise_id)[i]
+#   file_name <- here("data", "print", "unverified", glue("{cruise}_pres_abs.csv"))
+#   
+#   if (file_exists(file_name) & !ovt) {
+#     cli_alert_warning("Skipping: {basename(file_name)}; already exists")
+#     next
+#   }
+#   
+#   cli_alert_info("Creating file: {basename(file_name)}")
+#   sink(file_name)
+# 
+#   cat(paste(cruise, ",filter pads", "\n\n"))
+# 
+#   meta %>%
+#   filter(cruise_id == {{cruise}}) %>%
+#   select(-cruise_id) %>%
+#   write.csv(., row.names = FALSE, na = "")
+# 
+#   sink()
+# }
 
 # shell.exec(here("data", "print", glue("{cruise}_pres_abs.csv")))
 ```
-
