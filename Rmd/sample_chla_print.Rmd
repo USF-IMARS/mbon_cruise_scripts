@@ -47,14 +47,16 @@ librarian::shelf(
   
   # additional
   # readxl, # decided openxlsx is better to create file
-  openxlsx, cli
+  openxlsx, cli, janitor
 )
 
 library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+```
 
+```{r vars}
 # loads cloud directory in .Rprofile
 source(here(".Rprofile"))
 
@@ -66,21 +68,27 @@ author <- "Sebastian Di Geronimo"
 # 1. chl_progress
 # 2. hplc_progress
 # 3. cdom_progress
-sht_num <- 1 # change here to 1, 2, 3
+# "Chl-a"           "HPLC"            "CDOM"      
+sht_num <- 3 # change here to 1, 2, 3
 sht_nm  <-
   switch(
     sht_num,
-    "chl_progress",
-    "cdom_progress",
-    "hplc_progress"
+    c("chl_progress", "Chl-a"),
+    c("cdom_progress", "CDOM"),
+    c("hplc_progress", "HPLC")
     )
 
-local_sv <- here("data", "print", sht_nm)
+local_sv <- here("data", "print", sht_nm[1])
 dir_create(local_sv)
 
 
 rm(sht_num)
 ```
+
+```{r}
+
+```
+
 
 # Find Cruise Metadata 
 This file is located in:
@@ -91,34 +99,39 @@ https://usf.app.box.com/folder/179388329770?s=f6kujckfibt78al222ied0w2m6dxa529
 meta <-
   dir_ls(here(cloud_dir),
          regexp = "imars_inventory_chl_hplc_cdom") %>%
-
-  read_xlsx(sheet     = sht_nm,
-            guess_max = 10000) %>%
-
-  filter(collection_date > as_date("2019-09-01")) %>%
-  select(cruise_id, station, collection_date, collected_by, identifier)  %>%
+  read.xlsx(sheet = "sample_meta_data") %>%
+  mutate(collection_date = excel_numeric_to_date(date_mm_dd_yy)) %>%
+  filter(
+    str_detect(sample_type, sht_nm[2]) 
+    & collection_date > as_date("2019-09-01")) %>%
+  select(cruise_id, collection_date, station,
+         collected_by = collector, 
+         vol = vol_ml,
+         identifier) %>%
   mutate(
-    # date format: ex Mar 23, 2023
     collection_date = format(collection_date, "%b %d, %Y"),
-
+    
+    # add fill in sections
     present = NA_character_,
     absent  = NA_character_,
     notes   = NA_character_
-  )
+    ) 
 
-cli_alert_info("Reading sheet name: {sht_nm}")
-slice_head(meta, n = 5)
+
+cli_alert_info("Filtering by sample_type: {sht_nm[2]}")
+slice_sample(meta, n = 2, by = cruise_id)
 ```
 
 # Create Cruise Verification Sample Sheet
 ```{r load-create-wb}
 # if need to start from scratch
 scratch <- FALSE
+scratch <- T
 
 # find previously saved files
 prev_f <- 
   local_sv %>%
-  dir_ls(regexp = glue("^[^~]*{sht_nm}.*\\.xlsx$")
+  dir_ls(regexp = glue("^[^~]*{sht_nm[1]}.*\\.xlsx$")
          )
 
 # select most recently saved
@@ -198,21 +211,20 @@ for (cruise  in unique(meta$cruise_id)) {
   setColWidths(
     wb,
     sheet  = cruise,
-    cols   = 1,
-    widths = 9
-    )
-
-  setColWidths(
-    wb,
-    sheet  = cruise,
     cols   = ncol(temp_df),
     widths = 42,
+  )
+ setColWidths(
+    wb,
+    sheet  = cruise,
+    cols   = 4,
+    widths = 7,
   )
  
   setColWidths(
     wb,
     sheet  = cruise,
-    cols   = 4,
+    cols   = 5,
     widths = 13,
   )
   
@@ -239,14 +251,13 @@ for (cruise  in unique(meta$cruise_id)) {
 
 
 # openXL(wb)
-rm(author, cruise, temp_df)
 ```
 # Save Workbook Locally
 ```{r local-wb-sv}
 saveWorkbook(
   wb,
   file =  here(local_sv,
-               glue("{sht_nm}_pres_abs_updated_",
+               glue("{sht_nm[1]}_pres_abs_updated_",
                     format(Sys.time(), "%Y%m%dT%H%M"),
                     ".xlsx")),
   overwrite = TRUE
@@ -271,7 +282,7 @@ if (!exists("loc")) {
 # find previously saved files
 prev_f <-
   local_sv %>%
-  dir_ls(regexp = glue("^[^~]*{sht_nm}.*\\.xlsx$")
+  dir_ls(regexp = glue("^[^~]*{sht_nm[1]}.*\\.xlsx$")
          )
 
 # select most recently saved
