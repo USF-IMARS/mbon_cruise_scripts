@@ -57,21 +57,42 @@ conflict_prefer("select", "dplyr")
 
 # loads cloud directory in .Rprofile
 source(here(".Rprofile"))
+
+
+# change if another author
+author <- "Sebastian Di Geronimo" 
+
+# three sheets:
+# 1. chl_progress
+# 2. hplc_progress
+# 3. cdom_progress
+sht_num <- 1 # change here to 1, 2, 3
+sht_nm  <-
+  switch(
+    sht_num,
+    "chl_progress",
+    "cdom_progress",
+    "hplc_progress"
+    )
+
+local_sv <- here("data", "print", sht_nm)
+dir_create(local_sv)
+
+
+rm(sht_num)
 ```
 
-# Create Cruise File 
+# Find Cruise Metadata 
 This file is located in:
 box > imars_imars_cruises > imars_inventory_chl_hplc_cdom_updated_<date>.xlsx
 
 https://usf.app.box.com/folder/179388329770?s=f6kujckfibt78al222ied0w2m6dxa529
 ```{r load-meta-file}
-dir_create(here("data", "print"))
-
 meta <-
   dir_ls(here(cloud_dir),
          regexp = "imars_inventory_chl_hplc_cdom") %>%
 
-  read_xlsx(sheet     = "chl_progress",
+  read_xlsx(sheet     = sht_nm,
             guess_max = 10000) %>%
 
   filter(collection_date > as_date("2019-09-01")) %>%
@@ -85,18 +106,20 @@ meta <-
     notes   = NA_character_
   )
 
+cli_alert_info("Reading sheet name: {sht_nm}")
 slice_head(meta, n = 5)
 ```
 
-
+# Create Cruise Verification Sample Sheet
 ```{r load-create-wb}
-# change if another author
-author <- "Sebastian Di Geronimo" 
+# if need to start from scratch
+scratch <- FALSE
 
 # find previously saved files
 prev_f <- 
-  here("data", "print") %>%
-  dir_ls(regexp = "^[^~]*cruise.*\\.xlsx$")
+  local_sv %>%
+  dir_ls(regexp = glue("^[^~]*{sht_nm}.*\\.xlsx$")
+         )
 
 # select most recently saved
 prev_f <-
@@ -105,7 +128,7 @@ prev_f <-
 
 # if none, create,
 # else read previous file
-if (is_empty(prev_f)) {
+if (is.na(prev_f) | scratch) {
   cli_alert_info("Creating New Worksheet")
   wb <- 
   createWorkbook(
@@ -222,8 +245,8 @@ rm(author, cruise, temp_df)
 ```{r local-wb-sv}
 saveWorkbook(
   wb,
-  file =  here("data", "print", 
-               glue("cruise_pres_abs_updated_",
+  file =  here(local_sv,
+               glue("{sht_nm}_pres_abs_updated_",
                     format(Sys.time(), "%Y%m%dT%H%M"),
                     ".xlsx")),
   overwrite = TRUE
@@ -246,9 +269,10 @@ if (!exists("loc")) {
 } 
 
 # find previously saved files
-prev_f <- 
-  here("data", "print") %>%
-  dir_ls(regexp = "^[^~]*cruise.*\\.xlsx$")
+prev_f <-
+  local_sv %>%
+  dir_ls(regexp = glue("^[^~]*{sht_nm}.*\\.xlsx$")
+         )
 
 # select most recently saved
 prev_f <-
