@@ -35,14 +35,22 @@ sht_nm <- c("metadata", "Chl-a")
 ```
 # Triology Calibration Information ----
 This will need to be updated over time
+Update: "2022-04-29", 0.17441, -0.501753918982416, 27.32, 200.39
+Update: "2023-03-28",
+
 ```{r triology-calibration}
-cal <- tibble(
-  cal_date         = as_date("2022-04-29"),
-  no_acid_slop     = 0.17441,
-  no_acid_y_int    = -0.501753918982416,
-  cal_no_acid_low  = 27.32,
-  cal_no_acid_high = 200.39,
-)
+cal <- 
+  tribble(
+    ~cal_date,    ~no_acid_slop, ~no_acid_y_int,     ~cal_no_acid_low, ~cal_no_acid_high,
+    # <date>      <dbl>          <dbl>               <dbl>            <dbl>
+    "2022-04-29", 0.17441,      -0.501753918982416, 27.32,            200.39,
+    "2023-03-28", ,      , ,            ,
+
+    ) %>%
+  mutate(
+    cal_date = as_date(cal_date)
+  )
+
 ```
 
 # Read Log and filter Cruise IDs without Process Log File ----
