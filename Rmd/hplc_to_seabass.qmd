@@ -175,6 +175,7 @@ contacts <-
 
 
 hd_def <- list()
+hd_def$prep     <- "Sebastian Di Geronimo"
 hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
 hd_def$affil    <- "University_of_South_Florida,USA"
@@ -201,6 +202,8 @@ hd_def$comments <-
   glue(.sep = "\n",
        "!",
        "! COMMENTS",
+       "! Prepared by: {hd_def$prep}",
+       "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
        "!",
        "! Samples were processed at NASA GSFC by Crystal Thomas",
        "!",
