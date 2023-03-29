@@ -175,7 +175,7 @@ contacts <-
 
 
 hd_def <- list()
-hd_def$prep     <- "Sebastian Di Geronimo"
+hd_def$prep     <- "Sebastian Di Geronimo" # <----------------------- edit here
 hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
 hd_def$affil    <- "University_of_South_Florida,USA"
