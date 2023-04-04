@@ -290,12 +290,12 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ---- Create 1st Sheet ----
   # ========================================================================== #  
   cli_alert_info("Creating sheet: {.var {sht_nm[1]}}")
-  # ---- Create Worksheet ----
+  # ---- Create Worksheet
   wb <- createWorkbook(
     creator = creator, 
     title = glue("{cruise} Process Log"))
   
-  # ---- Add Info ----
+  # ---- Add Info
   addWorksheet(wb, sheetName = sht_nm[1])
   
   writeData(wb, sheet = sht_nm[1], startCol = 1, startRow = 1, 
@@ -310,11 +310,11 @@ process_log_sheet <- function(.meta, cal, cruise,
   writeData(wb, sheet = sht_nm[1], startCol = "S", startRow = 1, 
             x = meta[, 19], headerStyle = sstyles$styl_brd_head)
   
-  # ---- Specify Width and Heights ----
+  # ---- Specify Width and Heights
   setRowHeights(wb, sheet = sht_nm[1], rows = 1, heights = 73.2)
   setColWidths(wb, sheet = sht_nm[1], cols = "S", widths = 39.56)
   
-  # ---- Add Styles ----
+  # ---- Add Styles
   options(openxlsx.dateFormat = "mm/dd/yy")
   addStyle(wb, sht_nm[1],
            style      = sstyles$styl_date,
@@ -381,17 +381,17 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ---- Create 2nd Sheet ----
   # ========================================================================== # 
   cli_alert_info("Creating sheet: {.var {sht_nm[2]}}")
-  # ---- Add sheet ----
+  # ---- Add sheet
   addWorksheet(wb, sheetName = sht_nm[2])
   
-  # ---- Add Large Header ----
+  # ---- Add Large Header
   mergeCells(wb, sht_nm[2], cols = 9:24, rows = 1)
   writeData(wb, sht_nm[2], "Trilogy Fluorometer", startCol = 9, startRow = 1, 
             colNames = FALSE)
   addStyle(wb, sht_nm[2], rows = 1, cols = 9:24, stack = TRUE, 
            style = sstyles$styl_col3)
   
-  # ---- Add Smaller Headers ----
+  # ---- Add Smaller Headers
   mergeCells(wb, sht_nm[2], cols = 9:12,  rows = 2)
   mergeCells(wb, sht_nm[2], cols = 13:16, rows = 2)
   mergeCells(wb, sht_nm[2], cols = 17:21, rows = 2)
@@ -403,11 +403,11 @@ process_log_sheet <- function(.meta, cal, cruise,
             startCol = 22, startRow = 2, colNames = FALSE)
   
   
-  # ---- Add Info ----
+  # ---- Add Info
   writeData(wb, sheet = sht_nm[2], startCol = 1, startRow = 3, x = chl_a,
             headerStyle = sstyles$styl_brd_head)
   
-  # ---- Add Styles ----
+  # ---- Add Styles
   options(openxlsx.dateFormat = "mm/dd/yy")
   addStyle(wb, sht_nm[2],
            style      = sstyles$styl_date,
@@ -431,9 +431,13 @@ process_log_sheet <- function(.meta, cal, cruise,
            stack      = TRUE)
   
   
-  
-  addStyle(wb, sht_nm[2], rows = 2:(nrow(chl_a) + 3), cols = 9:24, stack = TRUE,
-           style = sstyles$styl_col4, gridExpand = TRUE)
+  addStyle(wb, sht_nm[2],
+           rows       = 2:(nrow(chl_a) + 3),
+           cols       = 9:24,
+           stack      = TRUE,
+           style      = sstyles$styl_col4,
+           gridExpand = TRUE
+  )
   
   addStyle(wb, sht_nm[2], 
            style      = sstyles$styl_border, 
@@ -462,14 +466,15 @@ process_log_sheet <- function(.meta, cal, cruise,
            gridExpand = TRUE,
            stack      = TRUE)
   
-  # ---- Specify Width and Heights ----
+  # ---- Specify Width and Heights
   setRowHeights(wb, sheet = sht_nm[2], rows = 1, heights = 29.3)
   setRowHeights(wb, sheet = sht_nm[2], rows = 2, heights = 14.4)
   setRowHeights(wb, sheet = sht_nm[2], rows = 3, heights = 57)
+  
   setColWidths(wb, sheet = sht_nm[2], cols = "Y", widths = 40.56)
   setColWidths(wb, sheet = sht_nm[2], cols = "H", widths = 12)
   
-  # ---- Add formulas to Cells ----
+  # ---- Add formulas to Cells
   writeFormula(wb, sht_nm[2],
                formulas$no_acid_ratio, 
                startCol = "U",
@@ -487,17 +492,17 @@ process_log_sheet <- function(.meta, cal, cruise,
                startCol = "X",
                startRow = 4)
   
-  # ---- Write Comments ----
+  # ---- Write Comments
   writeComment(wb, sht_nm[2], col = "L", row = 4, comment = comm$fluor)
   writeComment(wb, sht_nm[2], col = "N", row = 4, comment = comm$blank)
   writeComment(wb, sht_nm[2], col = "R", row = 4, comment = comm$low_read)
   writeComment(wb, sht_nm[2], col = "T", row = 4, comment = comm$high_read)
   
   
-  # ---- Freeze Pane ----
+  # ---- Freeze Pane
   freezePane(wb, sht_nm[2], firstActiveRow = 4)
   
-  # ---- Reorder Sheets ----
+  # ---- Reorder Sheets
   worksheetOrder(wb) <- c(2, 1)
   
   return(wb)
