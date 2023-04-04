@@ -1,3 +1,8 @@
+##%######################################################%##
+#                                                          #
+####              Create Process Log Sheet              ####
+#                                                          #
+##%######################################################%##
 process_log_sheet <- function(.meta, cal, cruise,
                               sht_nm = c("metadata", "Chl-a"), 
                               inst_nm = "PElam850+",
@@ -494,7 +499,111 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ---- end of function ----
   }
 
-# library("docstring")
-# docstring(process_log_sheet)
 
+##%######################################################%##
+#                                                          #
+####     Update Process Log Calibration Information     ####
+#                                                          #
+##%######################################################%##
+update_proc_log <- function(files, cal) {
+  names(cal) <-  c(
+    "Fluorometer Calibration date",
+    "'No Acid' Slope",
+    "'No Acid' y-int",
+    "Cal. 'No Acid' Low",
+    "Cal. 'No Acid' High"
+  )
+  
+  update <- 
+    files %>% 
+    readWorkbook(sheet       = "Chl-a", 
+                 startRow    = 3, 
+                 detectDates = TRUE,
+                 sep.names   = " ") %>%
+    mutate(
+      .keep = "none",
+      `Process date`,
+      data = pmap(
+        list(`Process date`, `Fluorometer Calibration date`), cal,
+        .f = function(x, y, cal) {
+          
+          if (is.na(x)) {
+            cal[which(cal[,1][[1]] == max(cal[,1][[1]])),]
+            
+          } else {
+            val <- max(which(!x < cal[,1][[1]]))
+            cal[val,]
+          }
+          # ---- may not need, the difference is the prev cal will be kept if it 
+          # is also less than sample process date. 
+          # the issue is that it may not be the closest process date and 
+          # therefore would be wrong
+          # 
+          # if (is.na(x)) {
+          #   cal[which(cal[,1][[1]] == max(cal[,1][[1]])),]
+          #   
+          # } else if (x < y) {
+          #   val <- max(which(!x < cal[,1][[1]]))
+          #   cal[val,]
+          # } else {
+          #   val <- which(y == cal[,1][[1]])
+          #   cal[val,] %T>% print()
+          # }
+        }
+      )
+    ) %>%
+    unnest(data)
+
+  wb <- 
+    files %>% 
+    loadWorkbook()
+  
+  writeData(
+    wb,
+    sheet    = "Chl-a",
+    startRow = 4,
+    startCol = 13,
+    # `Fluorometer Calibration date`
+    x        = update[[names(cal)[1]]]
+  )
+  
+  writeData(
+    wb,
+    sheet    = "Chl-a",
+    startRow = 4,
+    startCol = 15,
+    # `'No Acid' Slope`
+    x        = update[[names(cal)[2]]]
+  )
+  
+  writeData(
+    wb,
+    sheet    = "Chl-a",
+    startRow = 4,
+    startCol = 16,
+    # `'No Acid' y-int`
+    x        = update[[names(cal)[3]]]
+  )
+  
+  writeData(
+    wb,
+    sheet    = "Chl-a",
+    startRow = 4,
+    startCol = 17,
+    # `Cal. 'No Acid' Low`
+    x        = update[[names(cal)[4]]]
+  )
+  
+  writeData(
+    wb,
+    sheet    = "Chl-a",
+    startRow = 4,
+    startCol = 19,
+    # `Cal. 'No Acid' High`
+    x        = update[[names(cal)[5]]]
+  )
+  
+
+  return(wb)
+}
 
