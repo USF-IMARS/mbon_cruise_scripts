@@ -77,6 +77,11 @@ process_log_sheet <- function(.meta, cal, cruise,
   )
 
   # ========================================================================== #
+  # ---- Filter Cal Date to Most Recent ----
+  # ========================================================================== #  
+  cal <- cal[which(cal[,1][[1]] == max(cal[,1][[1]])),]
+  
+  # ========================================================================== #
   # ---- Filter Data ----
   # ========================================================================== #  
   cli_alert_info("Filtering Data")
@@ -84,7 +89,7 @@ process_log_sheet <- function(.meta, cal, cruise,
     select(-1, -sample_number) %>%
     mutate(sample_collection_time_gmt = as_hms(sample_collection_time_gmt)) 
   
-  # browser()
+
   # ---- Format 1st Sheet Info ----
   meta <-
     .meta %>%
