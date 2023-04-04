@@ -44,13 +44,15 @@ cal <-
     ~cal_date,    ~no_acid_slop, ~no_acid_y_int,     ~cal_no_acid_low, ~cal_no_acid_high,
     # <date>      <dbl>          <dbl>               <dbl>            <dbl>
     "2022-04-29", 0.17441,      -0.501753918982416, 27.32,            200.39,
-    "2023-03-28", ,      , ,            ,
+    "2023-03-28", 0.177357021947293, 0.134407327675063, 27.52, 192.11,
+    # "2022-04-01", 1, 1, 1, 11,
 
     ) %>%
   mutate(
     cal_date = as_date(cal_date)
   )
-
+cal
+update_log <- TRUE 
 ```
 
 # Read Log and filter Cruise IDs without Process Log File ----
@@ -59,9 +61,11 @@ cal <-
 crs_log_exst <- 
   here(cloud_dir, "process_logs") %>%
   dir_ls() %>%
-  as.character() %>%
-  basename()  %>%
-  str_extract("[A-Z0-9]{6,7}")
+  tibble(files = .) %>%
+  mutate(cruise_id = str_extract(files, "[A-Z]{2,3}\\d{4,5}"))
+  # as.character() %>%
+  # basename()  %>%
+  # str_extract("[A-Z0-9]{6,7}")
 
 meta_all <- 
   dir_ls(here(cloud_dir), 
@@ -73,18 +77,25 @@ meta_all <-
   # remove cruises fully completed pre-COVID
   filter(
     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
-    & !(cruise_id %in% crs_log_exst)
+    & !(cruise_id %in% crs_log_exst$cruise_id)
     )
 
-stopifnot("No files need creating" = nrow(meta_all) > 1)
+if (update_log) {
+  cli_alert_warning(c("You've set update_log = {update_log}. You will be ", 
+                      "updating the log!"))
+} else {
+  stopifnot("No files need creating" = nrow(meta_all) > 1 )
+}
+
 ```
 
 ## Create Workbook ----
 function: process_log_sheet(.meta, cal, cruise)
 Uses logsheet info for data and cruise ID
 Uses calibration variable to input into new ones
-```{r create-workbook}
-meta <-
+```{r workbook}
+if (!update_log) {
+save_meta <-
   meta_all %>% 
   nest(.by = cruise_id) %>%
   mutate(
@@ -99,32 +110,54 @@ meta <-
                                  e[["message"]])
                               )
         NULL
-      })
+        })
+      )
     )
-  )
+} else if (update_log) {
+  save_meta <- 
+    crs_log_exst %>%
+    mutate(
+      sheets = map(
+        .x = files,
+        ~ update_proc_log(.x, cal),
+        .progress = TRUE
+      )
+    )
+  
+} else {
+  cli_alert_danger("Stop?")
+}
+
 ```
 
 
+
 ```{r save}
-ignore  <- FALSE # redo all or ignore some
+ignore  <- TRUE # redo all or ignore some
 overwrt <- FALSE
 dir_loc <- here(cloud_dir, "process_logs")
-# dir_loc <- here("data", "process_logs") # test location 
+# dir_loc <- here("data", "process_logs", Sys.Date()) # test location
 
 dir_create(dir_loc)
 
-for (i in seq(nrow(meta))) {
-   file_name <- here(dir_loc,
-                      glue("{meta$cruise_id[i]}_",
-                           "{meta$data[[i]]$year[[1]]}_",
-                           "{min(format(meta$data[[i]]$date_mm_dd_yy, '%m'),", 
-                           "na.rm = TRUE)}_abs.xlsx"))
-   if (!file_exists(file_name) | ignore) {
+for (i in seq(nrow(save_meta))) {
+  if (nrow(meta_all) > 0) {
+      file_name <- here(dir_loc,
+                        glue("{save_meta$cruise_id[i]}_",
+                             "{save_meta$data[[i]]$year[[1]]}_",
+                             "{min(format(save_meta$data[[i]]$date_mm_dd_yy, ", 
+                             "\"%m\"), na.rm = TRUE)}_abs.xlsx"))
+  } else if (update_log) {
+    file_name <-  
+      here(dir_loc, basename(save_meta$files[[i]]))
+  }
+   if (!file_exists(file_name) | !ignore) {
      cli_alert_info("Trying to create file {.file {basename(file_name)}}")
      try(
-       saveWorkbook(meta$sheets[[i]],
+       saveWorkbook(save_meta$sheets[[i]],
                     file_name,
-                    overwrite = overwrt), silent = FALSE)
+                    overwrite = overwrt,
+                    returnValue = TRUE), silent = FALSE)
    } else {
      cli_alert_info("Ignoring file {.file {basename(file_name)}}")
    }
