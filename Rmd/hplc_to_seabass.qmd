@@ -425,6 +425,62 @@ pwalk(list(final$cols, final$heads),
       )
 ```
 
+# Read SeaBass HPLC Files and Check for Issues
+All columns are read as characters to check for any issues with the data
+```{r read-seabass}
+# function to read seasbass hplc files and sort through head, and data
+read_sb_files <- function(x) {
+  skips <-
+    read_lines(x) %>% str_detect("end_header") %>%
+    which()
+  
+  head <-
+    read_lines(x) %>% str_detect("fields") %>%
+    which()
+  
+  col_names <-
+    read_csv(
+      x,
+      skip = head - 1,
+      n_max = 1,
+      col_names = FALSE,
+      show_col_types = FALSE
+    ) %>%
+    mutate(X1 = str_remove(X1, "/fields=")) %>%
+    as.character()
+  
+  read_csv(
+    x,
+    skip = skips,
+    col_names = col_names,
+    show_col_types = FALSE,
+    col_types = cols(.default = "c"),
+    # na = c("", "NA", "-9999")
+    na = c("", "NA")
+  )
+}
+
+# get most recent directory created for seabass files
+ind_f_dir <- 
+  here("data", "processed", "hplc") %>%
+  dir_ls(type   = "directory", 
+         regexp = "ind_file") %>%
+  sort(decreasing = TRUE)
+
+# read seabass hplc files
+sb_data <-
+  ind_f_dir[1] %>%
+  dir_ls() %>%
+  tibble(file = .) %>%
+  mutate(data = map(file,
+                    read_sb_files)) %>%
+  unnest(data)
+
+message(glue("The dimensions are: {dim_desc(sb_data)}"))
+slice_head(sb_data, n = 10)
+```
+
+
 # Copy files to box
 If you want to copy files from local to cloud directory, you may run this
 chunk. 
