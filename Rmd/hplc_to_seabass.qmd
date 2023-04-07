@@ -119,8 +119,6 @@ conflict_prefer("select", "dplyr")
 # location to save files
 loc <- 
   here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
-
-
 ```
 
 ## All SeaBass Standard Fields 
@@ -238,8 +236,6 @@ hplc_data <-
        )),
     cal_file = map_chr(data, \(x) x$cal_files[[1]])
     )
-
-
 ```
 
 ```{r headr-skeleton}
@@ -335,6 +331,9 @@ hplc_w_head
 ```
 
 ```{r header-info}
+# if want to see header output, set to true
+verb <- FALSE
+
 # cruise data header_info cruise_id 
 final <-
   hplc_w_head %>%
@@ -344,7 +343,8 @@ final <-
       .progress = TRUE,
       .l = list(data, header_info, cruise_id, sb_name, precise_comm, cal_file,
                 doc),
-      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc){
+      verb = verb,
+      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc, verb){
         # remove spaces in original base name 
         fbase <- 
           str_replace_all(unique(y$base), " ", "_") %>%
@@ -366,7 +366,9 @@ final <-
         pun <- str_c(c(hd_def$fields_extr$units, sb_name$units), collapse = ",")
         
         # evaluate header
-        header <- with(x, eval(header_skeleton)) %T>% print()
+        header <- with(x, eval(header_skeleton)) 
+        
+        if (verb) print(header)
 
         # return values
         return(
@@ -400,20 +402,25 @@ pwalk(list(final$cols, final$heads),
             file = here(loc, y$file_name))
         
         x %>%
-         mutate(
-           date = format(date,"%Y%m%d"),
-           across(everything(), \(x) as.character(x)), # convert to char
-           across(everything(), \(x) case_when(
-                                        is.na(x) ~ "-9999", # chg NA to -9999
-                                        .default = x))
+          # convert all to characters
+          mutate(
+            date = format(date,"%Y%m%d"),
+            across(everything(), \(x) as.character(x)), # convert to char
+            across(everything(), \(x) case_when(
+                    is.na(x) ~ "-9999", # chg NA to -9999
+                    .default = x))
            ) %>%
-        # write data after header
-        write_delim(.,
-                    delim     = ",",
-                    file      = here(loc, y$file_name),
-                    append    = TRUE,
-                    col_names = FALSE
-                    )
+          
+          # filter out rows where no data exists
+          filter(!if_all(date:last_col(), \(x) x == "-9999")) %>%
+      
+          # write data after header
+          write_delim(.,
+                      delim     = ",",
+                      file      = here(loc, y$file_name),
+                      append    = TRUE,
+                      col_names = FALSE
+                      )
         }
       )
 ```
