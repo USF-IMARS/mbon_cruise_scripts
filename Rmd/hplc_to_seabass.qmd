@@ -236,6 +236,8 @@ hplc_data <-
        )),
     cal_file = map_chr(data, \(x) x$cal_files[[1]])
     )
+
+rm(contacts, sb_field)
 ```
 
 ```{r headr-skeleton}
@@ -335,9 +337,8 @@ hplc_w_head
 verb <- FALSE
 
 # cruise data header_info cruise_id 
-final <-
+hplc_final <-
   hplc_w_head %>%
-  # slice(1) %>%
   mutate(
      heads = pmap(
       .progress = TRUE,
@@ -391,6 +392,8 @@ final <-
         }
       )
      )
+
+rm(verb)
 ```
 
 
@@ -399,16 +402,16 @@ final <-
 dir_create(loc) # create dir for each day running
 
 # save files
-pwalk(list(final$cols, final$heads),
+pwalk(list(hplc_final$cols, hplc_final$heads),
       function(x, y) {
         # write header
         # this method doesn't include `CR` which gives a warning when running
         # fcheck
-        f <- file(here(loc, y$file_name), open = "wb") 
-        cat(y$header, "\n", sep = "",
-            # file = here(loc, y$file_name)
-            file = f
-            )
+        f <- file(here(loc, y$file_name), 
+                  open = "wb") 
+        cat(y$header, "\n", 
+            sep  = "",
+            file = f)
         close(f)
         
         x %>%
@@ -491,6 +494,8 @@ slice_head(sb_data, n = 10)
 
 sb_data %>%
   filter(if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
+
+rm(read_sb_files)
 ```
 
 ## FCHECK: Checking `.sb` Files Locally
@@ -503,8 +508,8 @@ Then a download of FCHECK from NASA:
 
 ```{r fcheck}
 # ---- Toggle if want to see fcheck out put or look just for errors
-verb2 <- FALSE
-# verb2 <- TRUE
+verb <- FALSE
+# verb <- TRUE
 
 # check if Perl is installed and errors if not
 tryCatch({
@@ -548,7 +553,7 @@ fcheck_results <-
                  \(x) paste(here("fcheck", "fcheck4.pl"), x) %>%
                    system2("perl", ., stdout = TRUE))
   ) %T>%
-  {if (verb2) {
+  {if (verb) {
     pull(., fcheck2) %>%
     print()
   } else {.}}
@@ -566,42 +571,55 @@ for (i in seq(nrow(fcheck_results))) {
     )
 }
 
+rm(verb, i, ind_f_dir)
 ```
 
 ## Get Date Range of Each Cruise
 Was useful for an email.
 ```{r date-range}
-dt_rng <- 
-  sb_data %>%
-  mutate(
-    .keep = "none",
-    cruise   = str_extract(sample, "\\w{2,3}\\d{4,5}"),
-    date     = as_date(date),
-  ) %>%
-  summarise(
-    .by = cruise,
-    num = n(),
-    # date_min = as_date(date_min, format = ""),
-    date_max = max(date)
-  ) %>%
-  arrange(date_max) %>%
-  mutate(
-    .before = date_max,
-    date_min = str_extract(cruise, "\\d+"),
-    date_min = as_date(date_min, format = "%y%j"),
-    date_min = format(date_min, "%b %d"),
-    date_max = format(date_max, "%b %d %Y")
+arg_ls <- 
+  list(
+    dt_rng = FALSE,
+    dt_sv  = FALSE
+  )
+
+if (arg_ls$dt_rng) {
+  dt_rng <- 
+    sb_data %>%
+    mutate(
+      .keep = "none",
+      cruise   = str_extract(sample, "\\w{2,3}\\d{4,5}"),
+      date     = as_date(date),
     ) %>%
-  unite(col = "date_range", date_min, date_max, sep = " - ") 
-
-df_rng
-
-if (FALSE) {
-  write_csv(
-    dt_rng,
-    file = here("date_range.csv"),
-    quote = "none"
-    )
+    summarise(
+      .by = cruise,
+      num = n(),
+      # date_min = as_date(date_min, format = ""),
+      date_max = max(date)
+    ) %>%
+    arrange(date_max) %>%
+    mutate(
+      .before = date_max,
+      date_min = str_extract(cruise, "\\d+"),
+      date_min = as_date(date_min, format = "%y%j"),
+      date_min = format(date_min, "%b %d"),
+      date_max = format(date_max, "%b %d %Y")
+      ) %>%
+    unite(col = "date_range", date_min, date_max, sep = " - ") 
+  
+  df_rng
+  
+  if (arg_ls$dt_sv) {
+    write_csv(
+      dt_rng,
+      file  = here("date_range.csv"),
+      quote = "none")
+    }
+  } else {
+    cli_alert_info(
+      glue_col("Removing `{red arg_ls}` because ",
+               "`{red arg_ls$dt_rng}` = `{red {arg_ls$dt_rng}}`"))
+    rm(arg_ls)
 }
 ```
 
@@ -738,59 +756,72 @@ if (!arg_ls$wrt_cld) {
           "(currently set to {.var {col_red(arg_ls$ovrwrt)}})"
         ))
       }
-    } 
+  } 
+
+rm(arg_ls)
 ```
 
 ## Save Consolidated Info and Select Variables
 If want to save a the consolidated HPLC data with the selected variables as a 
 `.csv` file.
 ```{r sv-consolidated}
-hplc_filt <-
-  hplc_data2 %>%
-  mutate(
-    data = map2(
-      .x = data,
-      .y = sb_name,
-      function(x, y) {
+arg_ls <- 
+  list(
+    run   = FALSE,
+    local = FALSE,
+    cloud = FALSE
+  )
+
+if (arg_ls$local | arg_ls$cloud | arg_ls$run) {
+  hplc_filt <-
+    hplc_data2 %>%
+    mutate(
+      data = map2(
+        .x = data,
+        .y = sb_name,
+        function(x, y) {
+          
+          x <- select(x, !contains(c("file", "base", "cal_files")))
+          
+          new_names <- tibble(og_names = names(x))  %>%
+          left_join(y, by = join_by(og_names == param_name)) %>%
+          mutate(
+            field_name = if_else(is.na(field_name), og_names, field_name)
+          )
+          
+          new_names$field_name
         
-        x <- select(x, !contains(c("file", "base", "cal_files")))
+          names(x) <- new_names$field_name
+          return(x)
+          }
         
-        new_names <- tibble(og_names = names(x))  %>%
-        left_join(y, by = join_by(og_names == param_name)) %>%
-        mutate(
-          field_name = if_else(is.na(field_name), og_names, field_name)
         )
-        
-        new_names$field_name
-      
-        names(x) <- new_names$field_name
-        return(x)
-        }
-      
-      )
-  ) %>%
-  select(1:3) %>%
-  unnest(data) 
-
-
-if (FALSE) {
-  # save to local
-  write_csv(hplc_filt, 
-            here("data", "processed", "hplc",
-                 glue("hplc_consolidate_select_vars_",
-                      "{Sys.Date()}",
-                      ".csv")))
-}
-
-# save to cloud
-if (FALSE) {
-  write_csv(hplc_filt,
-            here(cloud_dir, "hplc",
-                 glue("hplc_consolidate_select_vars_",
-                      "{Sys.Date()}",
-                      ".csv")))
+    ) %>%
+    select(1:3) %>%
+    unnest(data) 
+  
+  
+  if (arg_ls$local) {
+    # save to local
+    cli_alert_info("Saving consolidated HPLC to local")
+    write_csv(hplc_filt,
+              here("data", "processed", "hplc",
+                   glue("hplc_consolidate_select_vars_",
+                        "{Sys.Date()}",
+                        ".csv")))
     }
   
+  # save to cloud
+  if (arg_ls$cloud) {
+    cli_alert_info("Saving consolidated HPLC to cloud")
+    write_csv(hplc_filt,
+              here(cloud_dir, "hplc",
+                   glue("hplc_consolidate_select_vars_",
+                        "{Sys.Date()}",
+                        ".csv")))
+    }
+  }
+rm(arg_ls)
 ```
 
 x  hdr = {'/begin_header';
