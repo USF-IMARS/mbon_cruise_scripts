@@ -493,7 +493,7 @@ sb_data %>%
   filter(if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
 ```
 
-# FCHECK
+## FCHECK: Checking `.sb` Files Locally
 This is used by NASA to pre-check the .sb files before official submission 
 process. This requires the use of "Perl" <https://www.perl.org/get.html>.
 A quick download and it should work.
@@ -502,11 +502,11 @@ A quick download and it should work.
 verb2 <- FALSE
 # verb2 <- TRUE
 
+# check if Perl is installed and errors if not
 tryCatch({
   system2("perl", "-v", stdout = TRUE)
   invisible()
   }, error = function(e) {
-    # message(sprintf("Error in %s: %s", deparse(e[["call"]]), e[["message"]]))
     stop(glue("Perl does not seem to be downloaded to your computer.\n", 
               "To continue you will need to download perl at: ",
               "https://www.perl.org/get.html\n",
@@ -515,11 +515,10 @@ tryCatch({
     
       })
 
-test <- 
+# run fcheck
+fcheck_results <- 
   dir_ls(ind_f_dir[1]) %>%
   tibble(files = .) %>%
-  # slice(1) %>%
-  # slice_tail(n = 1) %>%
   mutate(
     fcheck2 = map(files, 
                  \(x) paste( here("fcheck", "fcheck4.pl"), x) %>%
@@ -531,14 +530,22 @@ test <-
   } else {.}}
 
 # print file and summary of errors/warnings
-for (i in seq(nrow(test))) {
-  print(glue(
-    basename(test$files[[i]]),
-    test$fcheck2[[i]][which(str_detect(test$fcheck2[[i]], "\\d+.*error"))],
-    .sep = ": "))
+for (i in seq(nrow(fcheck_results))) {
+  print(
+    with(
+      fcheck_results,
+      glue(basename(files[[i]]),
+           fcheck2[[i]][which(str_detect(fcheck2[[i]], 
+                                         "\\d+.*error"))],
+           .sep = ": ")
+      )
+    )
 }
+
 ```
-# Get Date Range of Each Cruise
+
+## Get Date Range of Each Cruise
+Was useful for an email.
 ```{r date-range}
 dt_rng <- 
   sb_data %>%
@@ -584,38 +591,37 @@ EXPORTSNP_SR1812_Roesler_sample_log_V2.xlsx,
 R2R_ELOG_SR1812_FINAL_EVENTLOG_20180913_022931.xlsx
 
 
-# Copy files to box
+## Copy files to box
 If you want to copy files from local to cloud directory, you may run this
 chunk. 
 
 By default, it will skip. 
 ```{r coy-to-box}
 shelf(cli)
-  cloud_loc <- here(cloud_dir, "hplc", "seabass_submit")
-  ovrwrt    <- TRUE
-  wrt_cld   <- TRUE
-  
-  # cloud_loc <- here("data", "test")
+
+# select location to save data
+cloud_loc <- here(cloud_dir, "hplc", "seabass_submit")
+# cloud_loc <- here("data", "test") # for testing if made experimental change
+
+# select if want to write data to cloud and overwrite cloud directory data 
+wrt_cld <- FALSE # write data to cloud
+ovrwrt  <- FALSE # overwrite if data exists
+
 if (!wrt_cld) {
   cli_alert_info("Skipping all files!")
   cli_alert_warning(c("If you want to save files to {.file {cloud_dir}}, ",
                      "set {.var wrt_cld} = {.var TRUE}",
                      "(currently set to {.var {wrt_cld}})"))
   } else {
-  # if (!ovrwrt) {
-  if (ovrwrt) {
-    meaning <- " meaning you will overwrite the data in the cloud directory."
-  } else {
-    meaning <- "."
-  }
-  
-  meaning <- 
-    if_else(ovrwrt,
-            glue(" meaning you will overwrite the data in the cloud ", 
-                 "directory, but if using box, it will be version controlled."),
-            " meaning you will not be overwriting data in the cloud.")  
+    # check the intentions if wanting to save files to cloud
+    meaning <-
+      if_else(ovrwrt,
+              glue(" meaning you will overwrite the data in the cloud ", 
+                   "directory, but if using box, it will be version ", 
+                   "controlled."),
+              " meaning you will not be overwriting data in the cloud.")  
     
- cli_text("\n\n")
+  cli_text("\n\n")
   cli_alert_warning("You might be overwriting previsouly saved data.")
   cli_alert_warning(c("Currently, {col_red(\"ovrwrt\")} = ",
                       "{.var {col_red(ovrwrt)}}{meaning}"))
@@ -624,8 +630,8 @@ if (!wrt_cld) {
   cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
            {col_red(\"\\\"esc\\\"\")} to escape and correct.")
   invisible(readline(""))
-  # }
 
+  # pushing files to cloud directory
   file_to_box <-
     reduce(
       .f = left_join, 
@@ -658,6 +664,7 @@ if (!wrt_cld) {
           )
         )
       ) %>%
+    
     # add cloud directory for each cruise
     mutate(cloud_dir = here(cloud_loc, cruise_id)) %>%
     nest(.by = c(cruise_id, cloud_dir)) %$%
@@ -699,7 +706,9 @@ if (!wrt_cld) {
 } 
 ```
 
-# Save Consolidated Info and Select Variables
+## Save Consolidated Info and Select Variables
+If want to save a the consolidated HPLC data with the selected variables as a 
+`.csv` file.
 ```{r sv-consolidated}
 hplc_filt <-
   hplc_data2 %>%
@@ -730,17 +739,23 @@ hplc_filt <-
 
 
 if (FALSE) {
-    write_csv(hplc_filt, here("data", "processed", "hplc", 
-                             glue("hplc_consolidate_select_vars_",
-                                  "{Sys.Date()}",
-                                  ".csv")))
-  if (FALSE) {
-    write_csv(hplc_filt, here(cloud_dir, "hplc",
-                              glue("hplc_consolidate_select_vars_",
-                                   "{Sys.Date()}",
-                                   ".csv")))
+  # save to local
+  write_csv(hplc_filt, 
+            here("data", "processed", "hplc",
+                 glue("hplc_consolidate_select_vars_",
+                      "{Sys.Date()}",
+                      ".csv")))
+}
+
+# save to cloud
+if (FALSE) {
+  write_csv(hplc_filt,
+            here(cloud_dir, "hplc",
+                 glue("hplc_consolidate_select_vars_",
+                      "{Sys.Date()}",
+                      ".csv")))
     }
-  }
+  
 ```
 
 x  hdr = {'/begin_header';
