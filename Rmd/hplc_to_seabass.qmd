@@ -402,9 +402,14 @@ dir_create(loc) # create dir for each day running
 pwalk(list(final$cols, final$heads),
       function(x, y) {
         # write header
+        # this method doesn't include `CR` which gives a warning when running
+        # fcheck
+        f <- file(here(loc, y$file_name), open = "wb") 
         cat(y$header, "\n", sep = "",
-            file = here(loc, y$file_name)
+            # file = here(loc, y$file_name)
+            file = f
             )
+        close(f)
         
         x %>%
           # convert all to characters
@@ -532,8 +537,6 @@ for (i in seq(nrow(test))) {
     test$fcheck2[[i]][which(str_detect(test$fcheck2[[i]], "\\d+.*error"))],
     .sep = ": "))
 }
-
-
 ```
 # Get Date Range of Each Cruise
 ```{r date-range}
@@ -589,8 +592,8 @@ By default, it will skip.
 ```{r coy-to-box}
 shelf(cli)
   cloud_loc <- here(cloud_dir, "hplc", "seabass_submit")
-  ovrwrt    <- FALSE
-  wrt_cld   <- FALSE
+  ovrwrt    <- TRUE
+  wrt_cld   <- TRUE
   
   # cloud_loc <- here("data", "test")
 if (!wrt_cld) {
@@ -600,10 +603,24 @@ if (!wrt_cld) {
                      "(currently set to {.var {wrt_cld}})"))
   } else {
   # if (!ovrwrt) {
-  cli_text("\n\n")
+  if (ovrwrt) {
+    meaning <- " meaning you will overwrite the data in the cloud directory."
+  } else {
+    meaning <- "."
+  }
+  
+  meaning <- 
+    if_else(ovrwrt,
+            glue(" meaning you will overwrite the data in the cloud ", 
+                 "directory, but if using box, it will be version controlled."),
+            " meaning you will not be overwriting data in the cloud.")  
+    
+ cli_text("\n\n")
   cli_alert_warning("You might be overwriting previsouly saved data.")
+  cli_alert_warning(c("Currently, {col_red(\"ovrwrt\")} = ",
+                      "{.var {col_red(ovrwrt)}}{meaning}"))
   cli_alert_warning(c("If this was a mistake, set {col_red(\"ovrwrt\")} ",
-                      "= {.var FALSE}"))
+                      "= {.var FALSE}."))
   cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
            {col_red(\"\\\"esc\\\"\")} to escape and correct.")
   invisible(readline(""))
