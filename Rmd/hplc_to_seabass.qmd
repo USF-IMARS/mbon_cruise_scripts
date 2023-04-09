@@ -623,111 +623,122 @@ By default, it will skip.
 ```{r coy-to-box}
 shelf(cli)
 
-# select location to save data
-cloud_loc <- here(cloud_dir, "hplc", "seabass_submit")
-# cloud_loc <- here("data", "test") # for testing if made experimental change
+# set arguments in a list
+arg_ls <- 
+  list(
+    # select location to save data
+    cloud_loc = here(cloud_dir, "hplc", "seabass_submit"),
+    # cloud_loc = here("data", "test"), # for testing of experimental change
+    
+    # select if want to write data to cloud and overwrite cloud directory data 
+    wrt_cld = TRUE, # write data to cloud
+    ovrwrt  = FALSE # overwrite if data exists
+  )
 
-# select if want to write data to cloud and overwrite cloud directory data 
-wrt_cld <- FALSE # write data to cloud
-ovrwrt  <- FALSE # overwrite if data exists
-
-if (!wrt_cld) {
+if (!arg_ls$wrt_cld) {
   cli_alert_info("Skipping all files!")
-  cli_alert_warning(c("If you want to save files to {.file {cloud_dir}}, ",
-                     "set {.var wrt_cld} = {.var TRUE}",
-                     "(currently set to {.var {wrt_cld}})"))
+  cli_alert_warning(
+    c("If you want to save files to {.file {cloud_dir}}, ",
+      "\nSet {.var {col_red(\"arg_ls$wrt_cld\")}} = {.var {col_red(TRUE)}}",
+      "(currently set to {.var {col_red(arg_ls$wrt_cld)}})"))
   } else {
-    # check the intentions if wanting to save files to cloud
+    # ---- check the intentions if wanting to save files to cloud
     meaning <-
-      if_else(ovrwrt,
-              glue(" meaning you will overwrite the data in the cloud ", 
-                   "directory, but if using box, it will be version ", 
-                   "controlled."),
-              " meaning you will not be overwriting data in the cloud.")  
+      if_else(arg_ls$ovrwrt,
+             glue_col(" meaning you {red {underline will be}} overwriting the ",
+                      "data in the cloud directory, but if using {blue box}, ",
+                      "it will be {blue {bold version controlled}}."),
+              glue_col(" meaning you {red {underline will not be}} " ,
+                       "overwriting data in the cloud."))
     
-  cli_text("\n\n")
-  cli_alert_warning("You might be overwriting previsouly saved data.")
-  cli_alert_warning(c("Currently, {col_red(\"ovrwrt\")} = ",
-                      "{.var {col_red(ovrwrt)}}{meaning}"))
-  cli_alert_warning(c("If this was a mistake, set {col_red(\"ovrwrt\")} ",
-                      "= {.var FALSE}."))
-  cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
-           {col_red(\"\\\"esc\\\"\")} to escape and correct.")
-  invisible(readline(""))
-
-  # pushing files to cloud directory
-  file_to_box <-
-    reduce(
-      .f = left_join, 
-      by = join_by(cruise_id),
-      list(
-        # extract location for each calibration file
-        select(hplc_data, cruise_id, cal_file) %>%
-        mutate(
-          cal_file = map_chr(.x = cal_file,
-                             ~ here("data", "raw", "hplc") %>%
-                               dir_ls(regexp = .x))
-          ),
-        
-        # extract cruise ID and path to individual seabass submission files
-        (here("data", "processed", "hplc") %>%
-           dir_ls(regexp = "ind_file") %>%
-           sort(decreasing = TRUE))[1] %>%
-          dir_ls() %>%
-          tibble(sb_file = .) %>%
-          mutate(
-            cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
-            ),
-        
-        # extract location for each cruise checklist      
-        here("data", "raw", "hplc", "checklist") %>%
-          dir_ls() %>%
-          tibble(chk_file = .) %>%
-        mutate(
-          cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
-          )
-        )
-      ) %>%
-    
-    # add cloud directory for each cruise
-    mutate(cloud_dir = here(cloud_loc, cruise_id)) %>%
-    nest(.by = c(cruise_id, cloud_dir)) %$%
-    
-    pwalk(list(cruise_id, data, cloud_dir),
-          function(x, y, dir_loc) {
-            cli_h1(x)
-            cli_alert_info("Copy Location: {.file {dir_loc}}")
-            y <- 
-              pivot_longer(
-                data      = y,
-                cols      = everything(),  # columns to pivot long,
-                names_to  = "file_type", # desired name for category column
-                values_to = "file_path", # desired name for value column
-                )  %>%
-              filter(!is.na(file_path)) 
-            
-          walk2(
-            .x = y$file_path,
-            .y = dir_loc,
-            function(from, to) {
-           dir_create(to)
-           tryCatch({
-             file_copy(from, to, overwrite = ovrwrt)
-             cli_alert_success("Copying: {.file {basename(from)}}")
-             }, error = function(e) {
-               cli_alert_danger(c("Skipping: {.file {basename(from)}} ",
-                                  "{col_red(\"Already exists!\")}"))
-             })
-              })}
-        )
-  
-  if (!ovrwrt) {
     cli_text("\n\n")
-    cli_alert_warning(c("If you want to {col_red(\"overwrite\")} existing ",
-                       "files, set {.var ovrwrt} = {.var TRUE}",
-                       "(currently set to {.var {ovrwrt}})"))
-  }
-} 
+    cli_alert_warning("You might be overwriting previsouly saved data.")
+    cli_alert_warning(c("Currently, {col_red(\"arg_ls$ovrwrt\")} = ",
+                        "{.var {col_red(arg_ls$ovrwrt)}}{meaning}"))
+    cli_alert_warning(c("If this was a mistake, change " ,
+                        "{col_red(\"arg_ls$ovrwrt\")} ",
+                        "= {.var {col_red(!arg_ls$ovrwrt)}}."))
+    cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
+             {col_red(\"\\\"esc\\\"\")} to escape and correct.")
+    invisible(readline(""))
+    
+    # ---- pushing files to cloud directory
+    file_to_box <-
+      reduce(
+        .f = left_join, 
+        by = join_by(cruise_id),
+        list(
+          # extract location for each calibration file
+          select(hplc_data, cruise_id, cal_file) %>%
+          mutate(
+            cal_file = map_chr(.x = cal_file,
+                               ~ here("data", "raw", "hplc") %>%
+                                 dir_ls(regexp = .x))
+            ),
+          
+          # extract cruise ID and path to individual seabass submission files
+          (here("data", "processed", "hplc") %>%
+             dir_ls(regexp = "ind_file") %>%
+             sort(decreasing = TRUE))[1] %>%
+            dir_ls() %>%
+            tibble(sb_file = .) %>%
+            mutate(
+              cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
+              ),
+          
+          # extract location for each cruise checklist      
+          here("data", "raw", "hplc", "checklist") %>%
+            dir_ls() %>%
+            tibble(chk_file = .) %>%
+          mutate(
+            cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
+            )
+          )
+        ) %>%
+    
+      # add cloud directory for each cruise
+      mutate(cloud_dir = here(arg_ls$cloud_loc, cruise_id)) %>%
+      
+      nest(.by = c(cruise_id, cloud_dir)) %$%
+      
+      pwalk(list(cruise_id, data, cloud_dir),
+            function(x, y, dir_loc) {
+              cli_h1(x)
+              cli_alert_info("Copy Location: {.file {dir_loc}}")
+              y <- 
+                pivot_longer(
+                  data      = y,
+                  cols      = everything(),  # columns to pivot long,
+                  names_to  = "file_type", # desired name for category column
+                  values_to = "file_path", # desired name for value column
+                  )  %>%
+                filter(!is.na(file_path)) 
+              
+            walk2(
+              .x = y$file_path,
+              .y = dir_loc,
+              function(from, to) {
+             dir_create(to)
+             tryCatch({
+               file_copy(from, to, overwrite = arg_ls$ovrwrt)
+               cli_alert_success("Copying: {.file {basename(from)}}")
+               }, error = function(e) {
+                 cli_alert_danger(c("Skipping: {.file {basename(from)}} ",
+                                    "{col_red(\"Already exists!\")}"))
+               })
+                })}
+          )
+    
+    if (!arg_ls$ovrwrt) {
+      cli_text("\n\n")
+      cli_alert_warning(
+        c("If you want to {col_red(\"overwrite\")} existing ",
+          "files, \nSet {.var {col_red(\"arg_ls$ovrwrt\")}} = ", 
+          "{.var {col_red(TRUE)}} ",
+          "(currently set to {.var {col_red(arg_ls$ovrwrt)}})"
+        ))
+      }
+    } 
 ```
 
 ## Save Consolidated Info and Select Variables
