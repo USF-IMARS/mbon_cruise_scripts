@@ -368,7 +368,11 @@ final <-
         # evaluate header
         header <- with(x, eval(header_skeleton)) 
         
-        if (verb) print(header)
+        if (verb) {
+          cat("\n-----\n", cruise_id, "\n\n")
+          print(header)
+          cat("\n-----\n\n")
+        }
 
         # return values
         return(
@@ -398,8 +402,9 @@ dir_create(loc) # create dir for each day running
 pwalk(list(final$cols, final$heads),
       function(x, y) {
         # write header
-        cat(y$header, "\n",
-            file = here(loc, y$file_name))
+        cat(y$header, "\n", sep = "",
+            file = here(loc, y$file_name)
+            )
         
         x %>%
           # convert all to characters
@@ -410,10 +415,10 @@ pwalk(list(final$cols, final$heads),
                     is.na(x) ~ "-9999", # chg NA to -9999
                     .default = x))
            ) %>%
-          
+
           # filter out rows where no data exists
           filter(!if_all(date:last_col(), \(x) x == "-9999")) %>%
-      
+
           # write data after header
           write_delim(.,
                       delim     = ",",
@@ -478,7 +483,102 @@ sb_data <-
 
 message(glue("The dimensions are: {dim_desc(sb_data)}"))
 slice_head(sb_data, n = 10)
+
+sb_data %>%
+  filter(if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
 ```
+
+# FCHECK
+This is used by NASA to pre-check the .sb files before official submission 
+process. This requires the use of "Perl" <https://www.perl.org/get.html>.
+A quick download and it should work.
+```{r}
+# Toggle if want to see fcheck out put or look just for errors
+verb2 <- FALSE
+verb2 <- T
+
+tryCatch({
+  system2("perl", "-v", stdout = TRUE)
+  invisible()
+  }, error = function(e) {
+    # message(sprintf("Error in %s: %s", deparse(e[["call"]]), e[["message"]]))
+    stop(glue("Perl does not seem to be downloaded to your computer.\n", 
+              "To continue you will need to download perl at: ",
+              "https://www.perl.org/get.html\n",
+              "----\n",
+              "Perl is used to run the fcheck.pl script to check the .sb files"))
+    
+      })
+
+test <- 
+  dir_ls(ind_f_dir[1]) %>%
+  tibble(files = .) %>%
+  # slice(1) %>%
+  slice_tail(n = 1) %>%
+  mutate(
+    fcheck2 = map(files, 
+                 \(x) paste( here("fcheck", "fcheck4.pl"), x) %>%
+                   system2("perl", ., stdout = TRUE))
+  ) %T>%
+  {if (verb2) {
+    pull(., fcheck2) %>%
+    print()
+  } else {.}}
+
+# print file and summary of errors/warnings
+for (i in seq(nrow(test))) {
+  print(glue(
+    basename(test$files[[i]]),
+    test$fcheck2[[i]][which(str_detect(test$fcheck2[[i]], "\\d+.*error"))],
+    .sep = ": "))
+}
+
+
+```
+# Get Date Range of Each Cruise
+```{r}
+dt_rng <- 
+  sb_data %>%
+  mutate(
+    .keep = "none",
+    cruise   = str_extract(sample, "\\w{2,3}\\d{4,5}"),
+    date     = as_date(date),
+  ) %>%
+  summarise(
+    .by = cruise,
+    num = n(),
+    # date_min = as_date(date_min, format = ""),
+    date_max = max(date)
+  ) %>%
+  arrange(date_max) %>%
+  mutate(
+    .before = date_max,
+    date_min = str_extract(cruise, "\\d+"),
+    date_min = as_date(date_min, format = "%y%j"),
+    date_min = format(date_min, "%b %d"),
+    date_max = format(date_max, "%b %d %Y")
+    ) %>%
+  unite(col = "date_range", date_min, date_max, sep = " - ") 
+
+df_rng
+
+if (FALSE) {
+  write_csv(
+    dt_rng,
+    file = here("date_range.csv"),
+    quote = "none"
+    )
+}
+```
+
+
+
+/documents=
+checklist_hplc_EXPORTS-EXPORTSNA_SR1812.rtf,
+EXPORTS_Roesler_08-06_report_rev2.xlsx,
+EXPORTS_pump_log_data_work_up_Sally_Ride_August_2018_QMA_SUPOR_organics.xls,
+EXPORTSNP_SR1812_Roesler_sample_log_V2.xlsx,
+R2R_ELOG_SR1812_FINAL_EVENTLOG_20180913_022931.xlsx
 
 
 # Copy files to box
