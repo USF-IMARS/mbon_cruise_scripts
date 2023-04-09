@@ -497,8 +497,12 @@ sb_data %>%
 This is used by NASA to pre-check the .sb files before official submission 
 process. This requires the use of "Perl" <https://www.perl.org/get.html>.
 A quick download and it should work.
+
+Then a download of FCHECK from NASA:
+<https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
+
 ```{r fcheck}
-# Toggle if want to see fcheck out put or look just for errors
+# ---- Toggle if want to see fcheck out put or look just for errors
 verb2 <- FALSE
 # verb2 <- TRUE
 
@@ -515,13 +519,33 @@ tryCatch({
     
       })
 
-# run fcheck
+# this will download fcheck if it doens't exists in the project directory
+# <https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
+if (!dir_exists(here("fcheck")) | !file_exists(here("fcheck", "fcheck4.pl"))) {
+  (function() {
+  dir_create(here("fcheck"))
+  url  <- "https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar"
+  file <- here("fcheck3", basename(url))
+  
+  # download
+  download.file(url      = url,
+                destfile = file,
+                method   = "curl")
+  
+  # unzip
+  untar(tarfile = file, 
+        exdir   = here("fcheck"))
+  })()
+  }
+
+
+# ---- run fcheck
 fcheck_results <- 
   dir_ls(ind_f_dir[1]) %>%
   tibble(files = .) %>%
   mutate(
     fcheck2 = map(files, 
-                 \(x) paste( here("fcheck", "fcheck4.pl"), x) %>%
+                 \(x) paste(here("fcheck", "fcheck4.pl"), x) %>%
                    system2("perl", ., stdout = TRUE))
   ) %T>%
   {if (verb2) {
