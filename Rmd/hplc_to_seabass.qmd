@@ -123,7 +123,7 @@ loc <-
 
 ## All SeaBass Standard Fields 
 https://seabass.gsfc.nasa.gov/wiki/stdfields
-```{r}
+```{r std-fields}
 sb_field <- 
   read_tsv(here("data", "metadata", "seabass_standard_fields_all.txt"),
            show_col_types = FALSE,
@@ -492,10 +492,10 @@ sb_data %>%
 This is used by NASA to pre-check the .sb files before official submission 
 process. This requires the use of "Perl" <https://www.perl.org/get.html>.
 A quick download and it should work.
-```{r}
+```{r fcheck}
 # Toggle if want to see fcheck out put or look just for errors
 verb2 <- FALSE
-verb2 <- T
+# verb2 <- TRUE
 
 tryCatch({
   system2("perl", "-v", stdout = TRUE)
@@ -514,7 +514,7 @@ test <-
   dir_ls(ind_f_dir[1]) %>%
   tibble(files = .) %>%
   # slice(1) %>%
-  slice_tail(n = 1) %>%
+  # slice_tail(n = 1) %>%
   mutate(
     fcheck2 = map(files, 
                  \(x) paste( here("fcheck", "fcheck4.pl"), x) %>%
@@ -536,7 +536,7 @@ for (i in seq(nrow(test))) {
 
 ```
 # Get Date Range of Each Cruise
-```{r}
+```{r date-range}
 dt_rng <- 
   sb_data %>%
   mutate(
@@ -599,15 +599,15 @@ if (!wrt_cld) {
                      "set {.var wrt_cld} = {.var TRUE}",
                      "(currently set to {.var {wrt_cld}})"))
   } else {
-  if (!ovrwrt) {
-    cli_text("\n\n")
-    cli_alert_warning("You might be overwriting previsouly saved data.")
-    cli_alert_warning(c("If this was a mistake, set {col_red(\"ovrwrt\")} ",
-                        "= {.var FALSE}"))
-    cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
-             {col_red(\"\\\"esc\\\"\")} to escape and correct.")
-    invisible(readline(""))
-  }
+  # if (!ovrwrt) {
+  cli_text("\n\n")
+  cli_alert_warning("You might be overwriting previsouly saved data.")
+  cli_alert_warning(c("If this was a mistake, set {col_red(\"ovrwrt\")} ",
+                      "= {.var FALSE}"))
+  cli_text("Hit {col_red(\"\\\"enter\\\"\")} to continue or 
+           {col_red(\"\\\"esc\\\"\")} to escape and correct.")
+  invisible(readline(""))
+  # }
 
   file_to_box <-
     reduce(
@@ -683,7 +683,7 @@ if (!wrt_cld) {
 ```
 
 # Save Consolidated Info and Select Variables
-```{r}
+```{r sv-consolidated}
 hplc_filt <-
   hplc_data2 %>%
   mutate(
