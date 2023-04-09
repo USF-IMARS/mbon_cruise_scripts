@@ -62,6 +62,7 @@ file.pig <-
     ) 
 ```
 
+## Read Files and Select Variables for SeaBass
 ```{r read-file-edit}
 hplc_data <-
   file.pig %>%
@@ -216,16 +217,26 @@ aoml <-
   filter(cruise %in% hplc_data$cruise_id) %>%
   distinct(cruise, station, .keep_all = TRUE)
 
-hplc_data <- 
+hplc_data <-
   hplc_data %>%
   left_join(aoml, by = join_by(cruise_id == cruise, station)) %>%
   mutate(
-    lon   = if_else(abs(lon - longitude_decimal) < 0.1, lon, longitude_decimal),
-    lat   = if_else(abs(lat - latitude_decimal) < 0.1, lat, latitude_decimal),
+    cruise_id,
+    station,
+    lon   = if_else(abs(lon - longitude_decimal) < 0.1 
+                    | is.na(longitude_decimal), 
+                    lon, longitude_decimal),
+    lat   = if_else(abs(lat - latitude_decimal) < 0.1
+                    | is.na(latitude_decimal), 
+                    lat, latitude_decimal),
     lon = round(lon, 4),
     lat = round(lat, 4),
-    date  = if_else(abs(date - date_gmt) < "1 day", date, date_gmt), 
-    time  = if_else(abs(time - time_gmt) < "600 secs", time, time_gmt),
+    date  = if_else(abs(as.double(date, date_gmt, units = "days")) <= 1
+                    | is.na(date_gmt), 
+                    date, date_gmt), 
+    time  = if_else(abs(as.double(time - time_gmt, units = "secs")) < 600
+                    | is.na(time_gmt), 
+                    time, time_gmt),
     .keep = "unused"
   ) %>%
   nest(.by = c(cruise, cruise_id)) %>%
@@ -358,8 +369,9 @@ save(hplc_data,
      )
 ```
 
+## Write New Checklist files (.rtf)
 ```{r write-checklist}
-ovrwrt <- TRUE
+ovrwrt <- FALSE
 for (i in seq(nrow(hplc_rtf))) {
   if (
     !is.na(hplc_rtf$check_f[[i]]) 
