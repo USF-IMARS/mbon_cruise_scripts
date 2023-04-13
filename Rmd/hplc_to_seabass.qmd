@@ -102,7 +102,9 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
-  hms, janitor
+  hms, janitor,
+  
+  quiet = TRUE
 )
 
 library("conflicted")
@@ -158,9 +160,194 @@ hplc_data <- hplc_data2 <-
                                                             "t_acc", "tacc"),
                 .default = low_name)
               ) %>%
-              left_join(sb_field, by = c("low_name"))))
-    ) 
+              left_join(sb_field, by = c("low_name")))),
+# 
+# hplc_data %>%
+# slice(2:3) %>%
+#   
+# mutate(
+    data_reps = map2(
+      data,
+      sb_name,
+      function(x, y) {
+        # browser()
+        # add sd and bincount
+        x <-
+          x %>%
+          group_by(station, depth, .drop = FALSE) %>%
+          mutate(
+            .keep = "used",
+            across(
+              tot_chl_a:last_col(),
+              \(x) if_else(x < 0, NA, x)
+            ),
+            across(tot_chl_a:last_col(),
+              .fns = list(
+                sd = ~ sd(., na.rm = TRUE),
+                bincount = ~ n()
+              ),
+              .names = "{.col}_{.fn}"
+            ),
+            # across(
+            #   tot_chl_a_sd:last_col(),
+            #   \(x) if_else(is.na(x), -9999, x)
+            # )
+          ) %>%
+          select(-(contains("tot")[1]:(contains("chl_a_sd") - 1)[1])) %>%
+          select(-where(~ all(. == 1 | . == -9999, na.rm = TRUE))) %>%
+          ungroup() %>%
+          select(-depth, -station)
+  
+        # create field names 
+        if (ncol(x) > 2) {
+          rep_names <-
+            tibble(param_name = names(x)) %>%
+            filter(str_detect(param_name, "_sd|_bincount")) %>%
+            separate_wider_regex(
+              cols = param_name,
+              patterns = c(
+                "rep_name" = ".*",
+                "seps" = "_.*"
+              )
+            ) %>%
+            
+            left_join(y, ., by = join_by("param_name" == "rep_name")) %>%
+           unite("field_name",
+             field_name, seps,
+             sep = "",
+             na.rm = TRUE,
+             remove = FALSE
+           ) %>%
+             unite("param_name",
+              param_name, seps,
+              sep = "",
+              na.rm = TRUE
+            ) %>%
+            mutate(
+              units = if_else(
+                str_detect(param_name, "bincount"), "none", units),
+              )
+          
+          
+          
+        } else {
+          rep_names <- NULL
+          x <- NULL
+        }
+
+        return(
+          list(
+            reps = x,
+            rep_names = rep_names
+          )
+        )
+      }
+    )
+  ) %>%
+  unnest_wider(data_reps) %>%
+  mutate(
+    data = map2(data, 
+               reps,
+               (\(x, y) bind_cols(x, y))
+               ),
+    sb_name = map2(sb_name, 
+               rep_names,
+               (\(x, y) bind_rows(x, y))
+               )
+  ) 
+
 ```
+
+## Calculate Replicate Info
+With duplicate samples, there needs to be added <field>_sd and <field>_bincount
+
+If no duplicate, set <field>_sd = -9999
+```{r}
+# hplc_data <- 
+#   hplc_data %>%
+#   mutate(
+#     data_reps = map2(
+#       data,
+#       sb_name,
+#       function(x, y) {
+#         # add sd and bincount
+#         x <-
+#           x %>%
+#           group_by(station, depth, .drop = FALSE) %>%
+#           mutate(
+#             .keep = "used",
+#             across(
+#               tot_chl_a:last_col(),
+#               \(x) if_else(x < 0, NA, x)
+#             ),
+#             across(tot_chl_a:last_col(),
+#               .fns = list(
+#                 sd = ~ sd(., na.rm = TRUE),
+#                 bincount = ~ n()
+#               ),
+#               .names = "{.col}_{.fn}"
+#             ),
+#             # across(
+#             #   tot_chl_a_sd:last_col(),
+#             #   \(x) if_else(is.na(x), -9999, x)
+#             # )
+#           ) %>%
+#           select(-(contains("tot")[1]:(contains("chl_a_sd") - 1)[1])) %>%
+#           select(-where(~ all(. == 1 | . == -9999, na.rm = TRUE))) %>%
+#           ungroup() %>%
+#           select(-depth, -station)
+#   
+#         # create field names 
+#         if (ncol(x) > 2) {
+#           rep_names <-
+#             tibble(rep_name = names(x)) %>%
+#             filter(str_detect(rep_name, "_sd|_bincount")) %>%
+#             separate_wider_regex(
+#               cols = rep_name,
+#               patterns = c(
+#                 "param_name" = ".*",
+#                 "seps" = "_.*"
+#               )
+#             ) %>%
+#             left_join(y, by = join_by("param_name")) %>%
+#             select(-description) %>%
+#             unite("field_name",
+#               field_name, seps,
+#               sep = "",
+#               na.rm = TRUE
+#             ) %>%
+#             mutate(units = if_else(
+#               str_detect(field_name, "bincount"), "none", units
+#             ))
+#         } else {
+#           rep_names <- NULL
+#           x <- NULL
+#         }
+# 
+#         return(
+#           list(
+#             reps = x,
+#             rep_names = rep_names
+#           )
+#         )
+#       }
+#     )
+#   ) %>%
+#   unnest_wider(data_reps) %>%
+#   mutate(
+#     data = map2(data, 
+#                reps,
+#                (\(x, y) bind_cols(x, y))
+#                ),
+#     sb_name = map2(sb_name, 
+#                rep_names,
+#                (\(x, y) bind_rows(x, y))
+#                )
+#   ) 
+
+```
+
+
 ## Header Information
 ```{r default}
 contacts <- 
@@ -212,6 +399,7 @@ hd_def$comments <-
        "! concentrations less than 0.0005 mg/m^3."
        ) 
 
+# add comments to each file
 hplc_data <- 
   hplc_data %>%
   mutate(
@@ -334,18 +522,20 @@ hplc_w_head
 
 ```{r header-info}
 # if want to see header output, set to true
-verb <- FALSE
+verb <- TRUE
 
 # cruise data header_info cruise_id 
 hplc_final <-
   hplc_w_head %>%
+  
   mutate(
      heads = pmap(
       .progress = TRUE,
       .l = list(data, header_info, cruise_id, sb_name, precise_comm, cal_file,
                 doc),
       verb = verb,
-      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc, verb){
+      
+      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc, verb) {
         # remove spaces in original base name 
         fbase <- 
           str_replace_all(unique(y$base), " ", "_") %>%
@@ -383,12 +573,22 @@ hplc_final <-
             fld_use   = list(field_nm = field_nm)))
         }
      ),
+     
+     # renames the final data columns to match the "standard" fields 
      cols = pmap(
       list(data, heads, sb_name),
-      function(.x, .y, .z) {
-        select(.x, any_of(c(hd_def$fields_extr$field_extr,
-                            .z$param_name))) %>%
-          purrr::set_names(.y$fld_use[[1]])
+      def = hd_def,
+      function(.x, .y, .z, def) {
+        # browser()
+        select(.x, any_of(
+          c(def$fields_extr$field_extr,
+            .z$param_name))
+          ) #%>%
+          # purrr::set_names(.y$fld_use[[1]])
+
+     # select(rep, any_of(rep_nm$field_name_rep))# %>%
+       # purrr::set_names(.y$fld_use[[1]])
+
         }
       )
      )
@@ -442,7 +642,16 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
 All columns are read as characters to check for any issues with the data
 ```{r read-seabass}
 # function to read seasbass hplc files and sort through head, and data
-read_sb_files <- function(x) {
+read_sb_files <- function(x, type = NULL, add_na = NULL) {
+
+  na_val <- unique(c("", "NA", add_na))
+  
+  if (is.null(type)) {
+    type <- cols(.default = col_guess())
+  } else {
+    type <- cols(.default = type)
+  }
+
   skips <-
     read_lines(x) %>% str_detect("end_header") %>%
     which()
@@ -467,9 +676,8 @@ read_sb_files <- function(x) {
     skip = skips,
     col_names = col_names,
     show_col_types = FALSE,
-    col_types = cols(.default = "c"),
-    # na = c("", "NA", "-9999")
-    na = c("", "NA")
+    col_types = type,
+    na = na_val
   )
 }
 
@@ -485,8 +693,10 @@ sb_data <-
   ind_f_dir[1] %>%
   dir_ls() %>%
   tibble(file = .) %>%
-  mutate(data = map(file,
-                    read_sb_files)) %>%
+  # slice(1) %>%
+  mutate(data = map(file, 
+                    read_sb_files, 
+                    type = "c",)) %>%
   unnest(data)
 
 message(glue("The dimensions are: {dim_desc(sb_data)}"))
@@ -495,7 +705,7 @@ slice_head(sb_data, n = 10)
 sb_data %>%
   filter(if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
 
-rm(read_sb_files)
+# rm(read_sb_files)
 ```
 
 ## FCHECK: Checking `.sb` Files Locally
@@ -650,7 +860,7 @@ arg_ls <-
     
     # select if want to write data to cloud and overwrite cloud directory data 
     wrt_cld = TRUE, # write data to cloud
-    ovrwrt  = FALSE # overwrite if data exists
+    ovrwrt  = TRUE # overwrite if data exists
   )
 
 if (!arg_ls$wrt_cld) {
