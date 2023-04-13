@@ -161,16 +161,12 @@ hplc_data <- hplc_data2 <-
                 .default = low_name)
               ) %>%
               left_join(sb_field, by = c("low_name")))),
-# 
-# hplc_data %>%
-# slice(2:3) %>%
-#   
-# mutate(
+    
+    # calc duplicat info
     data_reps = map2(
       data,
       sb_name,
       function(x, y) {
-        # browser()
         # add sd and bincount
         x <-
           x %>%
@@ -187,18 +183,14 @@ hplc_data <- hplc_data2 <-
                 bincount = ~ n()
               ),
               .names = "{.col}_{.fn}"
-            ),
-            # across(
-            #   tot_chl_a_sd:last_col(),
-            #   \(x) if_else(is.na(x), -9999, x)
-            # )
+            )
           ) %>%
           select(-(contains("tot")[1]:(contains("chl_a_sd") - 1)[1])) %>%
           select(-where(~ all(. == 1 | . == -9999, na.rm = TRUE))) %>%
           ungroup() %>%
           select(-depth, -station)
   
-        # create field names 
+        # create replicate and bincount field names 
         if (ncol(x) > 2) {
           rep_names <-
             tibble(param_name = names(x)) %>%
@@ -227,8 +219,6 @@ hplc_data <- hplc_data2 <-
               units = if_else(
                 str_detect(param_name, "bincount"), "none", units),
               )
-          
-          
           
         } else {
           rep_names <- NULL
@@ -349,6 +339,18 @@ If no duplicate, set <field>_sd = -9999
 
 
 ## Header Information
+TODO: change how list is created? 
+  I don't know which one is easier to read and/or faster to run
+  instead of: 
+    hd_def <- list()
+    hd_def$x <- <info>
+    hd_def$y <- <more info>
+    
+  replace with:
+    hd_def <- list(
+        x = <info>,
+        y = <more info>
+        )
 ```{r default}
 contacts <- 
   tribble(
@@ -579,23 +581,17 @@ hplc_final <-
       list(data, heads, sb_name),
       def = hd_def,
       function(.x, .y, .z, def) {
-        # browser()
         select(.x, any_of(
           c(def$fields_extr$field_extr,
             .z$param_name))
-          ) #%>%
-          # purrr::set_names(.y$fld_use[[1]])
-
-     # select(rep, any_of(rep_nm$field_name_rep))# %>%
-       # purrr::set_names(.y$fld_use[[1]])
-
+          ) %>%
+          purrr::set_names(.y$fld_use[[1]])
         }
       )
      )
 
 rm(verb)
 ```
-
 
 ## Saving Files in SeaBass Format
 ```{r save-files}
@@ -673,11 +669,11 @@ read_sb_files <- function(x, type = NULL, add_na = NULL) {
   
   read_csv(
     x,
-    skip = skips,
-    col_names = col_names,
+    skip           = skips,
+    col_names      = col_names,
     show_col_types = FALSE,
-    col_types = type,
-    na = na_val
+    col_types      = type,
+    na             = na_val
   )
 }
 
@@ -696,7 +692,7 @@ sb_data <-
   # slice(1) %>%
   mutate(data = map(file, 
                     read_sb_files, 
-                    type = "c",)) %>%
+                    type = "c")) %>%
   unnest(data)
 
 message(glue("The dimensions are: {dim_desc(sb_data)}"))
