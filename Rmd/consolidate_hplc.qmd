@@ -38,7 +38,7 @@ cal_file <-
   basename()
 
 # pigment files
-file.pig <-
+file_pig <-
     here("data", "raw", "hplc") %>%
     dir_ls(
            recurse = FALSE,
@@ -65,7 +65,7 @@ file.pig <-
 ## Read Files and Select Variables for SeaBass
 ```{r read-file-edit}
 hplc_data <-
-  file.pig %>%
+  file_pig %>%
   mutate(
     .keep = "none",
     file,
@@ -257,7 +257,7 @@ hplc_data <-
 ```{r precision}
 precise <-
   mutate(
-    .data = file.pig,
+    .data = file_pig,
     .keep = "none",
     base,
     precison = map2(
@@ -438,8 +438,8 @@ hplc_rtf %>%
 # Extract Comments from Sheets
 ```{r comments}
 shelf(openxlsx)
-for (i in seq(nrow(file.pig))) {
-  temp_file <- file.pig$file[[i]]
+for (i in seq(nrow(file_pig))) {
+  temp_file <- file_pig$file[[i]]
   
   wb <- 
     temp_file %>%
@@ -509,7 +509,7 @@ xlsx_comm %>%
 # Delete:
 ```{r}
 # hplc_data <-
-#   file.pig %>%
+#   file_pig %>%
 #   mutate(
 #   metadata = map(
 #     .x = file,
