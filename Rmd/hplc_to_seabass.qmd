@@ -111,7 +111,10 @@ library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+```
 
+
+```{r load-hplc}
 # load consolidated HPLC by cruise
 (dir_ls(here("data", "processed", "hplc"),
        regexp = "RData") %>%
@@ -162,7 +165,7 @@ hplc_data <- hplc_data2 <-
               ) %>%
               left_join(sb_field, by = c("low_name")))),
     
-    # calc duplicat info
+    # calc duplicate info ----
     data_reps = map2(
       data,
       sb_name,
@@ -252,6 +255,8 @@ hplc_data <- hplc_data2 <-
 With duplicate samples, there needs to be added <field>_sd and <field>_bincount
 
 If no duplicate, set <field>_sd = -9999
+
+NOTE: this is done in the above chunk
 ```{r}
 # hplc_data <- 
 #   hplc_data %>%
@@ -337,6 +342,40 @@ If no duplicate, set <field>_sd = -9999
 
 ```
 
+# ---- edit here -----------------------
+```{r edit-chunk}
+prepared_by <- "Sebastian Di Geronimo" 
+contacts    <-
+  tribble(
+    ~invest,               ~email,             ~affil,
+    "Frank Muller-Karger", "carib@usf.edu",    "University of South_Florida",
+    "Daniel Otis",         "dotis@usf.edu",    "University of South_Florida",
+    "Digna Rueda Roa",     "druedaro@usf.edu", "University of South_Florida"
+) %>%
+  mutate(
+    across(
+      everything(),
+      (\(x) str_replace_all(x, "\\s", "_"))
+    )
+  )
+
+acknowledge <-
+  str_c("! ",
+    c(
+    "ACKNOWLEDGMENTS",
+    "Observations were contributed by the South Florida Marine Biodiversity",
+    "Observation Network (SFMBON) and the Southeast US Marine Biodiversity",
+    "Observation Network (SEUSMBON). This research was funded by the National",
+    "Oceanic and Atmospheric Administration (NOAA grant No. NA19NOS0120199);",
+    "National Oceanic and Atmospheric Administration and Gulf of Mexico Coastal",
+    "Ocean Observing System (NOAA-GCOOS Cooperative Agreement No. NA16NOS0120018);",
+    "National Aeronautics and Space Administration (NASA grants No. NNX14AP62A,",
+    "80NSSC20K0017, and 80NSSC22K1779)."
+    ),
+    collapse = "\n"
+  ) %>%
+  str_c(., "\n!")
+```
 
 ## Header Information
 TODO: change how list is created? 
@@ -352,23 +391,16 @@ TODO: change how list is created?
         y = <more info>
         )
 ```{r default}
-contacts <- 
-  tribble(
-    ~invest,               ~email,
-    "Frank_Muller-Karger", "carib@usf.edu", 
-    "Daniel_Otis",         "dotis@usf.edu", 
-    "Digna_Rueda_Roa",     "druedaro@usf.edu"
-)
-
-
 hd_def <- list()
-hd_def$prep     <- "Sebastian Di Geronimo" # <----------------------- edit here
 hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
-hd_def$affil    <- "University_of_South_Florida,USA"
+hd_def$affil    <- str_c(contacts$affil, collapse = ",")
 hd_def$expri    <- "SFMBON"
 hd_def$hplc_lab <- "NASA_GSFC"	
 hd_def$lab_tech <- "Crystal_Thomas"	
+hd_def$lab_instr   <- "Agilent"	
+hd_def$lab_instr_m <- "RR1200"	
+
 hd_def$type     <- "pigment"
 hd_def$status   <- "final" # final - not intending to revisit
 hd_def$wtr_dpth <- hd_def$stn <- "na"
@@ -389,7 +421,7 @@ hd_def$comments <-
   glue(.sep = "\n",
        "!",
        "! COMMENTS",
-       "! Prepared by: {hd_def$prep}",
+       "! Prepared by: {prepared_by}",
        "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
        "!",
        "! Samples were processed at NASA GSFC by Crystal Thomas",
@@ -412,15 +444,25 @@ hplc_data <-
          glue("!")
          } else if (nrow(xl) > 1) {
          glue(
-           "!\n! Coefficient of variation (replicate filter precision)",
+           "!",
+           "\n! Coefficient of variation (CV) per report (replicate filter ",
+           "precision)",
            "\n! TChl a = {str_c(xl$t_chl_a, collapse = \",\")};",
            "\n! Ppig   = {str_c(xl$ppig, collapse = \",\")}",
+           "\n! Note: This cruise may not have replicate filters, but CV is",
+           "\n! included beacuse the full report contains cruises with",
+           "\n! replicate filters.",
            "\n!") 
          } else {
         glue(
-           "!\n! Coefficient of variation (replicate filter precision)",
+           "!",
+           "\n! Coefficient of variation (CV) per report (replicate filter ",
+           "precision)",
            "\n! TChl a = {xl$t_chl_a};",
            "\n! Ppig   = {xl$ppig}",
+           "\n! Note: This cruise may not have replicate filters, but CV is",
+           "\n! included beacuse the full report contains cruises with",
+           "\n! replicate filters.",
            "\n!")
         }
        )),
@@ -430,6 +472,7 @@ hplc_data <-
 rm(contacts, sb_field)
 ```
 
+
 ```{r headr-skeleton}
 header_skeleton <-
   glue::glue(
@@ -437,6 +480,7 @@ header_skeleton <-
     # required  
     "/investigators={hd_def$invest}",
     "/affiliations={hd_def$affil}",
+    "!/affiliations=University of South Florida, MBON, SFMBON, SE US MBON",
     "/contact={hd_def$contact}",
     "/experiment={hd_def$expri}",
     "/cruise={cruise_id}",
@@ -458,10 +502,11 @@ header_skeleton <-
     "/missing=-9999",
     "/delimiter=comma",
     
-    
     # HPLC required
     "/HPLC_lab={hd_def$hplc_lab}",
     "/HPLC_lab_technician={hd_def$lab_tech}",
+    "/instrument_manufacturer={hd_def$lab_instr}",
+    "/instrument_model={hd_def$lab_instr_m}",
     "/below_detection_limit=-8888",
     
     # conditional 
@@ -474,6 +519,7 @@ header_skeleton <-
     
     "{hd_def$comments}",
     "{pc_com}",
+    "{acknowledge}",
     "/fields={fields}", # fields of data 
     "/units={pun}",  # units for each column 
     "/end_header", 
@@ -481,7 +527,9 @@ header_skeleton <-
   
   expression()
 ```
-
+ Optional header \"/instrument_model\" not provided."                                             
+[14] "    Optional header \"/calibration_date\" not provided."                                             
+[15] "    Optional header \"/instrument_manufacturer\" not provided."          
 ## Extract Header Information
 ```{r header-info}
 hplc_w_head <-
@@ -715,7 +763,7 @@ Then a download of FCHECK from NASA:
 ```{r fcheck}
 # ---- Toggle if want to see fcheck out put or look just for errors
 verb <- FALSE
-# verb <- TRUE
+verb <- TRUE
 
 # check if Perl is installed and errors if not
 tryCatch({
@@ -846,7 +894,7 @@ chunk.
 By default, it will skip. 
 ```{r coy-to-box}
 shelf(cli)
-
+source(here(".Rprofile"))
 # set arguments in a list
 arg_ls <- 
   list(
