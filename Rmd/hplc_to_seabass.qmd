@@ -763,6 +763,15 @@ A quick download and it should work.
 Then a download of FCHECK from NASA:
 <https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
 
+Cruises not ready
+- WS16074
+- WS16130
+- WS16263
+
+SFMBON_WS16074_pigment_20160314_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
+SFMBON_WS16130_pigment_20160509_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
+SFMBON_WS16263_pigment_20160919_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
+
 ```{r fcheck}
 # ---- Toggle if want to see fcheck out put or look just for errors
 verb <- FALSE
@@ -775,7 +784,7 @@ tryCatch({
   }, error = function(e) {
     stop(glue("The programming language \"Perl\" does not seem to be ", 
               "downloaded to your computer.\n", 
-              "\"Perl\" is used to run the `fcheck.pl` script to check issues ", 
+              "\"Perl\" is used to run the `fcheck4.pl` script to check issues ", 
               "with SeaBASS files (.sb).\n",
               "----\n",
               "To continue checking .sb files:\n",
