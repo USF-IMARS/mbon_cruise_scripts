@@ -572,7 +572,8 @@ hplc_w_head
 
 ```{r header-info}
 # if want to see header output, set to true
-verb <- TRUE
+verb <- FALSE
+# verb <- TRUE
 
 # cruise data header_info cruise_id 
 hplc_final <-
@@ -763,7 +764,7 @@ Then a download of FCHECK from NASA:
 ```{r fcheck}
 # ---- Toggle if want to see fcheck out put or look just for errors
 verb <- FALSE
-verb <- TRUE
+# verb <- TRUE
 
 # check if Perl is installed and errors if not
 tryCatch({
