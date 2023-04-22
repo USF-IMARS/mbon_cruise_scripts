@@ -6,11 +6,14 @@ format: html
 ---
 # 1.0 Information
 ## 1.1 Links: SeaBass Instructions for Submission of HPLC
-Instructions: https://seabass.gsfc.nasa.gov/wiki/Data_Submission
-Check before submit: https://seabass.gsfc.nasa.gov/wiki/FCHECK#Download%20Source%20Code
+Instructions: 
+  <https://seabass.gsfc.nasa.gov/wiki/Data_Submission>
+Check before submit: 
+  <https://seabass.gsfc.nasa.gov/wiki/FCHECK#Download%20Source%20Code>
 
 ## 1.2 Header
-https://seabass.gsfc.nasa.gov/wiki/metadataheaders
+Documentation:
+<https://seabass.gsfc.nasa.gov/wiki/metadataheaders>
 
 ### 1.2.1 Required Fields:
 investigators
@@ -20,7 +23,7 @@ experiment
 cruise
 station
 data_file_name
-documetns
+documents
 data_type
 calibration_files
 start_date
@@ -41,12 +44,12 @@ units
 
 
 ### 1.2.3 HPLC Specific
-https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments,%20HPLC
+<https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments,%20HPLC>
 /HPLC_lab (e.g., NASA_GSFC)
 /HPLC_lab_technician (e.g., Crystal_Thomas)
 
 ### 1.2.4 Ex Header
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ start ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------ start ------------------------------------
 /begin_header	
 /identifier_product_doi=10.5067/SeaBASS/EXPORTS/DATA001	
 /received=20190807	
@@ -80,7 +83,7 @@ https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments
 /units=none	none
 /end_header	
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ end ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------- end -------------------------------------
 
 ## 1.3 Data fields
 1. Individual and summed pigments (based on SeaBASS fields/SeaHARRE reports)
@@ -92,7 +95,7 @@ https://seabass.gsfc.nasa.gov/wiki/data_submission_special_requirements#Pigments
 Report any replicate filters separately
 Use the /below_detection_limit to mask any relevant values. It is distinct from the /missing value (e.g., /missing=-9999 vs. /below_detection_limit=-8888)
 SeaBASS files may only contain data from a single cruise or deployment. If necessary, sort and separate your data by cruise then create multiple SeaBASS files
-An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC spreadsheets into SeaBASS file format. However, please read its limitations and caveats carefully. https://seabass.gsfc.nasa.gov/hplc2sb/
+An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC spreadsheets into SeaBASS file format. However, please read its limitations and caveats carefully. <https://seabass.gsfc.nasa.gov/hplc2sb/>
 
 # 2.0 Start Code:
 ## Load Libraries
@@ -162,7 +165,7 @@ acknowledge <-
 ```
 
 ## All SeaBass Standard Fields 
-https://seabass.gsfc.nasa.gov/wiki/stdfields
+<https://seabass.gsfc.nasa.gov/wiki/stdfields>
 ```{r std-fields}
 sb_field <- 
   read_tsv(here("data", "metadata", "seabass_standard_fields_all.txt"),
@@ -597,7 +600,8 @@ hplc_final <-
                "{hd_def$type}", "{x$start_date}_{hd_def$suffix}.sb", 
                .sep = "_")
         
-        # fields and units standards: https://seabass.gsfc.nasa.gov/wiki/stdfields
+        # fields and units standards: 
+        #   <https://seabass.gsfc.nasa.gov/wiki/stdfields>
         # SeaBass standard fields
         field_nm <- c(hd_def$fields_extr$field_extr, sb_name$field_name)
         fields   <- str_c(field_nm, collapse = ",")
@@ -769,11 +773,15 @@ tryCatch({
   system2("perl", "-v", stdout = TRUE)
   invisible()
   }, error = function(e) {
-    stop(glue("Perl does not seem to be downloaded to your computer.\n", 
-              "To continue you will need to download perl at: ",
-              "https://www.perl.org/get.html\n",
+    stop(glue("The programming language \"Perl\" does not seem to be ", 
+              "downloaded to your computer.\n", 
+              "\"Perl\" is used to run the `fcheck.pl` script to check issues ", 
+              "with SeaBASS files (.sb).\n",
               "----\n",
-              "Perl is used to run the fcheck.pl script to check the .sb files"))
+              "To continue checking .sb files:\n",
+              "Download perl at: ",
+              "<https://www.perl.org/get.html>\n",
+              "----\n"))
     
       })
 
@@ -781,18 +789,41 @@ tryCatch({
 # <https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
 if (!dir_exists(here("fcheck")) | !file_exists(here("fcheck", "fcheck4.pl"))) {
   (function() {
-  dir_create(here("fcheck"))
+  
   url  <- "https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar"
-  file <- here("fcheck3", basename(url))
+  
+   message(
+    glue_col(
+      "The directory `fcheck` does not exists in your project repo.\n",
+      "If you type <ENTER> in consol, this will create the repo in ",
+      "{blue {here()}}\n",
+      "and download `fcheck` from {blue {url}}\n",
+      "<ESC> will cancel."))
+  
+   x <- menu(c("No, stop download", "Yes, continue download"))
+   
+   if (x != 2) return(message("Not downloading `fcheck`"))
+   
+ 
+  message("Creating `fcheck` folder and downloading `fcheck.pl`")
+    
+  dir_create(here("fcheck"))
+  file <- here("fcheck", basename(url))
   
   # download
-  download.file(url      = url,
-                destfile = file,
-                method   = "curl")
-  
+  message(glue_col("Downloading to {blue {here(\"fcheck\")}}"))
+  download.file(
+    url      = url,
+    destfile = file,
+    method   = "curl")
+
   # unzip
-  untar(tarfile = file, 
-        exdir   = here("fcheck"))
+  message(glue_col("Unzipping to {blue {here(\"fcheck\")}}"))
+  untar(
+    tarfile = file,
+    exdir   = here("fcheck"))
+         
+  message("Finished downloading and unzipping!")
   })()
   }
 
