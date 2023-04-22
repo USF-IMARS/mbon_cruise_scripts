@@ -126,6 +126,41 @@ loc <-
   here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
 ```
 
+# ---- Edit Header Information Here -----------------------
+```{r edit-chunk}
+prepared_by <- "Sebastian Di Geronimo" 
+contacts    <-
+  tribble(
+    ~invest,               ~email,             ~affil,
+    "Frank Muller-Karger", "carib@usf.edu",    "University of South_Florida",
+    "Daniel Otis",         "dotis@usf.edu",    "University of South_Florida",
+    "Digna Rueda Roa",     "druedaro@usf.edu", "University of South_Florida"
+) %>%
+  mutate(
+    across(
+      everything(),
+      (\(x) str_replace_all(x, "\\s", "_"))
+    )
+  )
+
+acknowledge <-
+  str_c("! ",
+    c(
+    "ACKNOWLEDGMENTS",
+    "Observations were contributed by the South Florida Marine Biodiversity",
+    "Observation Network (SFMBON) and the Southeast US Marine Biodiversity",
+    "Observation Network (SEUSMBON). This research was funded by the National",
+    "Oceanic and Atmospheric Administration (NOAA grant No. NA19NOS0120199);",
+    "National Oceanic and Atmospheric Administration and Gulf of Mexico Coastal",
+    "Ocean Observing System (NOAA-GCOOS Cooperative Agreement No. NA16NOS0120018);",
+    "National Aeronautics and Space Administration (NASA grants No. NNX14AP62A,",
+    "80NSSC20K0017, and 80NSSC22K1779)."
+    ),
+    collapse = "\n"
+  ) %>%
+  str_c(., "\n!")
+```
+
 ## All SeaBass Standard Fields 
 https://seabass.gsfc.nasa.gov/wiki/stdfields
 ```{r std-fields}
@@ -257,7 +292,7 @@ With duplicate samples, there needs to be added <field>_sd and <field>_bincount
 If no duplicate, set <field>_sd = -9999
 
 NOTE: this is done in the above chunk
-```{r}
+```{r calc-rep}
 # hplc_data <- 
 #   hplc_data %>%
 #   mutate(
@@ -342,41 +377,6 @@ NOTE: this is done in the above chunk
 
 ```
 
-# ---- edit here -----------------------
-```{r edit-chunk}
-prepared_by <- "Sebastian Di Geronimo" 
-contacts    <-
-  tribble(
-    ~invest,               ~email,             ~affil,
-    "Frank Muller-Karger", "carib@usf.edu",    "University of South_Florida",
-    "Daniel Otis",         "dotis@usf.edu",    "University of South_Florida",
-    "Digna Rueda Roa",     "druedaro@usf.edu", "University of South_Florida"
-) %>%
-  mutate(
-    across(
-      everything(),
-      (\(x) str_replace_all(x, "\\s", "_"))
-    )
-  )
-
-acknowledge <-
-  str_c("! ",
-    c(
-    "ACKNOWLEDGMENTS",
-    "Observations were contributed by the South Florida Marine Biodiversity",
-    "Observation Network (SFMBON) and the Southeast US Marine Biodiversity",
-    "Observation Network (SEUSMBON). This research was funded by the National",
-    "Oceanic and Atmospheric Administration (NOAA grant No. NA19NOS0120199);",
-    "National Oceanic and Atmospheric Administration and Gulf of Mexico Coastal",
-    "Ocean Observing System (NOAA-GCOOS Cooperative Agreement No. NA16NOS0120018);",
-    "National Aeronautics and Space Administration (NASA grants No. NNX14AP62A,",
-    "80NSSC20K0017, and 80NSSC22K1779)."
-    ),
-    collapse = "\n"
-  ) %>%
-  str_c(., "\n!")
-```
-
 ## Header Information
 TODO: change how list is created? 
   I don't know which one is easier to read and/or faster to run
@@ -390,7 +390,7 @@ TODO: change how list is created?
         x = <info>,
         y = <more info>
         )
-```{r default}
+```{r default-info}
 hd_def <- list()
 hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
@@ -473,7 +473,7 @@ rm(contacts, sb_field)
 ```
 
 
-```{r headr-skeleton}
+```{r header-skeleton}
 header_skeleton <-
   glue::glue(
     "/begin_header",
@@ -527,11 +527,9 @@ header_skeleton <-
   
   expression()
 ```
- Optional header \"/instrument_model\" not provided."                                             
-[14] "    Optional header \"/calibration_date\" not provided."                                             
-[15] "    Optional header \"/instrument_manufacturer\" not provided."          
-## Extract Header Information
-```{r header-info}
+
+
+```{r extract-header-info}
 hplc_w_head <-
   hplc_data %>%
   mutate(
@@ -570,7 +568,7 @@ hplc_w_head <-
 hplc_w_head
 ```
 
-```{r header-info}
+```{r create-header-info}
 # if want to see header output, set to true
 verb <- FALSE
 # verb <- TRUE
@@ -753,7 +751,7 @@ sb_data %>%
 # rm(read_sb_files)
 ```
 
-## FCHECK: Checking `.sb` Files Locally
+## FCHECK: Checking `.sb` Files Locally for Issues
 This is used by NASA to pre-check the .sb files before official submission 
 process. This requires the use of "Perl" <https://www.perl.org/get.html>.
 A quick download and it should work.
@@ -877,8 +875,6 @@ if (arg_ls$dt_rng) {
     rm(arg_ls)
 }
 ```
-
-
 
 /documents=
 checklist_hplc_EXPORTS-EXPORTSNA_SR1812.rtf,
