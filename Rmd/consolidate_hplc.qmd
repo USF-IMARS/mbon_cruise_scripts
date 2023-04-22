@@ -31,15 +31,18 @@ M-K 10-11 part1 report.xlsx
 M-K 10-11 part2 report.xlsx
 M-K_05-17_report.xlsx : mar16
 ```{r file-path}
+dir_hplc <- here("data", "raw", "hplc")
+
+
 # cal files
 cal_file <- 
-  here("data", "raw", "hplc") %>%
+  dir_hplc %>%
   dir_ls(regexp = "method") %>%
   basename()
 
 # pigment files
 file_pig <-
-    here("data", "raw", "hplc") %>%
+    dir_hplc %>%
     dir_ls(
            recurse = FALSE,
            type = "file",
@@ -309,14 +312,15 @@ e. Flash frozen in L/N (y/n):
 f. Long term storage conditions/temperature:
 
 ```{r checklist}
-# pacman::p_load_gh("trinker/textreadr")
 shelf(r2rtf)
-
-chk_ls <- 
-  here("data", "raw", "hplc") %>%
+dir_create(here(dir_hplc, "checklist"))
+           
+chk_ls <-
+  dir_hplc %>%
   dir_ls(regexp = "checklist",
          type = "file") %>%
-  sort()
+  str_subset(., "ignore", negate = TRUE) %>%
+  sort() 
 
 srch_terms <-
   tibble::tribble(
@@ -333,35 +337,43 @@ srch_terms <-
 hplc_data <-
   hplc_data %>%
   mutate(
-    cruise_id, data,
-    check_f = map_chr(base,
-                  ~ case_when(
-                    .default = NA_character_,
-                    any(str_detect(.x, "09-02")) ~ chk_ls[[1]],
-                    any(str_detect(.x, "10-11")) ~ chk_ls[[2]])
-                  ),
+    check_f = map_chr(
+      base,
+      function(x) {
+        base_num <- str_extract(x, "\\d{2}-\\d{2}")
+        chk_num  <- str_extract(chk_ls, "\\d{2}-\\d{2}")
+        chk_ls[which(base_num == chk_num)][1]
+      }
+    ),
     rtf_file = map2_chr(
       .x = check_f,
       .y = cruise_id,
       function(x, y) {
         if (!is.na(x)) {
-          dir_create(here(dirname(x), "checklist"))
+          # dir_create(here(dirname(x), "checklist"))
           here(
-            dirname(x), "checklist",
-            glue(str_extract(basename(x), "check.*hplc"),
-                 "_", y, ".rtf"))
-          } else {
-            NA_character_
-          }
-        }))
+            dir_hplc, "checklist",
+            glue(
+              str_extract(basename(x), "check.*hplc"),
+              "_", y, ".rtf"
+            )
+          )
+        } else {
+          NA_character_
+        }
+      }
+    )
+  )
 
 hplc_rtf <- hplc_data
 ```
+
 ```{r save-hplc-data}
 dir_create(here("data", "processed", "hplc"))
 hplc_data <- 
   select(hplc_data, -check_f) %>%
   mutate(rtf_file = basename(rtf_file))
+
 save(hplc_data,
       file =  here("data", "processed", "hplc", 
                    glue("consolidated_HPLC_{Sys.Date()}.RData")
@@ -372,6 +384,7 @@ save(hplc_data,
 ## Write New Checklist files (.rtf)
 ```{r write-checklist}
 ovrwrt <- FALSE
+
 for (i in seq(nrow(hplc_rtf))) {
   if (
     !is.na(hplc_rtf$check_f[[i]]) 
@@ -393,7 +406,6 @@ hplc_rtf %>%
   mutate(
     .keep = "used",
     cruise_id,
-    data,
     rtf_file,
     text = map(
       .x = rtf_file,
