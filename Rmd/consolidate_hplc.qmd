@@ -329,7 +329,7 @@ srch_terms <-
                                 "Cruise Name", NA,
                      "Filter type/pore size:", "Whatman GF/F, 0.7 um",
                            "Vacuum pressure:", "< 5 atm??",
-       "Replicates collected \\(# or no\\): ", NA,
+        "Replicates collected \\(# or no\\):", NA,
              "Flash frozen in L/N \\(y/n\\):", "y",
   "Long term storage conditions/temperature:", "-80 deg C Freezer"
   )
@@ -384,6 +384,9 @@ save(hplc_data,
 ## Write New Checklist files (.rtf)
 ```{r write-checklist}
 ovrwrt <- FALSE
+# ovrwrt <- TRUE
+
+ignore_files <- vector("character", nrow(hplc_rtf))
 
 for (i in seq(nrow(hplc_rtf))) {
   if (
@@ -396,13 +399,17 @@ for (i in seq(nrow(hplc_rtf))) {
     file_copy(hplc_rtf$check_f[[i]],
               hplc_rtf$rtf_file[[i]],
               overwrite = ovrwrt)
+    ignore_files[i] <- NA
   } else {
     cli_alert_info("Skipping Cruise ID: {hplc_rtf$cruise_id[[i]]}")
+    ignore_files[i] <- hplc_rtf$rtf_file[[i]]
+      
   }
 }
 
 hplc_rtf %>% 
-  filter(!is.na(rtf_file)) %>%
+  filter(!is.na(rtf_file) &
+         !rtf_file %in% ignore_files) %>%
   mutate(
     .keep = "used",
     cruise_id,
