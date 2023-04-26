@@ -1,10 +1,13 @@
 ---
 title: "Sample Map"
+author: "Sebastian Di Geronimo"
+date: "2023-01-05"
 format: html
-editor: visual
+editor: source
 ---
 
 # ---- Load Libraries ----
+
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -13,7 +16,7 @@ librarian::shelf(
   # broom # optional
   
   # added
-  ggrepel, ggtext, readxl, ggnnewscale,
+  ggrepel, ggtext, readxl, ggnewscale,
   
   # idk if needed
   fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot
@@ -35,9 +38,12 @@ cruise_id <-
     "WS23061", # TODO:  edit for cruise
     "March 2<sup>nd</sup> - 8<sup>th</sup>, 2023" # TODO: edit for dates
   )
+
+
 ```
 
 # ---- Load Locations ----
+
 ```{r load-locations}
 # sample
 loca <-  
@@ -62,7 +68,8 @@ zoo_loc <-
 
 ```
 
-# ---- 
+# ----
+
 ```{r data-manipulation}
 # define labels for map
 loc_labs <- 
@@ -104,7 +111,9 @@ loca2 <-
     lat = if_else(station == 68, 24.93, lat)
   )
 ```
+
 # additional noaa locations starting Feb 2023
+
 ```{r noaa-loc}
 noaa_loc <-
   loc_file %>%
@@ -151,6 +160,7 @@ noaa_loc[!(noaa_loc$station %in% loca2$station),]$station
 ```
 
 # Bounding box
+
 ```{r bound-box}
 # fixes issue with reading file?
 sf::sf_use_s2(FALSE)
@@ -232,7 +242,8 @@ world2 <-
 ```
 
 ```{r base-map}
-plt <- ggplot() +
+plt <-
+  ggplot() +
   geom_sf(data = world2) +
   scale_x_continuous(expand = c(0,0)) + 
   scale_y_continuous(expand = c(0,0), breaks = seq(24.5, 28.0, 0.5)) +
