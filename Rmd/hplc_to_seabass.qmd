@@ -994,7 +994,7 @@ if (!arg_ls$wrt_cld) {
         .f = left_join, 
         by = join_by(cruise_id),
         list(
-          # extract location for each calibration file
+          # ---- extract path to calibration files
           select(hplc_data, cruise_id, cal_file) %>%
           mutate(
             cal_file = map_chr(.x = cal_file,
@@ -1002,7 +1002,7 @@ if (!arg_ls$wrt_cld) {
                                  dir_ls(regexp = .x))
             ),
           
-          # extract cruise ID and path to individual seabass submission files
+          # ---- extract path to SeaBass submission files
           (here("data", "processed", "hplc") %>%
              dir_ls(regexp = "ind_file") %>%
              sort(decreasing = TRUE))[1] %>%
@@ -1012,7 +1012,7 @@ if (!arg_ls$wrt_cld) {
               cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
               ),
           
-          # extract location for each cruise checklist      
+          # ---- extract path to cruise checklist files
           here("data", "raw", "hplc", "checklist") %>%
             dir_ls() %>%
             tibble(chk_file = .) %>%
@@ -1020,7 +1020,7 @@ if (!arg_ls$wrt_cld) {
             cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
             ),
           
-          # extract map location for each cruise
+          # ---- extract path to map files
            (here("data", "processed", "hplc") %>%
              dir_ls(regexp = "map") %>%
              sort(decreasing = TRUE))[1] %>%
@@ -1194,4 +1194,24 @@ strcat('/east_longitude=',lon_e,'[DEG]');
 
 
 
+
+```{r}
+# temp <- 
+#   here(cloud_dir, "hplc", "seabass_submit") %>%
+#   dir_ls(type = "directory")
+# 
+# dir_copy(
+#   temp,
+#   here("data", "processed", "hplc", "submit", basename(temp))
+# )
+# 
+# here("data", "processed", "hplc", "submit") %>%
+#   dir_ls(regexp = "\\.sb$",
+#          recurse = TRUE) %>%
+#          file_delete()
+# 
+# here("data", "processed", "hplc", "submit")  %>%
+#   dir_tree()
+
+```
 
