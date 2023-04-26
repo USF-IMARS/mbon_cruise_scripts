@@ -487,7 +487,7 @@ hplc_data <-
     cal_file = map_chr(data, \(x) x$cal_files[[1]])
     )
 
-rm(contacts, sb_field)
+rm(contacts, sb_field, prepared_by)
 ```
 
 
@@ -989,50 +989,49 @@ if (!arg_ls$wrt_cld) {
     invisible(readline(""))
     
     # ---- pushing files to cloud directory
-    file_to_box <-
-      reduce(
-        .f = left_join, 
-        by = join_by(cruise_id),
-        list(
-          # ---- extract path to calibration files
-          select(hplc_data, cruise_id, cal_file) %>%
+    reduce(
+      .f = left_join, 
+      by = join_by(cruise_id),
+      list(
+        # ---- extract path to calibration files
+        select(hplc_data, cruise_id, cal_file) %>%
+        mutate(
+          cal_file = map_chr(.x = cal_file,
+                             ~ here("data", "raw", "hplc") %>%
+                               dir_ls(regexp = .x))
+          ),
+        
+        # ---- extract path to SeaBass submission files
+        (here("data", "processed", "hplc") %>%
+           dir_ls(regexp = "ind_file") %>%
+           sort(decreasing = TRUE))[1] %>%
+          dir_ls() %>%
+          tibble(sb_file = .) %>%
           mutate(
-            cal_file = map_chr(.x = cal_file,
-                               ~ here("data", "raw", "hplc") %>%
-                                 dir_ls(regexp = .x))
+            cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
             ),
-          
-          # ---- extract path to SeaBass submission files
-          (here("data", "processed", "hplc") %>%
-             dir_ls(regexp = "ind_file") %>%
-             sort(decreasing = TRUE))[1] %>%
-            dir_ls() %>%
-            tibble(sb_file = .) %>%
-            mutate(
-              cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
-              ),
-          
-          # ---- extract path to cruise checklist files
-          here("data", "raw", "hplc", "checklist") %>%
-            dir_ls() %>%
-            tibble(chk_file = .) %>%
+        
+        # ---- extract path to cruise checklist files
+        here("data", "raw", "hplc", "checklist") %>%
+          dir_ls() %>%
+          tibble(chk_file = .) %>%
+        mutate(
+          cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
+          ),
+        
+        # ---- extract path to map files
+         (here("data", "processed", "hplc") %>%
+           dir_ls(regexp = "map") %>%
+           sort(decreasing = TRUE))[1] %>%
+          dir_ls() %>%
+          tibble(map_file = .) %>%
           mutate(
-            cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
-            ),
-          
-          # ---- extract path to map files
-           (here("data", "processed", "hplc") %>%
-             dir_ls(regexp = "map") %>%
-             sort(decreasing = TRUE))[1] %>%
-            dir_ls() %>%
-            tibble(map_file = .) %>%
-            mutate(
-              cruise_id = str_extract(map_file, "((WS|WB|SV)[0-9].*)(?=_s)")
-              )
-          )
-        ) %>%
+            cruise_id = str_extract(map_file, "((WS|WB|SV)[0-9].*)(?=_s)")
+            )
+        )
+      ) %>%
     
-      # add cloud directory for each cruise
+      # ---- add cloud directory for each cruise
       mutate(cloud_dir = here(arg_ls$cloud_loc, cruise_id)) %>%
       
       nest(.by = c(cruise_id, cloud_dir)) %$%
