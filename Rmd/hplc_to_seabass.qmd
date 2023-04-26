@@ -124,10 +124,6 @@ conflict_prefer("select", "dplyr")
   sort(decreasing = TRUE))[1] |>
   load() 
 
-# hplc_data <- 
-#   hplc_data %>%
-#   select(-map_file)
-
 # location to save files
 loc <- 
   here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
