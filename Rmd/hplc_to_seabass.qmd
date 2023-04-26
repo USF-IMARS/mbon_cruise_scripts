@@ -124,6 +124,10 @@ conflict_prefer("select", "dplyr")
   sort(decreasing = TRUE))[1] |>
   load() 
 
+# hplc_data <- 
+#   hplc_data %>%
+#   select(-map_file)
+
 # location to save files
 loc <- 
   here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
@@ -131,7 +135,12 @@ loc <-
 
 # ---- Edit Header Information Here -----------------------
 ```{r edit-chunk}
-prepared_by <- "Sebastian Di Geronimo" 
+prepared_by <- 
+  list(
+    name  = "Sebastian Di Geronimo",
+    email = "sebastian15@usf.edu"
+  )
+                    
 contacts    <-
   tribble(
     ~invest,               ~email,             ~affil,
@@ -399,8 +408,13 @@ hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
 hd_def$affil    <- str_c(contacts$affil, collapse = ",")
 hd_def$expri    <- "SFMBON"
-hd_def$hplc_lab <- "NASA_GSFC"	
-hd_def$lab_tech <- "Crystal_Thomas"	
+hd_def$expri_old <-
+  glue(
+    "SFP,",
+    "Sanctuaries_Marine_Biodiversity_Observation_Network_(MBON)"
+  )
+hd_def$hplc_lab    <- "NASA_GSFC"	
+hd_def$lab_tech    <- "Crystal_Thomas"	
 hd_def$lab_instr   <- "Agilent"	
 hd_def$lab_instr_m <- "RR1200"	
 
@@ -424,7 +438,8 @@ hd_def$comments <-
   glue(.sep = "\n",
        "!",
        "! COMMENTS",
-       "! Prepared by: {prepared_by}",
+       "! Prepared by: {prepared_by$name}",
+       "! Email: {prepared_by$email}",
        "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
        "!",
        "! Samples were processed at NASA GSFC by Crystal Thomas",
@@ -485,12 +500,14 @@ header_skeleton <-
     "/affiliations={hd_def$affil}",
     "!/affiliations=University of South Florida, MBON, SFMBON, SE US MBON",
     "/contact={hd_def$contact}",
-    "/experiment={hd_def$expri}",
+    "/experiment={hd_def$expri}", 
+    "!/experiment={hd_def$expri_old}",
     "/cruise={cruise_id}",
     "/station={hd_def$stn}",
     "/data_file_name={file_name}", # current name of data file, self-reference
     # "/documents={hd_def$docs}",    # additional info about experiment and cruise
-    "/documents={doc}",    # additional info about experiment and cruise
+    "/documents={doc},{map_file}",    # additional info about experiment and cruise
+    # "/documents={doc}",    # additional info about experiment and cruise
     "/data_type={hd_def$type}",
     "/calibration_files={cal_file}",
     "/start_date={start_date}",
@@ -584,10 +601,11 @@ hplc_final <-
      heads = pmap(
       .progress = TRUE,
       .l = list(data, header_info, cruise_id, sb_name, precise_comm, cal_file,
-                doc),
+                doc, map_file),
       verb = verb,
       
-      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc, verb) {
+      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc, 
+               map_file, verb) {
         # remove spaces in original base name 
         fbase <- 
           str_replace_all(unique(y$base), " ", "_") %>%
@@ -660,6 +678,8 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
             sep  = "",
             file = f)
         close(f)
+        
+        
         
         x %>%
           # convert all to characters
@@ -877,7 +897,7 @@ arg_ls <-
   )
 
 if (arg_ls$dt_rng) {
-  dt_rng <- 
+  dt_rng <-
     sb_data %>%
     mutate(
       .keep = "none",
@@ -888,19 +908,23 @@ if (arg_ls$dt_rng) {
       .by = cruise,
       num = n(),
       # date_min = as_date(date_min, format = ""),
-      date_max = max(date)
+      date_max = max(date),
+      date_min = min(date)
     ) %>%
     arrange(date_max) %>%
     mutate(
       .before = date_max,
-      date_min = str_extract(cruise, "\\d+"),
-      date_min = as_date(date_min, format = "%y%j"),
-      date_min = format(date_min, "%b %d"),
-      date_max = format(date_max, "%b %d %Y")
+      date_diff = date_max - date_min,
+      date_min_cr = str_extract(cruise, "\\d+"),
+      date_min_cr = as_date(date_min_cr, format = "%y%j"),
+      date_min_cr = format(date_min_cr, "%b %d"),
+      date_max = format(date_max, "%b %d %Y"),
       ) %>%
-    unite(col = "date_range", date_min, date_max, sep = " - ") 
+    unite(col = "date_range", date_min_cr, date_max, sep = " - ") %>%
+    relocate(date_diff, .after = date_range) %>%
+    rename("date_min_of_samples" = date_min)
   
-  df_rng
+  dt_rng
   
   if (arg_ls$dt_sv) {
     write_csv(
@@ -913,15 +937,8 @@ if (arg_ls$dt_rng) {
       glue_col("Removing `{red arg_ls}` because ",
                "`{red arg_ls$dt_rng}` = `{red {arg_ls$dt_rng}}`"))
     rm(arg_ls)
-}
+  }
 ```
-
-/documents=
-checklist_hplc_EXPORTS-EXPORTSNA_SR1812.rtf,
-EXPORTS_Roesler_08-06_report_rev2.xlsx,
-EXPORTS_pump_log_data_work_up_Sally_Ride_August_2018_QMA_SUPOR_organics.xls,
-EXPORTSNP_SR1812_Roesler_sample_log_V2.xlsx,
-R2R_ELOG_SR1812_FINAL_EVENTLOG_20180913_022931.xlsx
 
 
 ## Copy files to box
@@ -1001,7 +1018,17 @@ if (!arg_ls$wrt_cld) {
             tibble(chk_file = .) %>%
           mutate(
             cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
-            )
+            ),
+          
+          # extract map location for each cruise
+           (here("data", "processed", "hplc") %>%
+             dir_ls(regexp = "map") %>%
+             sort(decreasing = TRUE))[1] %>%
+            dir_ls() %>%
+            tibble(map_file = .) %>%
+            mutate(
+              cruise_id = str_extract(map_file, "((WS|WB|SV)[0-9].*)(?=_s)")
+              )
           )
         ) %>%
     
@@ -1115,6 +1142,16 @@ if (arg_ls$local | arg_ls$cloud | arg_ls$run) {
 rm(arg_ls)
 ```
 
+
+example documents from collin roesler:
+/documents=
+checklist_hplc_EXPORTS-EXPORTSNA_SR1812.rtf,
+EXPORTS_Roesler_08-06_report_rev2.xlsx,
+EXPORTS_pump_log_data_work_up_Sally_Ride_August_2018_QMA_SUPOR_organics.xls,
+EXPORTSNP_SR1812_Roesler_sample_log_V2.xlsx,
+R2R_ELOG_SR1812_FINAL_EVENTLOG_20180913_022931.xlsx
+
+example from enrique:
 x  hdr = {'/begin_header';
   strcat('/received=',date_received);
   '/investigators=Frank_Muller-Karger,Enrique_Montes';
