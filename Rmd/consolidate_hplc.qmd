@@ -362,11 +362,186 @@ hplc_data <-
           NA_character_
         }
       }
-    )
+    ),
+    map_file = glue("{cruise_id}_sample_map.jpeg")
   )
 
 hplc_rtf <- hplc_data
 ```
+
+
+# Map Sample Points
+```{r plt_data, fig.width=8.5, fig.height=11}
+# scripts to download and create maps
+source(here("scripts", "map_files_dwnlod.R"))
+
+# location of map
+map_loc <- 
+  here("data", "map_shp")
+
+# extract columns to map data points
+hplc_gps <- 
+ hplc_data %>%
+  select(-c(names:(contains("map") - 1))) %>%
+  hoist(data, "station", "lat", "lon", "depth", "date") %>%
+  select(-data) %>%
+  unnest_longer(col = c(station, lat, lon, depth, date)) 
+
+# extract date range of samples per cruise for title
+date_range <-
+  hplc_gps %>%
+  summarise(
+    .by       = cruise_id,
+    min_date  = min(date, na.rm = TRUE),
+    max_date  = max(date, na.rm = TRUE),
+    diff_date = max_date - min_date
+  ) %>%
+  mutate(
+    .keep = "none",
+    cruise_id,
+    map_title = str_c(
+      cruise_id, ": ",
+      format(min_date, "%b %d %Y"),
+      " - ",
+      format(max_date, "%b %d %Y")
+    )
+  )
+
+# add labels to points for duplicates and multiple depths
+hplc_gps <- 
+  hplc_gps %>%
+  summarise(
+    .by = c(cruise, cruise_id, station, depth, map_file),
+      lat = median(lat, na.rm = TRUE),
+      lon = median(lon, na.rm = TRUE),
+      dupes = n(),
+  ) %>%
+  mutate(
+    .by = c(cruise, cruise_id, station),
+    depth_num = n(),
+    labels = case_when(
+      dupes > 1 & depth_num > 1 ~ "Duplicates and Multiple Depth",
+      dupes > 1 ~ "Duplicates",
+      depth_num > 1 ~ "Multiple Depths",
+      .default = "Single"
+    )
+  ) %>%
+  mutate(
+    labels = forcats::fct_infreq(labels)
+  ) %>%
+  drop_na(station:lon) %>%
+  distinct(cruise, station, .keep_all = TRUE)
+
+# get largest spatial extent for all cruises +/- 0.5 deg 
+extnt_all <-
+  summarise(
+    hplc_gps,
+    across(
+      .cols = c(lon, lat),
+      .fns = list(
+        min = (\(x) min(x, na.rm = TRUE) - 0.5),
+        max = (\(x) max(x, na.rm = TRUE) + 0.5)
+      ),
+      .names = "{.col}_{.fn}"
+    )
+  ) %>%
+  magrittr::set_names(c("xmin", "xmax","ymin","ymax")) %>%
+  c(recursive = TRUE) 
+
+# nest all cruises station locations
+hplc_gps <-
+  hplc_gps %>%
+  nest(.by = c(cruise, cruise_id, map_file)) %>%
+  mutate(
+    extnt_cr = map(
+      .x = data,
+      function(x) {
+        x %>%
+          # get min and max of head per cruise header info
+          summarise(
+            across(
+              .cols = c(lon, lat),
+              .fns  = list(
+                min = (\(x) min(x, na.rm = TRUE) - 0.1),
+                max = (\(x) max(x, na.rm = TRUE) + 0.1)
+              ),
+              .names = "{.col}_{.fn}"
+            )
+          ) %>%
+          mutate(
+            across(
+              where(is.numeric),
+              (\(x) round(x, 3))
+            )
+          )
+      }
+    )) %>%
+  left_join(
+    date_range, by = "cruise_id"
+  )
+
+# download topography (.nc) and coastline (.shp)
+world_download(
+  path_land = map_loc,
+  path_topo = map_loc,
+  extent    = extnt_all
+)
+
+# load downloaded map objects
+map_obj <- load_map_obj(
+  map_loc,
+  map_loc,
+  c(
+    xmin = -90, # West
+    xmax = -75, # East
+    ymin = 20, # South
+    ymax = 35 # North
+  )
+)
+
+base_plt       <- base_map_plot(map_obj$coast_topo, map_obj$bathy, extnt_all)
+hplc_inset_map <- map_inset(map_obj$coast_topo, map_obj$state, extnt_all)
+
+# create final maps
+hplc_gps <-
+  hplc_gps %>%
+  mutate(
+    plt = pmap(
+      list(data, cruise_id, map_title, extnt_cr),
+      .f = map_plot,
+      .base_plt = base_plt,
+      .inset = hplc_inset_map
+    )
+  )
+
+# save final maps
+if (FALSE) {
+  hplc_gps %$%
+    walk2(
+      .x = map_file,
+      .y = plt,
+      function(x, y) {
+        map_dir <-
+          here(
+            "data", "processed", "hplc",
+            glue("map_{Sys.Date()}")
+          )
+        dir_create(map_dir)
+
+        save_plot(
+          filename    = here(map_dir, x),
+          plot        = y,
+          base_height = 11,
+          base_width  = 8.5,
+          dpi         = 600,
+          units       = "in",
+          device      = "jpeg"
+        )
+      }
+    )
+}
+```
+
 
 ```{r save-hplc-data}
 dir_create(here("data", "processed", "hplc"))
@@ -523,6 +698,8 @@ xlsx_comm %>%
   } else {.}
     }
 ```
+
+
 
 
 # Delete:
