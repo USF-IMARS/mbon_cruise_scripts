@@ -209,7 +209,6 @@ world_download <- function(
       # delete temp folder and files
       unlink(temp)
     }
-    
   } 
   
   return(invisible(NULL))
@@ -325,7 +324,9 @@ load_map_obj <- function(
           st_bbox(
             .extent
           )
-        )
+        ) %>%
+        suppressMessages() %>%
+        suppressWarnings()
     }
   }
   # ---- bathymetry
@@ -471,7 +472,8 @@ base_map_plot <- function(
 map_inset <- function(
     .topo, 
     .state_line, 
-    .extent) {
+    .extent,
+    add_tol = 0.4) {
   
   # ---- plot
   ggplot() +
@@ -483,10 +485,10 @@ map_inset <- function(
     # create red box on map to show sampling locations
     geom_rect(
       aes(
-        xmin = .extent[1] - 0.4, # West
-        xmax = .extent[2] - 0.4, # East
-        ymin = .extent[3] - 0.4, # South
-        ymax = .extent[4] - 0.4  # North
+        xmin = .extent[1] - add_tol, # West
+        xmax = .extent[2] + add_tol, # East
+        ymin = .extent[3] - add_tol, # South
+        ymax = .extent[4] + add_tol  # North
       ),
       color = "red",
       fill  = NA
