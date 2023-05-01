@@ -3,66 +3,68 @@
 ####              Create Process Log Sheet              ####
 #                                                          #
 ##%######################################################%##
+#'@title Create Process Log Sheet
+#'
+#' @description 
+#' This function is used to create process log sheets when running filter pad
+#' samples or CDOM samples in the lab. This is cruise specific
+#'
+#' @param .meta The metadata for the specific cruise of interest.
+#' 
+#' @param cal Calibration information for the Turner Triology
+#' 
+#' @param cruise Cruise ID number (i.e WS19266)
+#' @param sht_nm The name of two sheets to be created. 
+#' @param inst_nm The name of the instrument used (default: "PElam850+")
+#' @param creator Who create these Excel Log Sheets
+#' 
+#' @return An excel spreadsheet with the cruise name.
+#' 
+#' @note 
+#' A few equations used to calculate [Chlorophyll-a]: \cr
+#' 'No Acid' ratio: \cr\cr
+#' \eqn{
+#' \begin{aligned}
+#' & \text{Excel Formula} =IF(R>0,((Q/R)+(S/T))/2,-999) \\
+#' & na_{cl} = \text{No Acid Low Calibration (Q)} \\ 
+#' & na_l = \text{No Acid Low (R)} \\
+#' & na_{ch} = \text{No Acid High Calibration (S)} \\ 
+#' & na_h = \text{No Acid High (T)} \\
+#' \end{aligned}
+#' } \cr
+#' 
+#' \deqn{\text{'No Acid' ratio} = 
+#' \frac {(na_{cl} /na_l) + (na_{ch} / na_h)} {2}
+#' } \cr
+#' 
+#' [Chl a] (mg m-3): \cr\cr
+#' \eqn{
+#' \begin{aligned}
+#' & \text{Excel Formula} =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999) \\
+#' & na_s = \text{'No Acid' Slope (O)} \\
+#' & na = \text{'No Acid' Rb (L)} \\
+#' & na_b = \text{'No Acid' blank (N)} \\
+#' & na_{lh} = \text{'No Acid' ratio (U)} \\
+#' & na_{int} = \text{'No Acid'  y-int (P)} \\
+#' & vol_{me} = \text{Volume methanol (ml) (K)} \\
+#' & vol_{sw} = \text{Volume seawater (ml) (J)} \\
+#' \end{aligned}
+#' }
+#' 
+#' \deqn{\text{[Chl-a]} = (na_s * ((na - na_b) * na_{lh})) + na_{int}) * 
+#' (vol_{me} / vol_{sw})
+#' } \cr
+#' 
+#' If exist duplicates are averaged together and their standard deviations.
+#' 
+#' @examples
+#' NA
+#' 
 process_log_sheet <- function(.meta, cal, cruise,
                               sht_nm = c("metadata", "Chl-a"), 
                               inst_nm = "PElam850+",
                               creator = "Sebastian Di Geronimo") {
-  #'@title Create Process Log Sheet
-  #'
-  #' @description 
-  #' This function is used to create process log sheets when running filter pad
-  #' samples or CDOM samples in the lab. This is cruise specific
-  #'
-  #' @param .meta The metadata for the specific cruise of interest.
-  #' 
-  #' @param cal Calibration information for the Turner Triology
-  #' 
-  #' @param cruise Cruise ID number (i.e WS19266)
-  #' @param sht_nm The name of two sheets to be created. 
-  #' @param inst_nm The name of the instrument used (default: "PElam850+")
-  #' @param creator Who create these Excel Log Sheets
-  #' 
-  #' @return An excel spreadsheet with the cruise name.
-  #' 
-  #' @note 
-  #' A few equations used to calculate [Chlorophyll-a]: \cr
-  #' 'No Acid' ratio: \cr\cr
-  #' \eqn{
-  #' \begin{aligned}
-  #' & \text{Excel Formula} =IF(R>0,((Q/R)+(S/T))/2,-999) \\
-  #' & na_{cl} = \text{No Acid Low Calibration (Q)} \\ 
-  #' & na_l = \text{No Acid Low (R)} \\
-  #' & na_{ch} = \text{No Acid High Calibration (S)} \\ 
-  #' & na_h = \text{No Acid High (T)} \\
-  #' \end{aligned}
-  #' } \cr
-  #' 
-  #' \deqn{\text{'No Acid' ratio} = 
-  #' \frac {(na_{cl} /na_l) + (na_{ch} / na_h)} {2}
-  #' } \cr
-  #' 
-  #' [Chl a] (mg m-3): \cr\cr
-  #' \eqn{
-  #' \begin{aligned}
-  #' & \text{Excel Formula} =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999) \\
-  #' & na_s = \text{'No Acid' Slope (O)} \\
-  #' & na = \text{'No Acid' Rb (L)} \\
-  #' & na_b = \text{'No Acid' blank (N)} \\
-  #' & na_{lh} = \text{'No Acid' ratio (U)} \\
-  #' & na_{int} = \text{'No Acid'  y-int (P)} \\
-  #' & vol_{me} = \text{Volume methanol (ml) (K)} \\
-  #' & vol_{sw} = \text{Volume seawater (ml) (J)} \\
-  #' \end{aligned}
-  #' }
-  #' 
-  #' \deqn{\text{[Chl-a]} = (na_s * ((na - na_b) * na_{lh})) + na_{int}) * 
-  #' (vol_{me} / vol_{sw})
-  #' } \cr
-  #' 
-  #' If exist duplicates are averaged together and their standard deviations.
-  #' 
-  #' @examples
-  #' NA
+
 
   # ========================================================================== #
   # ---- Load Libraries ----
