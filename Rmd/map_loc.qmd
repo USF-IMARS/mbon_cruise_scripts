@@ -7,7 +7,7 @@ editor: source
 ---
 
 # ---- Load Libraries ----
-
+## Load Libraries
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -19,7 +19,8 @@ librarian::shelf(
   ggrepel, ggtext, readxl, ggnewscale,
   
   # idk if needed
-  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot
+  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot,
+  # datefixR
 )
 
 library("conflicted")
@@ -27,23 +28,47 @@ library("conflicted")
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
 
-# file with locations
+# scripts to download and create maps
+source(here("scripts", "map_files_dwnlod.R"))
+
+# fixes issue with reading raster file using decimal degrees
+sf::sf_use_s2(FALSE)
+```
+
+## File Path and Cruise ID
+```{r path-cruise-id}
+# ---- Edit Cruise Info ----
+cruise_id <-
+  tibble(
+    cruise_id   = "WS23XXX",      # Here
+    start_dates = "May 18 2023",  # Here
+    end_dates   = "May 25 2023"   # Here
+    ) %>%
+    mutate(
+      label = map2_chr(
+        .x = start_dates, 
+        .y = end_dates, 
+        date_label
+        )
+    ) 
+
+# paths to data location files
 loc_file <- 
   here("data", "metadata") %>%
   fs::dir_ls(regexp = "^[^~]*locations.*xlsx")
 
-# ---- Edit Cruise Info ----
-cruise_id <- 
-  c(
-    "WS23061", # TODO:  edit for cruise
-    "March 2<sup>nd</sup> - 8<sup>th</sup>, 2023" # TODO: edit for dates
-  )
+# path to base map files
+map_loc <- here("data", "map_shp")
 
-
+# spatial extent
+exnt <- c(xmin = -84, # West
+          xmax = -80, # East
+          ymin = 24,  # South
+          ymax = 28.5 # North 
+        )
 ```
 
-# ---- Load Locations ----
-
+## Load Data Locations (Lat/Lon)
 ```{r load-locations}
 # sample
 loca <-  
@@ -52,14 +77,14 @@ loca <-
                     .name_repair = janitor::make_clean_names,
                     )
 
-# all
+# NOAA 
 all_loc <- 
   loc_file %>%
   read_xlsx(sheet = 2, 
             .name_repair = janitor::make_clean_names) %>%
   filter(!(station %in% loca$station))
 
-# zoo
+# zooplankton
 zoo_loc <- 
   loc_file %>%
   read_xlsx(sheet = 3, 
@@ -68,8 +93,7 @@ zoo_loc <-
 
 ```
 
-# ----
-
+## Match NOAA and IMaRS Locations
 ```{r data-manipulation}
 # define labels for map
 loc_labs <- 
@@ -112,8 +136,7 @@ loca2 <-
   )
 ```
 
-# additional noaa locations starting Feb 2023
-
+## Additional noaa locations starting Feb 2023
 ```{r noaa-loc}
 noaa_loc <-
   loc_file %>%
@@ -139,7 +162,7 @@ noaa_loc <-
 loca2[loca2$station %in% noaa_loc$station,]
 noaa_loc[!(noaa_loc$station %in% loca2$station),]$station
 
-# addtional locations
+# addtional locations ----
 # add_loc <- paste("BG7", "CW7", "ROME5", sep = "|")
 
 # noaa_loc_add <- 
@@ -159,169 +182,122 @@ noaa_loc[!(noaa_loc$station %in% loca2$station),]$station
   
 ```
 
-# Bounding box
-
-```{r bound-box}
-# fixes issue with reading file?
-sf::sf_use_s2(FALSE)
-
-# path to map files on local computuer
-path <- here("D:/zooplankton.test", "data", "map")
-
-
-
-# bounding box
-exnt <- c(xmin = -84, # West
-          xmax = -80, # East
-          ymin = 24,  # South
-          ymax = 28.5 # North 
-        )
-```
+# ---- Base Map Data ----
 
 Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
 
 Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 
 ```{r download-map}
-if (!dir_exists(path)) {
-  # only useful if don't have access to map file
-  dir_create(path)
-  
-  
-  if (!file.exists(here(path,"etopo1.nc"))) {
-    message("Getting Topography Data")
-    # ERDDAP extract and save
-    griddap(
-      info('etopo180'),
-      latitude  = exnt[3:4],
-      longitude = exnt[1:2],
-      stride    = c(1, 1),
-      fields    = 'altitude',
-      store     = disk(path)
-    )
-    
-    # Rename file 
-    file_move(dir_ls(path, regexp = "\\.nc$"),
-              here("data","map", "etopo1.nc"))
-    
-    # rm(etopo)
-  }
-  
-  coast <- 
-    dir_ls(path    = path,
-           recurse = TRUE ,
-           regexp  = "GSHHS_h_L1.shp")
-  
-  if (rlang::is_empty(coast)) {
-    message("Getting Coastline Data")
-    temp        <- tempfile()
-        download.file(
-            "ftp://ftp.soest.hawaii.edu/gshhg/gshhg-shp-2.3.7.zip",
-            temp,
-            method = "libcurl",
-            mode   = "wb"
-        )
-        unzip(exdir = path, temp)
-        unlink(temp)
-        rm(temp)
-  }
-  
-  rm(coast)
-}
+# download topography (.nc) and coastline (.shp)
+world_download(
+  path_land  = map_loc,
+  path_topo  = map_loc,
+  extent     = exnt,
+  use_suffix = NULL
+)
 ```
 
+## Load Base Maps for Plotting 
 ```{r load-map-files}
 # select and read coastline file from GSHHS then crop
-world2 <- 
-  dir_ls(path    = path,
-         recurse = TRUE ,
-         regexp  = "GSHHS_h_L1.shp") %>%
-  st_read(.) %>%
-  st_crop(., st_bbox(exnt))
-
+# load maps
+map_obj <-
+  load_map_obj(
+    .map_coast = map_loc,
+    .map_state = NULL,
+    .map_bath  = map_loc,
+    .map_file  = "etopo1.nc",
+    .extent    = exnt
+  )
 ```
 
+## Plot Base Map
 ```{r base-map}
-plt <-
-  ggplot() +
-  geom_sf(data = world2) +
-  scale_x_continuous(expand = c(0,0)) + 
-  scale_y_continuous(expand = c(0,0), breaks = seq(24.5, 28.0, 0.5)) +
-  coord_sf(xlim = exnt[1:2], ylim = exnt[3:4]) +
-  labs(
-    x = NULL,
-    y = NULL,
-    # shape = "Station",
-    # fill = "Station"
-    ) +
-  theme_bw() +
-  theme(text = element_text(family = "serif", size = 10),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank()
-        # legend.position = c(0.85, 0.25),
-        # legend.title = element_text(size = 10), 
-        # legend.text = element_text(size = 15),
-        # legend.key.size = unit(0.6, "cm"),
-        # legend.margin=margin(c(0.1,0.1,0.1,0.1), unit='cm')
-        )
-# plt
+base_plt <- 
+base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
+base_plt
 ```
 
+# ---- Plot Locations ----
 ```{r add-stations, fig.width=8.5, fig.height=11}
 set.seed(123)
-imars_map <- plt +
-  annotate(geom = "richtext", y = 28, x = -81.5, 
-           label = glue("{cruise_id[[1]]} (IMaRS)"),
-           size = 10,
-           fontface = 'bold',
-           fill = NA,
-           label.color = NA,
-           ) +
-  annotate(geom = "richtext", y = 27.85, x = -81.5, 
-           label = cruise_id[[2]],
-           size = 7,
-           fontface = 'bold',
-           fill = NA,
-           label.color = NA) +
+imars_map <-
+  base_plt +
+  # ---- Cruise ID
+  annotate(
+    geom        = "richtext", 
+    x           = -81.5,
+    y           = 28,
+    # label       = glue("{cruise_id[[1]]} (IMaRS)"),
+    label       = glue("{cruise_id$cruise_id[1]} (IMaRS)"),
+    size        = 10,
+    fontface    = "bold",
+    fill        = NA,
+    label.color = NA,
+  ) +
+  # ---- Cruise Dates
+  annotate(
+    geom        = "richtext", 
+    x           = -81.5,
+    y           = 27.85, 
+    # label       = cruise_id[[2]],
+    label       = cruise_id$label[1],
+    size        = 7,
+    fontface    = "bold",
+    fill        = NA,
+    label.color = NA
+  ) +
+  # ---- NOAA Locations
   geom_point(
-    # data = all_loc, 
-    data = noaa_loc, 
-    aes(x = lon, y = lat),
+    data  = noaa_loc,
+    aes(x = lon, 
+        y = lat),
     shape = 3,
     color = "gray",
-    size = 1
+    size  = 1
   ) +
   # I may want to add labels for all none sampled locations
   # geom_text_repel(data = all_loc, aes(x = lon, y = lat, label = station),
-  #                size = 2, 
+  #                size = 2,
   #                # hjust = -1,
   #                color = "gray"
   #                # vjust = 1
   #                ) +
+  # ---- Sample Locations
   geom_point(
-    data = loca2, aes(x = lon, y = lat, color = labl), 
-    # show.legend = FALSE
+    data = loca2,
+    aes(x = lon, 
+        y = lat, 
+        color = labl),
   ) +
- geom_text_repel(data = loca2, aes(x = lon, y = lat, label = station),
-                 size = 2.5, 
-                 hjust = 0,
-                 # direction = "both",
-                 # force_pull = 5,
-                 # force = 0.5
-                 # vjust = 1
-                 ) +
-  
+  geom_text_repel(
+    aes(x = lon, 
+        y = lat, 
+        label = station),
+    data  = loca2,
+    size  = 2.5,
+    hjust = 0,
+  ) +
+
   scale_color_manual(
     name   = "Samples",
-    values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF",  "#BA55D3")) +
+    values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF", "#BA55D3")
+  ) +
   labs(color = NULL) +
+
+  # ---- Zooplankton
   new_scale_color() +
-  geom_point(data  = zoo_loc, 
-             aes(x     = lon, 
-                 y     = lat, 
-                 color = labs),
-             shape = 5, 
-             size  = 2) +
+  geom_point(
+    data  = zoo_loc,
+    aes(
+      x = lon,
+      y = lat,
+      color = labs
+    ),
+    shape = 5,
+    size  = 2
+  ) +
   labs(color = "Zooplankton Mesh Size") +
   theme(
     legend.position = c(0.2, 0.14),
@@ -330,15 +306,25 @@ imars_map <- plt +
   )
 imars_map
 ```
-
+## Save Map
 ```{r save-map, fig.width=8.5, fig.height=11}
+file_name <-
+  here(
+    "data", "metadata", "cruise_map",
+    glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")
+  )
+
 if (FALSE) {
   fs::dir_create(here("data", "metadata", "cruise_map"))
-  ggsave(here("data", "metadata", "cruise_map",
-              glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")),
-         plot   = imars_map,
-         dpi    = 900,
-         width  = 8.5,
-         height = 11)
-} 
+  ggsave(
+    here(
+      "data", "metadata", "cruise_map",
+      glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")
+    ),
+    plot = imars_map,
+    dpi = 900,
+    width = 8.5,
+    height = 11
+  )
+}
 ```
