@@ -98,7 +98,7 @@ SeaBASS files may only contain data from a single cruise or deployment. If neces
 An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC spreadsheets into SeaBASS file format. However, please read its limitations and caveats carefully. <https://seabass.gsfc.nasa.gov/hplc2sb/>
 
 # 2.0 Start Code:
-## Load Libraries
+## 2.1 Load Libraries
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -119,17 +119,21 @@ conflict_prefer("select", "dplyr")
 
 ```{r load-hplc}
 # load consolidated HPLC by cruise
-(dir_ls(here("data", "processed", "hplc"),
+dir_ls(here("data", "processed", "hplc"),
        regexp = "RData") %>%
-  sort(decreasing = TRUE))[1] |>
+  sort(decreasing = TRUE)  %>%
+  first() |>
   load() 
+
+hplc_data %<>%
+  filter(str_detect(cruise_id, "WS18285|WS21032"))
 
 # location to save files
 loc <- 
   here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
 ```
 
-# ---- Edit Header Information Here -----------------------
+## 2.2 ---- Edit Header Information Here -----------------------
 ```{r edit-chunk}
 prepared_by <- 
   list(
@@ -169,7 +173,7 @@ acknowledge <-
   str_c(., "\n!")
 ```
 
-## All SeaBass Standard Fields 
+## 2.3 All SeaBass Standard Fields 
 <https://seabass.gsfc.nasa.gov/wiki/stdfields>
 ```{r std-fields}
 sb_field <- 
@@ -385,7 +389,7 @@ NOTE: this is done in the above chunk
 
 ```
 
-## Header Information
+## 2.4 Header Information
 TODO: change how list is created? 
   I don't know which one is easier to read and/or faster to run
   instead of: 
@@ -684,7 +688,9 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
             across(everything(), \(x) as.character(x)), # convert to char
             across(everything(), \(x) case_when(
                     is.na(x) ~ "-9999", # chg NA to -9999
-                    .default = x))
+                    .default = x)),
+            # make sure no spaces exists in data before saving
+            across(everything(),\(x) str_replace_all(x, "\\s", "")) 
            ) %>%
 
           # filter out rows where no data exists
@@ -701,7 +707,7 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
       )
 ```
 
-# Read SeaBass HPLC Files and Check for Issues
+# 3.0 Read SeaBass HPLC Files and Check for Issues
 All columns are read as characters to check for any issues with the data
 ```{r read-seabass}
 # function to read seasbass hplc files and sort through head, and data
@@ -753,7 +759,8 @@ ind_f_dir <-
 
 # read seabass hplc files
 sb_data <-
-  ind_f_dir[1] %>%
+  ind_f_dir  %>%
+  first() %>%
   dir_ls() %>%
   tibble(file = .) %>%
   # slice(1) %>%
@@ -998,14 +1005,15 @@ if (!arg_ls$wrt_cld) {
           ),
         
         # ---- extract path to SeaBass submission files
-        (here("data", "processed", "hplc") %>%
-           dir_ls(regexp = "ind_file") %>%
-           sort(decreasing = TRUE))[1] %>%
-          dir_ls() %>%
-          tibble(sb_file = .) %>%
-          mutate(
-            cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
-            ),
+        here("data", "processed", "hplc") %>%
+        dir_ls(regexp = "ind_file") %>%
+        sort(decreasing = TRUE) %>%
+        first() %>%
+        dir_ls() %>%
+        tibble(sb_file = .) %>%
+        mutate(
+          cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
+          ),
         
         # ---- extract path to cruise checklist files
         here("data", "raw", "hplc", "checklist") %>%
@@ -1016,14 +1024,15 @@ if (!arg_ls$wrt_cld) {
           ),
         
         # ---- extract path to map files
-         (here("data", "processed", "hplc") %>%
-           dir_ls(regexp = "map") %>%
-           sort(decreasing = TRUE))[1] %>%
-          dir_ls() %>%
-          tibble(map_file = .) %>%
-          mutate(
-            cruise_id = str_extract(map_file, "((WS|WB|SV)[0-9].*)(?=_s)")
-            )
+         here("data", "processed", "hplc") %>%
+         dir_ls(regexp = "map") %>%
+         sort(decreasing = TRUE) %>%
+         first() %>%
+         dir_ls() %>%
+         tibble(map_file = .) %>%
+         mutate(
+           cruise_id = str_extract(map_file, "((WS|WB|SV)[0-9].*)(?=_s)")
+           )
         )
       ) %>%
     
