@@ -489,14 +489,16 @@ world_download(
 
 # load downloaded map objects
 map_obj <- load_map_obj(
-  map_loc,
-  map_loc,
-  c(
-    xmin = -90, # West
-    xmax = -75, # East
-    ymin = 20, # South
-    ymax = 35 # North
-  )
+  .map_coast = map_loc,
+  .map_state = map_loc,
+  .map_bath  = map_loc,
+  .map_file  = "etopo1.nc",
+  .extent    = c(
+          xmin = -90, # West
+          xmax = -75, # East
+          ymin = 20, # South
+          ymax = 35 # North
+        )
 )
 
 base_plt       <- base_map_plot(map_obj$coast_topo, map_obj$bathy, extnt_all)
