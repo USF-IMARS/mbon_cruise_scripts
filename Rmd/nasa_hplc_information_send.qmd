@@ -1,5 +1,5 @@
 ---
-title: "NASA-HPLC Sample Info Send"
+title: "NASA-HPLC Sample Submission Form for Analysis"
 author: "Sebastian Di Geronimo"
 date: "2023-05-02"
 format: html
@@ -7,10 +7,12 @@ format: html
 
 # Info:
 
-This file is to load the cruise metadata for HPLC and input into the 
-NASA-HPLC sample info before sending to Crystal Thomas at NASA for processing.
+This file loads cruise metadata for HPLC and converts to the necessary format
+used in the NASA-HPLC sample submission file before sending physical samples to 
+Crystal Thomas at NASA for processing.
 
-
+TODO: add way to check `hplc_progress_pres_abs.xlsx` at:
+<https://usf.app.box.com/file/1203915391640>
 
 # Setup
 
@@ -37,14 +39,17 @@ conflicts_prefer(
 ```
 
 ## ---- Edit: Info ----
-```{r}
+This info is from the NASA intake form, sent in previously
+```{r grant-info}
 grant_info <-
   list(
   info = rbind(
     # grant name
     "The Southeast US Marine Biodiversity Observation Network (MBON): Toward Operational Marine Life Data for Conservation and Sustainability",
+    
     # grant number
     "80NSSC22K1779",
+    
     # contact
     "Sebastian Di Geronimo, sebastian15@usf.edu"
   ),
@@ -59,7 +64,9 @@ grant_info <-
 - Sample Info Template
 - Cruise Metadata
 
-```{r}
+```{r file-path}
+# path to sample submission template
+# looks like <HPLC_SampleInfo_template_rev2019.xlsx>
 template <-
   here("data") %>%
   dir_ls(
@@ -68,9 +75,10 @@ template <-
   ignore.case = TRUE) %>%
   str_subset("ignore", negate = TRUE)
 
+# path to cruise metadata
 metadata <-
-dir_ls(here(cloud_dir),
-         regexp = "imars_inventory_chl_hplc_cdom") %>%
+  here(cloud_dir) %>%
+  dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
   read.xlsx(sheet = "sample_meta_data",
             detectDates = FALSE) %>%
   filter(str_detect(sample_type, "(?i)hplc")) %>%
@@ -78,23 +86,27 @@ dir_ls(here(cloud_dir),
     date = janitor::excel_numeric_to_date(date_mm_dd_yy),
     time = hms::as_hms(sample_collection_time_gmt),
     datetime = ymd_hms(glue("{date} {time}"), truncated = 3),
-    station = str_remove(station, "\\.0$"),
-    .before = date_mm_dd_yy
+    station  = str_remove(station, "\\.0$"),
+    .before  = date_mm_dd_yy
   )
 
+# select cruise IDs for submission
 cruise_id <- 
 metadata %$% unique(cruise_id) %>%
   str_subset(str_c("W[SB]2[1-3]", "WS15264", "WS15320", sep = "|")) %>%
-  str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = T) 
-  
+  str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
+
+# filter metadata to match cruise IDs
 metadata_filt <- 
   metadata %>%
   filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
 ```
 
-```{r}
+This gets the cell locations within the `template` to add data into
+```{r cell-locations}
 sheet_nm <- getSheetNames(template)
 
+# row for adding metadata
 loc <-
   which(
     read.xlsx(
@@ -106,6 +118,7 @@ loc <-
     arr.ind = TRUE
   )
 
+# column names to use
 col_names <- 
 read.xlsx(
   template,
@@ -115,7 +128,7 @@ read.xlsx(
 ) %>%
   names()
 
-
+# location to add grant info
 grant_loc <-
   which(
     read.xlsx(
@@ -128,50 +141,11 @@ grant_loc <-
   )
 ```
 
-hplc_gsfc_id
-X2
-PI
-sample = identifier
-cruise = cruise_id
-indicate.if.filters.are.replicates
-volfilt = vol_ml
-station = station
-bottle
-depth = depth_m
-water_depth
-name.of.water.body
-year
-month
-day
-sdy
-time
-lon
-lat
-filter.type
-filter.diameter.(mm)
-filter.storage.before.shipment.to.GFC
-other
-other   
-
-
-base
-cruise_id
-year
-identifier
-date_mm_dd_yy
-station
-lon
-lat
-sample_collection_time_gmt
-date_time
-depth_m
-sample_type
-vol_ml
-notes
-sample_number
-collector
-max_depth
-```{r}
+# Get Water Body for Each Station
+- Florida Keys
+- West Florida Shelf
+- Southwest Florida Shelf
+```{r water-body}
 water_body <- list(
   "Florida Keys" = c(
     glue("{1:18}"),
@@ -192,7 +166,55 @@ water_body <- list(
 ) %T>% print()
 ```
 
-```{r}
+# Convert Format to NASA Sample Submission Form
+## Column Names
+### ---- Needed Format
+hplc_gsfc_id
+X2
+PI
+sample
+cruise
+indicate.if.filters.are.replicates
+volfilt
+station
+bottle
+depth
+water_depth
+name.of.water.body
+year
+month
+day
+sdy
+time
+lon
+lat
+filter.type
+filter.diameter.(mm)
+filter.storage.before.shipment.to.GFC
+other
+other   
+
+### ---- Current Format
+base
+cruise_id
+year
+identifier
+date_mm_dd_yy
+station
+lon
+lat
+sample_collection_time_gmt
+date_time
+depth_m
+sample_type
+vol_ml
+notes
+sample_number
+collector
+max_depth
+
+## Conversion
+```{r format-info}
 metadata_filt
 meta_format <-
   metadata_filt %>%
@@ -253,7 +275,9 @@ meta_format <-
   arrange(year, month, nchar(sample), sample) %T>%
   print()
 ```
-```{r fig.height=15, fig.width=20}
+
+## Check Spatial Locations
+```{r check-spatial, fig.height=15, fig.width=20}
 (meta_format %>%
    # filter(station == "24" | station == "MR") %>%
   ggplot(aes(x = lon, y = lat, 
@@ -268,13 +292,14 @@ meta_format <-
   plotly::ggplotly()
 ```
 
-```{r}
+## Check for Missing Data
+```{r check-na}
 naniar::vis_miss(meta_format)
 ```
 
-```{r}
+# Save Workbook
+```{r save-wb}
 wb <- loadWorkbook(template)
-names(wb)
 
 writeData(
   wb,
@@ -291,9 +316,10 @@ writeData(wb,
           startRow = loc[1] + 1,
           colNames = FALSE)
 
+# open
 openXL(wb)
 
-
+# save
 saveWorkbook(
   wb = wb,
   file = here(
