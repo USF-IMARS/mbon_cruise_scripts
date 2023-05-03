@@ -102,8 +102,10 @@ meta <-
   read.xlsx(sheet = "sample_meta_data") %>%
   mutate(collection_date = excel_numeric_to_date(date_mm_dd_yy)) %>%
   filter(
-    str_detect(sample_type, sht_nm[2]) 
+    str_detect(sample_type, sht_nm[2])
     & collection_date > as_date("2019-09-01")) %>%
+  # filter(
+  #   str_detect(cruise_id, "WS15264|WS15320")) %>%
   select(cruise_id, collection_date, station,
          collected_by = collector, 
          vol = vol_ml,
@@ -126,11 +128,12 @@ slice_sample(meta, n = 2, by = cruise_id)
 ```{r load-create-wb}
 # if need to start from scratch
 scratch <- FALSE
-scratch <- T
+# scratch <- TRUE
 
 # find previously saved files
-prev_f <- 
-  local_sv %>%
+prev_f <-
+  # local_sv %>%
+  here(cloud_dir, "blank_sheets") %>%
   dir_ls(regexp = glue("^[^~]*{sht_nm[1]}.*\\.xlsx$")
          )
 
@@ -248,7 +251,8 @@ for (cruise  in unique(meta$cruise_id)) {
     firstActiveCol = 1
     )
 }
-
+openxlsx::activeSheet(wb) <- 20
+openxlsx::worksheetOrder(wb) <- c(20, 21, 1:19)
 
 # openXL(wb)
 ```
@@ -269,8 +273,10 @@ rm(wb, prev_f, meta)
 # Save Workbook in Cloud
 ```{r cloud-wb-sv}
 # TODO: set location
-# loc <- here(cloud_dir, "")
-# dir_create(loc)
+if (FALSE) {
+  loc <- here(cloud_dir, "blank_sheets")
+  dir_create(loc)
+}
 
 if (!exists("loc")) {
   cli_alert_danger(c("You need to set {.var loc} before continuing if you ",
@@ -283,12 +289,19 @@ if (!exists("loc")) {
 prev_f <-
   local_sv %>%
   dir_ls(regexp = glue("^[^~]*{sht_nm[1]}.*\\.xlsx$")
-         )
-
+         ) 
+  
 # select most recently saved
 prev_f <-
-  (file_info(prev_f) %>%
-  arrange(desc(birth_time)))[1,1][[1]]
+  file_info(prev_f) %>%
+  arrange(desc(birth_time))  %>%
+  pull(path) %>%
+  first()
+
+# get new path and name
+loc <- 
+  here(loc, basename(prev_f) ) %>%
+  str_remove("_updated_\\d+T\\d+")
 
 if (is_empty(prev_f)) {
   cli_alert_info("No File to Copy")
