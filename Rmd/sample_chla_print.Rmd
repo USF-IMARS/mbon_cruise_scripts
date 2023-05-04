@@ -294,7 +294,8 @@ if (exists("open_file") && open_file) {
                     ".xlsx")),
   overwrite = TRUE
   )
-   sv_ready <- FALSE
+  
+  sv_ready <- FALSE
   open_file <- FALSE
 
 }
@@ -401,7 +402,7 @@ if (is_empty(prev_f)) {
 #     ungroup() %>%
 #     # select(1, identifier, notes)  %>%
 #     select(-test) %T>%
-  print()
+#  print()
 ```
 
 # OLD WAY CREATING csv in separate files
