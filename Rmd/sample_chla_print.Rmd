@@ -95,12 +95,12 @@ meta <-
          regexp = "imars_inventory_chl_hplc_cdom") %>%
   read.xlsx(sheet = "sample_meta_data") %>%
   mutate(collection_date = excel_numeric_to_date(date_mm_dd_yy)) %>%
-  # filter(
-  #   str_detect(sample_type, sht_nm[2])
-  #   & collection_date > as_date("2019-09-01")) %>%
   filter(
     str_detect(sample_type, sht_nm[2])
-    & str_detect(cruise_id, "WS15264|WS15320")) %>%
+    # & collection_date > as_date("2019-09-01")
+    # & str_detect(cruise_id, "WS15264|WS15320")
+    & str_detect(cruise_id, "WS16319")
+    ) %>%
   select(cruise_id, collection_date, station,
          collected_by = collector, 
          vol = vol_ml,
@@ -112,10 +112,18 @@ meta <-
     present = NA_character_,
     absent  = NA_character_,
     notes   = NA_character_
-    ) 
+    ) %>%
+    arrange(cruise_id, nchar(identifier), identifier)
 
 
-cli_alert_info("Filtering by sample_type: {sht_nm[2]}")
+cli_alert_info(c("Filtering by sample_type: {sht_nm[2]}, \n",
+                 "Total Row Number: {nrow(meta)}"))
+temp <- summarise(meta, .by = cruise_id, n_row = n())
+
+cli_alert_info(c("\nInfo:\nCruise ID| Number of Rows\n", 
+                 glue("{str_dup(\"-\", 8)} | {str_dup(\"-\", 14)}"),
+                 sprintf("\n%-9s| %7s", temp$cruise_id, temp$n_row)))
+
 slice_sample(meta, n = 2, by = cruise_id)
 ```
 
@@ -141,8 +149,11 @@ prev_f <-
   first()
 
 ```
+
+
 ```{r add-cruise-sheet}
 overwrt <-  FALSE
+overwrt <-  TRUE
 
 # if none, create,
 # else read previous file
@@ -286,6 +297,8 @@ if (exists("open_file") && open_file) {
   cli_alert_danger("Re-run previous chunk because {.fun openXL} was called.")
   sv_ready <- TRUE
 } else {
+  cli_alert_info(c("Saving file: {basename(prev_f)}\nLocal Path: ",
+                     "{.file {local_sv}}"))
  saveWorkbook(
   wb,
   file =  here(local_sv,
@@ -307,7 +320,7 @@ to save locally.
 
 ```{r cloud-wb-sv}
 # TODO: set location
-if (FALSE) {
+if (T) {
   loc <- here(cloud_dir, "blank_sheets")
   dir_create(loc)
 } else {
@@ -347,10 +360,13 @@ if (is_empty(prev_f)) {
                      "{.file {loc}}"))
     file_copy(prev_f, loc, TRUE)
   }
+
+# shell.exec(loc)
 ```
 
-# Not Needed: Fixed Cruise WS15264 and WS15320
+# Not Needed: Fixed Cruise WS15264 and WS15320, and WS16319
 ```{r}
+# fix cruise WS15264 and WS15320
 # if (!exists("meta2")) meta2 <- meta
 # 
 # orig <-
@@ -402,6 +418,19 @@ if (is_empty(prev_f)) {
 #     ungroup() %>%
 #     # select(1, identifier, notes)  %>%
 #     select(-test) %T>%
+#  print()
+
+
+# fix cruise WS16319
+# if (!exists("meta2")) meta2 <- meta
+# 
+# orig <-
+#   read.xlsx(prev_f, sheet = 4, startRow = 2)
+#     
+# meta <-
+#   orig %>%
+#     select(-c(1:vol)) %>%
+#     full_join(select(meta2, -c(present:notes)), .) %T>%
 #  print()
 ```
 
