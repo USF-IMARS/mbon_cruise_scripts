@@ -21,13 +21,13 @@
 #' Global Self-consistent, Hierarchical, High-resolution Geography Database
 #' (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 #'
-#' @param path_land File directory to be used for coastline files. This may need to be
-#'                  created or already exists. This is where the land map will be
-#'                  downloaded to if it doesn't exists.
-#' @param path_topo File directory to be used for topgraphy file. This may need to be
-#'                  created or already exists. This is where the topo map will be
-#'                  downloaded to if it doesn't exists. This will require a spatial
-#'                  extent to subset the data
+#' @param path_land File directory to be used for coastline files. This may need 
+#'                  to be created or already exists. This is where the land map 
+#'                  will be downloaded to if it doesn't exists.
+#' @param path_topo File directory to be used for topgraphy file. This may need 
+#'                  to be created or already exists. This is where the topo map 
+#'                  will be downloaded to if it doesn't exists. This will 
+#'                  require a spatial extent to subset the data.
 #' @param extent Spatial extent for the topography data.
 #'               Format: exnt <- c(xmin = -82,    # West
 #'                                 xmax = -80,    # East
