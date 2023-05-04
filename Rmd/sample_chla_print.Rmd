@@ -73,21 +73,15 @@ sht_num <- 3 # change here to 1, 2, 3
 sht_nm  <-
   switch(
     sht_num,
-    c("chl_progress", "Chl-a"),
-    c("cdom_progress", "CDOM"),
-    c("hplc_progress", "HPLC")
+    c("chl_progress", "Chl-a", "Filter Pads"),
+    c("cdom_progress", "CDOM", "CDOM"),
+    c("hplc_progress", "HPLC", "HPLC")
     )
 
 local_sv <- here("data", "print", sht_nm[1])
 dir_create(local_sv)
-
-
-rm(sht_num)
 ```
 
-```{r}
-
-```
 
 
 # Find Cruise Metadata 
@@ -101,11 +95,12 @@ meta <-
          regexp = "imars_inventory_chl_hplc_cdom") %>%
   read.xlsx(sheet = "sample_meta_data") %>%
   mutate(collection_date = excel_numeric_to_date(date_mm_dd_yy)) %>%
+  # filter(
+  #   str_detect(sample_type, sht_nm[2])
+  #   & collection_date > as_date("2019-09-01")) %>%
   filter(
     str_detect(sample_type, sht_nm[2])
-    & collection_date > as_date("2019-09-01")) %>%
-  # filter(
-  #   str_detect(cruise_id, "WS15264|WS15320")) %>%
+    & str_detect(cruise_id, "WS15264|WS15320")) %>%
   select(cruise_id, collection_date, station,
          collected_by = collector, 
          vol = vol_ml,
@@ -132,15 +127,18 @@ scratch <- FALSE
 
 # find previously saved files
 prev_f <-
-  # local_sv %>%
-  here(cloud_dir, "blank_sheets") %>%
+  # local_sv %>%                         # local
+  here(cloud_dir, "blank_sheets") %>%  # cloud
+  
   dir_ls(regexp = glue("^[^~]*{sht_nm[1]}.*\\.xlsx$")
          )
 
 # select most recently saved
 prev_f <-
-  (file_info(prev_f) %>%
-  arrange(desc(birth_time)))[1,1][[1]]
+  file_info(prev_f) %>%
+  arrange(desc(birth_time))  %>%
+  pull(path) %>%
+  first()
 
 # if none, create,
 # else read previous file
@@ -152,42 +150,56 @@ if (is.na(prev_f) | scratch) {
     "Filter Pad Presence/Absence"
     )
   } else {
-    cli_alert_info("Loading Previous File: {basename(prev_f)}")
+    cli_alert_info(c("Loading Previous File: {basename(prev_f)}\n",
+                    "From: {dirname(prev_f)}"))
     wb <- 
       prev_f %>%
       loadWorkbook(.)
   }
 ```
-
 ```{r add-cruise-sheet}
+overwrt <-  TRUE
+
 for (cruise  in unique(meta$cruise_id)) {
   
   # ---- determine if cruise ID exists in previous file
   if (cruise %in% names(wb)) {
-    cli_alert_warning("Skipping Cruise ID: {cruise}")
-    next
-  } 
-
-  cli_alert_info("Adding Cruise ID: {cruise}")
-
+   if (overwrt) {
+     cli_alert_warning(c("Overwriting Cruise ID {cruise}\n",
+                         "If this was a mistak, change {.var overwrt}",
+                         "= {col_red('FALSE')} before saving!"))
+   } else {
+     cli_alert_warning("Skipping Cruise ID: {cruise}")
+     next
+   }
+ } else {
+   cli_alert_info("Adding Cruise ID: {cruise}")
+ }
+  
   # ---- filter for cruise ID in meta
   temp_df <-
     meta %>%
-    filter(cruise_id == {{cruise}}) %>%
+    filter(cruise_id == {{ cruise }}) %>%
     select(-cruise_id)
   
-  # ---- add cruise sheet name
-  addWorksheet(
-    wb, 
-    sheetName = cruise,
-    gridLines = openxlsx_getOp("gridLines", TRUE)
+  page_set <- FALSE
+  
+  # ---- add cruise sheet name if doesn't exist
+   if (!cruise %in% names(wb)) {
+     addWorksheet(
+       wb,
+       sheetName = cruise,
+       gridLines = openxlsx_getOp("gridLines", TRUE)
     )
+     # if added sheet, will do page setup later
+     page_set <- TRUE
+   }
   
   # ---- add cruise info
   writeData(
-    wb, 
+    wb,
     sheet    = cruise,
-    x        = cbind(cruise, "Filter Pads"),
+    x        = cbind(cruise, sht_nm[3]),
     colNames = FALSE
     )
   
@@ -198,12 +210,12 @@ for (cruise  in unique(meta$cruise_id)) {
     startRow = 3,
     borders  = openxlsx_getOp("borders", "all"),
     headerStyle = createStyle(
-      halign = "CENTER", textDecoration = "bold",
-      border = "TopBottomLeftRight"
+    halign = "CENTER", textDecoration = "bold",
+    border = "TopBottomLeftRight"
       )
     )
   
-  # ---- set widths of columns 
+ #  # ---- set widths of columns
   setColWidths(
     wb,
     sheet  = cruise,
@@ -223,18 +235,20 @@ for (cruise  in unique(meta$cruise_id)) {
     cols   = 4,
     widths = 7,
   )
- 
+
   setColWidths(
     wb,
     sheet  = cruise,
     cols   = 5,
     widths = 13,
   )
-  
-  # ---- set page setup for printing 
+
+  # ---- set page setup for printing
+  # errors if sheet exist in workbook with print page set already
+  if (page_set) {
   pageSetup(
     wb,
-    sheet       = cruise, 
+    sheet       = cruise,
     orientation = "portrait",
     fitToWidth  = TRUE,
     left        = 0.25,
@@ -243,6 +257,7 @@ for (cruise  in unique(meta$cruise_id)) {
     bottom      = 0.25,
     printTitleRows = c(1:3)
     )
+  }
   
   freezePane(
     wb,
@@ -251,10 +266,16 @@ for (cruise  in unique(meta$cruise_id)) {
     firstActiveCol = 1
     )
 }
-openxlsx::activeSheet(wb) <- 20
-openxlsx::worksheetOrder(wb) <- c(20, 21, 1:19)
 
-# openXL(wb)
+openxlsx::activeSheet(wb) <- 1
+
+if (!exists("open_file") || open_file) {
+  # openXL(wb)
+  cat("create")
+  open_file <-  FALSE
+} 
+
+rm(open_file)
 ```
 # Save Workbook Locally
 ```{r local-wb-sv}
@@ -266,16 +287,19 @@ saveWorkbook(
                     ".xlsx")),
   overwrite = TRUE
   )
-
-rm(wb, prev_f, meta)
 ```
 
-# Save Workbook in Cloud
+# Save Workbook in Cloud 
+Uses the locally saved one to push to cloud, so if you updated it, make sure 
+to save locally.
+
 ```{r cloud-wb-sv}
 # TODO: set location
 if (FALSE) {
   loc <- here(cloud_dir, "blank_sheets")
   dir_create(loc)
+} else {
+  suppressWarnings(rm(loc))
 }
 
 if (!exists("loc")) {
@@ -288,8 +312,9 @@ if (!exists("loc")) {
 # find previously saved files
 prev_f <-
   local_sv %>%
-  dir_ls(regexp = glue("^[^~]*{sht_nm[1]}.*\\.xlsx$")
-         ) 
+  dir_ls(regexp = glue("{sht_nm[1]}.*\\.xlsx$")
+         ) %>%
+  str_subset("~", negate = T)
   
 # select most recently saved
 prev_f <-
@@ -311,6 +336,63 @@ if (is_empty(prev_f)) {
     file_copy(prev_f, loc, TRUE)
   }
 ```
+
+# Not Needed: Fixed Cruise WS15264 and WS15320
+```{r}
+# if (!exists("meta2")) meta2 <- meta
+# 
+# orig <-
+#   map(2:3,
+#     \(x) read.xlsx(prev_f, sheet = x, startRow = 2) %>%
+#       mutate(notes = as.character(notes),
+#              collected_by = as.character(collected_by))
+#     ) %>%
+#       list_rbind()
+# 
+# hplc_only <-
+# left_join(select(meta2, identifier), select(orig, identifier))
+# 
+# 
+# 
+# meta <-
+#   orig %>%
+#   mutate(
+#     test = case_match(
+#       identifier,
+#       pull(hplc_only, 1) ~ "hplc",
+#       .default = "chl/cdom"
+#     )
+#   ) %>%
+#     # filter(
+#     #   str_detect(notes, "(?i)unk")
+#     #   | str_detect(present, "(?i)x")
+#     #   | str_detect(test, "hplc")
+#     #        ) %>%
+#   mutate(
+#     .before = 1,
+#     cruise_id = case_when(
+#       str_detect(identifier, "WS15264") ~ "WS15264",
+#       str_detect(identifier, "WS15320") ~ "WS15320",
+#       .default = "WS15320"
+# 
+#     ),
+#     notes = case_when(
+#       !is.na(present)
+#       & str_detect(test, "cdom") ~ "check, supposted to be labeled CDOM or chl",
+#       is.na(notes) 
+#       & str_detect(test, "cdom") ~ "supposted to be labeled CDOM or chl",
+#       .default = notes),
+#     test = fct(test, levels = c("hplc", "chl/cdom"))
+#   ) %>%
+# 
+#   group_by(cruise_id, test) %>%
+#     arrange(nchar(identifier), identifier, .by_group = TRUE)  %>%
+#     ungroup() %>%
+#     # select(1, identifier, notes)  %>%
+#     select(-test) %T>%
+  print()
+```
+
 # OLD WAY CREATING csv in separate files
 I opted for .xlsx because it would contain all cruises in one file with the 
 correct formatting for printing each cruise
