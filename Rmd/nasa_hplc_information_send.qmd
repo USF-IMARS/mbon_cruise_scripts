@@ -93,7 +93,7 @@ metadata <-
 # select cruise IDs for submission
 cruise_id <- 
 metadata %$% unique(cruise_id) %>%
-  str_subset(str_c("W[SB]2[1-3]", "WS15264", "WS15320", sep = "|")) %>%
+  str_subset(str_c("W[SB]2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
   str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
 
 # filter metadata to match cruise IDs
@@ -333,5 +333,66 @@ saveWorkbook(
   )
 )
 
+```
+
+```{r}
+# find previously saved files
+prev_f <-
+  # local_sv %>%                         # local
+  here(cloud_dir, "blank_sheets") %>%  # cloud
+  
+  dir_ls(regexp = glue("^[^~]*hplc.*\\.xlsx$")
+         )
+
+getSheetNames(prev_f)[2:4]
+
+hplc_check <- 
+map(2:4, ~ read.xlsx(prev_f, sheet = .x, startRow = 2)  %>%
+           mutate(absent = as.character(absent),
+                  notes = as.character(notes))) %>%
+  list_rbind() 
+
+meta_format_filt <- 
+meta_format %>%
+  filter(cruise %in% getSheetNames(prev_f)[2:4]) %>%
+  left_join(hplc_check,
+            by = join_by(sample == identifier)) %>%
+            filter(if_any(c(present, absent), \(x) !is.na(x)) &
+                     !is.na(present)) %>%
+                      select(-c(present:notes))
+
+wb <- loadWorkbook(template)
+
+writeData(
+  wb,
+  sheet    = 1,
+  x        = grant_info$info,
+  startRow = grant_loc[1],
+  startCol = grant_loc[2] + 1,
+  colNames = FALSE
+)
+
+writeData(wb, 
+          sheet = 1,
+          x = meta_format_filt,
+          startRow = loc[1] + 1,
+          colNames = FALSE)
+
+# open
+openXL(wb)
+
+# save
+saveWorkbook(
+  wb = wb,
+  file = here(
+    "data", "metadata",
+    glue(
+      grant_info$last_nm,
+      format(Sys.Date(), "_%Y%m%d_"),
+      str_c(cruise_id, collapse = "_"),
+      ".xlsx"
+    )
+  )
+)
 ```
 
