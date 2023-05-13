@@ -36,11 +36,11 @@ sf::sf_use_s2(FALSE)
 ```
 
 ## File Path and Cruise ID
-```{r path-cruise-id}
+```{r cruide-id-info}
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    cruise_id   = "WS23XXX",      # Here
+    cruise_id   = "H23138",      # Here
     start_dates = "May 18 2023",  # Here
     end_dates   = "May 25 2023"   # Here
     ) %>%
@@ -50,8 +50,18 @@ cruise_id <-
         .y = end_dates, 
         date_label
         )
-    ) 
+    ) %T>% 
+  print()
 
+cli::cli_alert_warning(
+  c("Did you make sure to update cruise info?\n\n",
+  "---- Press the [Enter] key to continue! ----\n",
+  "\t or go back to fix it!"))
+invisible(readline())
+```
+
+
+```{r paths}
 # paths to data location files
 loc_file <- 
   here("data", "metadata") %>%
@@ -80,14 +90,14 @@ loca <-
 # NOAA 
 all_loc <- 
   loc_file %>%
-  read_xlsx(sheet = 2, 
+  readxl::read_xlsx(sheet = 2, 
             .name_repair = janitor::make_clean_names) %>%
   filter(!(station %in% loca$station))
 
 # zooplankton
 zoo_loc <- 
   loc_file %>%
-  read_xlsx(sheet = 3, 
+  readxl::read_xlsx(sheet = 3, 
             .name_repair = janitor::make_clean_names) 
 
 
@@ -116,9 +126,9 @@ loc_labs <-
                   sums == 4 ~ "CHL, HPLC and CDOM",
                   sums == 10 ~ "CHL, HPLC, CDOM, eDNA for surf and bot",
                   sums == 6 ~ "CHL, HPLC (replicate), CDOM and eDNA",
-                  sums == 5 & hplc == 2 ~ "CHL, HPLC (replicate) and CDOM",
+                  sums == 5 && hplc == 2 ~ "CHL, HPLC (replicate) and CDOM",
                   sums == 5 && e_dna == 1 ~ "CHL, HPLC, CDOM, and eDNA",
-                  TRUE ~ NA_character_
+                  .default = NA_character_
          )) %>%
   select(-c(chl_a:sums))
 
@@ -308,23 +318,31 @@ imars_map
 ```
 ## Save Map
 ```{r save-map, fig.width=8.5, fig.height=11}
-file_name <-
-  here(
-    "data", "metadata", "cruise_map",
-    glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")
+sv_arg <-
+  list(
+    save_path = here("data", "metadata", "cruise_map")
+  ) %>%
+  c(
+    file_name =
+      here(
+        "data", "metadata", "cruise_map",
+        glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")
+      )
   )
 
-if (FALSE) {
-  fs::dir_create(here("data", "metadata", "cruise_map"))
+if (!file_exists(sv_arg$file_name) || FALSE) {
+  # create directory if doens't exist
+  fs::dir_create(sv_arg$save_path)
+  
+  # save map
   ggsave(
-    here(
-      "data", "metadata", "cruise_map",
-      glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")
-    ),
-    plot = imars_map,
-    dpi = 900,
-    width = 8.5,
-    height = 11
+   sv_arg$file_name,
+   plot   = imars_map,
+   dpi    = 900,
+   width  = 8.5,
+   height = 11
   )
-}
+} 
+
+rm(sv_arg)
 ```
