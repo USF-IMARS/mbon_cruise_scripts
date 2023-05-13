@@ -64,21 +64,36 @@ if (!file_exists(here("box_search.csv"))) {
   box_search <- read_csv(here("box_search.csv"), show_col_types = FALSE)
 }
 
-files_all <- 
+# # files_all <- 
+# for (i in 1:43)  {
+#   cli_alert_info("{i} of 43")
+# try(dir_ls(box_search$folder,
+#          # regexp  = "^[^~]*\\.(xlsx)$",
+#          regexp  = "\\.(xlsx)$",
+#          recurse = TRUE),
+#     silent = T) #%>%
+# }
+
+files_all <-
   dir_ls(box_search$folder,
-         regexp  = "^[^~]*\\.(xlsx)$",
+         regexp  = "\\.(xlsx)$",
          recurse = TRUE) %>%
+  str_subset("~|ignore", negate = TRUE) %>%
   tibble(file_path = .,
          base  = basename(.)) %>%
   mutate(
+    .keep = "used",
     cruise_id = str_replace(file_path, ".*cruises/[0-9]+/(.*)/m.*", "\\1"),
+    cruise_id2 = str_extract(file_path, "\\w{1,2}\\d{4,5}"),
+    
     year = str_extract(file_path, "[0-9]{4}") %>%
-    as.numeric()
-  )
+           as.numeric()
+  ) %T>% print()
 
-files_filt <- files_all %>%
-         filter(str_detect(basename(file_path), "(?i)fknms_") &
-         !str_detect(file_path, "ignore"))
+files_filt <- 
+  files_all %>%
+  filter(str_detect(file_path, "(?i)fknms_")) %T>% 
+  print()
 ```
 
 ## Local Directory
