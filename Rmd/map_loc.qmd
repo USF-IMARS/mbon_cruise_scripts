@@ -25,8 +25,10 @@ librarian::shelf(
 
 library("conflicted")
 
-conflict_prefer("select", "dplyr")
-conflict_prefer("filter", "dplyr")
+conflicts_prefer(
+  dplyr::filter,
+  dplyr::select
+  )
 
 # scripts to download and create maps
 source(here("scripts", "map_files_dwnlod.R"))
@@ -40,9 +42,9 @@ sf::sf_use_s2(FALSE)
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    cruise_id   = "H23138",      # Here
-    start_dates = "May 18 2023",  # Here
-    end_dates   = "May 25 2023"   # Here
+    cruise_id   = "SS23JJJ",      # Here
+    start_dates = "July 15 2023",  # Here
+    end_dates   = "July 21 2023"   # Here
     ) %>%
     mutate(
       label = map2_chr(
@@ -239,24 +241,24 @@ imars_map <-
     geom        = "richtext", 
     x           = -81.5,
     y           = 28,
-    # label       = glue("{cruise_id[[1]]} (IMaRS)"),
     label       = glue("{cruise_id$cruise_id[1]} (IMaRS)"),
     size        = 10,
     fontface    = "bold",
     fill        = NA,
     label.color = NA,
+    family = "serif"
   ) +
   # ---- Cruise Dates
   annotate(
     geom        = "richtext", 
     x           = -81.5,
     y           = 27.85, 
-    # label       = cruise_id[[2]],
     label       = cruise_id$label[1],
     size        = 7,
     fontface    = "bold",
     fill        = NA,
-    label.color = NA
+    label.color = NA,
+    family = "serif"
   ) +
   # ---- NOAA Locations
   geom_point(
