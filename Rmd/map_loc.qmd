@@ -38,21 +38,28 @@ sf::sf_use_s2(FALSE)
 ```
 
 ## File Path and Cruise ID
+Ship:
+WS = Walton Smith
+WB = WeatherBird II
+SV = Savannah
+H = Hogarth
 ```{r cruide-id-info}
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    cruise_id   = "SS23JJJ",      # Here
-    start_dates = "July 15 2023",  # Here
-    end_dates   = "July 21 2023"   # Here
-    ) %>%
-    mutate(
-      label = map2_chr(
-        .x = start_dates, 
-        .y = end_dates, 
-        date_label
-        )
-    ) %T>% 
+    ship        = "WS",           # Here, ship acronym
+    start_dates = "July 22 2023", # Here, month day year
+    end_dates   = "July 28 2023"  # Here, month day year
+  ) %>%
+  mutate(
+    cruise_id = parse_date(start_dates, format = "%B %d %Y"),
+    cruise_id = str_c(ship, format(cruise_id, "%y"), yday(cruise_id)),
+    label = map2_chr(
+      .x = start_dates,
+      .y = end_dates,
+      date_label
+    )
+  ) %T>%
   print()
 
 cli::cli_alert_warning(
