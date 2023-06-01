@@ -13,7 +13,7 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  openxlsx, janitor
+  cli, openxlsx, janitor
 )
 
 library("conflicted")
@@ -28,6 +28,7 @@ conflict_prefer("select", "dplyr")
 
 
 NEED TO MAKE SURE INVENTORY IS UP TO DATE
+- go to `merge_meta_chl_hplc_cdom.Rmd` to update inventory
 ```{r}
 source(here(".Rprofile"))
 
@@ -49,12 +50,45 @@ meta_data <-
   filter(collection_date > as_date("2022-03-25")) %>%
   select(cruise_id, station,	"sample ID" = identifier) %>%
   mutate(sample_number = str_extract(`sample ID`, "-(.*)", group = 1))
-  
+
+meta_data
+
+# meta_data <-
+here(cloud_dir, "years", "2023", c("H23138", "WS23061"), "metadata") %>%
+  dir_ls(
+    regexp = "^[^\\$]*fknms_sample_logsheet"
+  ) %>%
+  # str_subset("H") |>
+  # shell.exec()
+  map(
+    ~ openxlsx::read.xlsx(.x, sheet = "field_logsheet",
+                          detectDates = TRUE) %>%
+      janitor::clean_names() %>%
+      mutate(sample_number = as.character(sample_number),
+             cruise_id =  str_extract(.x, "\\w{1,2}\\d{4,5}")) %>%
+      filter(str_detect(sample_type, "(?i)cdom"))
+  ) %>%
+  list_rbind() %>% #names()
+  arrange(desc(cruise_id)) %>%
+  select(
+    cruise_id,
+    station,
+    "sample ID" = identifier,
+    sample_number
+  ) %>%
+  mutate(
+    dups = case_when(
+      str_detect(sample_number, "(?i)b$") ~ "dup",
+      str_detect(`sample ID`, "(?i)b$") ~ "dup",
+      .default = NA
+    )
+  ) %T>% print()
+
 ```
 
 
 ```{r}
-# loc_dist <- 
+loc_dist <-
   schedule_file %>%
   read.xlsx(sheet = "color_code") %>%
   as_tibble()
@@ -71,13 +105,17 @@ for (i in seq(nrow(cdom_cruise))) {
   sheet_name <- cdom_cruise$cruise_id[i]
 
   if (any(names(wb) %in% sheet_name)) {
-    message(glue("Skipping \"{sheet_name}\""))
+    cli::cli_alert_info(glue("Skipping \"{sheet_name}\""))
       next
   }
 
   dat_sht <- cdom_cruise$data[[i]]
   
-  message(glue("Adding Cruise: \"{sheet_name}\""))
+  dup_rows <- which(dat_sht$dups == "dup")
+  
+  dat_sht <- select(dat_sht, -dups)
+  
+  cli::cli_alert_info(glue("Adding Cruise: \"{sheet_name}\""))
   
   addWorksheet(wb, sheetName = sheet_name)
   writeData(wb, sheet = sheet_name , startCol = 1, startRow = 1, 
@@ -103,10 +141,32 @@ for (i in seq(nrow(cdom_cruise))) {
                         rows = 1:(nrow(dat_sht) + 1), 
                         rule = "mid", type = "contains",
                         style = createStyle(bgFill = "#FFC000"))
+  
+  if (length(dup_rows) < 1) next
+  
+  for (j in dup_rows) {
+     addStyle(wb, 
+              sheet_name,
+              cols = 1:3,
+              rows = j + 1, 
+              stack = TRUE,
+              style = createStyle(fgFill = "#F4B084"))
+    
+    
+     addStyle(wb, 
+              sheet_name ,
+              cols = 1:3,
+              rows = j, 
+              stack = TRUE,
+              style = createStyle(fgFill = "#C6E0B4"))
+  }
+ 
+  
+ 
 
 }
 
-openXL(wb)
+# openXL(wb)
 ```
 
 ```{r}
@@ -114,5 +174,7 @@ if (FALSE) {
   saveWorkbook(wb, schedule_file,
              overwrite = TRUE)
 }
+
+schedule_file |> shell.exec()
 ```
 
