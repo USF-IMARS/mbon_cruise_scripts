@@ -223,7 +223,7 @@ mismatch
 
 # ---- Unnest Metadata and Format ----
 ```{r unnest-meta}
-# data_all <- 
+data_all <-
   files %>%
   select(-c(file_path:base)) %>%
   unnest(data) %>%
