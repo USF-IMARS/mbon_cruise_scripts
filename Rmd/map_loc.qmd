@@ -107,8 +107,16 @@ zoo_loc <-
 
 ## Match NOAA and IMaRS Locations
 ```{r data-manipulation}
+plt_labels <- c(
+  "CHL, HPLC and CDOM",
+  "CHL, HPLC (replicate) and CDOM",
+  "CHL, HPLC, CDOM, and eDNA",
+  "CHL, HPLC (replicate), CDOM and eDNA",
+  "CHL, HPLC, CDOM, eDNA for surf and bot"
+)
+
 # define labels for map
-loc_labs <- 
+loc_labs <-
   loca %>%
   group_by(station) %>%
   mutate(vals = 1) %>%
@@ -125,14 +133,21 @@ loc_labs <-
   rowwise() %>%
   mutate(sums = sum(chl_a, hplc, cdom, e_dna, na.rm = TRUE),
          labl = case_when(
-                  sums == 4 ~ "CHL, HPLC and CDOM",
-                  sums == 10 ~ "CHL, HPLC, CDOM, eDNA for surf and bot",
-                  sums == 6 ~ "CHL, HPLC (replicate), CDOM and eDNA",
-                  sums == 5 && hplc == 2 ~ "CHL, HPLC (replicate) and CDOM",
-                  sums == 5 && e_dna == 1 ~ "CHL, HPLC, CDOM, and eDNA",
+                  sums == 4 ~ plt_labels[1], # "CHL, HPLC and CDOM",
+                  sums == 5 && hplc == 2 ~ plt_labels[2], #"CHL, HPLC (replicate) and CDOM",
+                  sums == 5 && e_dna == 1 ~ plt_labels[3],#"CHL, HPLC, CDOM, and eDNA",
+                  sums == 6 ~ plt_labels[4], #"CHL, HPLC (replicate), CDOM and eDNA",
+                  sums == 10 ~ plt_labels[5],#"CHL, HPLC, CDOM, eDNA for surf and bot",
                   .default = NA_character_
-         )) %>%
-  select(-c(chl_a:sums))
+         ),
+         labl = fct(labl, 
+                    levels = plt_labels)) %>%
+  ungroup() %>%
+  select(-c(chl_a:sums)) %>%
+  mutate(
+    .by = labl,
+    labl = glue("{labl}, ({n()})")
+  )
 
 
 loca2 <- 
@@ -294,7 +309,9 @@ imars_map <-
 
   scale_color_manual(
     name   = "Samples",
-    values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF", "#BA55D3")
+    # values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF", "#BA55D3")
+    values = c("#999999", "#E69F00", "#56B4E9", "#009E73",
+            "#CC79A7")
   ) +
   labs(color = NULL) +
 
@@ -337,12 +354,12 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   fs::dir_create(sv_arg$save_path)
   
   # save map
-  ggsave(
+  cowplot::save_plot(
    sv_arg$file_name,
    plot   = imars_map,
    dpi    = 900,
-   width  = 8.5,
-   height = 11
+   base_width  = 8.5,
+   base_height = 11
   )
 } 
 
