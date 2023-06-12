@@ -109,7 +109,7 @@ cdom_cruise <-
   nest(.by = cruise_id)
 
 wb <- loadWorkbook(schedule_file) 
-r
+
 
 
 for (i in seq(nrow(cdom_cruise))) {
