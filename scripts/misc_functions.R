@@ -9,7 +9,7 @@ get_sheet_info <- function(files) {
   for (i in seq(nrow(files))) {
     # select sheet name with `field_logsheet`
     cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
-    temp_sht <- excel_sheets(files$file_path[i]) 
+    temp_sht <- openxlsx::getSheetNames(files$file_path[i]) 
     sht_num  <- which(str_detect(temp_sht, "field_"))
     
     if (is_empty(sht_num)) {
@@ -34,12 +34,16 @@ get_sheet_info <- function(files) {
     }
     
     # read sheet 
-    temp <- read_excel(
-      files$file_path[i],
-      sheet        = sht_num, 
-      n_max        = 5,
-      col_names    = FALSE,
-      .name_repair = "unique_quiet") 
+    temp <-
+      openxlsx::read.xlsx(
+        xlsxFile      = files$file_path[i],
+        sheet         = sht_num,
+        rows          = 1:5,
+        colNames      = FALSE,
+        skipEmptyRows = FALSE,
+        skipEmptyCols = FALSE
+      ) %>%
+      as_tibble()
     
     # row number that contains headers
     row <- which(apply(temp, 1, function(x) any(grepl("(?i)sample", x))))
@@ -53,9 +57,11 @@ get_sheet_info <- function(files) {
     # skip if no row info
     if (is_empty(row) || is.na(row)) {
       recal <-
-        bind_rows(recal, 
-                  tibble(file_path    = files$file_path[i], 
-                         sht_num = sht_num))
+        bind_rows(
+          recal, 
+          tibble(
+            file_path = files$file_path[i], 
+            sht_num   = sht_num))
       next
     }
     
@@ -81,9 +87,7 @@ get_sheet_info <- function(files) {
     drop_na(everything()) %>%
     left_join(files, by = "file_path")
   
-  return(
-    list(files,
-         sht_num))
+  return(files)
   
   # ---- end of function
 }
@@ -113,18 +117,20 @@ get_sheet_info <- function(files) {
 #' 
 read_logsheets <-  function(.x, .y, .z, .l,
                             ship_acr = "FK|WS|SV|WB|H") {
-  
+
   # ---- load data
   # select sheet, skip number of lines to sample 1, stop columns after
   # `notes` or `collector`, remove NA values, clean names
-  temp <- read_xlsx(
-    path         = .x,
-    sheet        = .y,
-    skip         = .z - 1,
-    range        = cell_cols(c(NA, .l)),
-    .name_repair = janitor::make_clean_names,
-    na           = na_skip
-  ) %>%
+  temp <- 
+    openxlsx::read.xlsx(
+      xlsxFile    = .x,
+      sheet       = .y,
+      cols        = 1:.l,
+      startRow    = .z,
+      na.strings  = na_skip,
+      detectDates = TRUE
+    ) %>%
+      janitor::clean_names() %>%
     
     # ---- fix time
     # time_gmt and time_sampled_24_00 to sample_collection_time_gmt
@@ -207,24 +213,17 @@ read_logsheets <-  function(.x, .y, .z, .l,
       )
   }
   
-  if (any(str_detect(names(temp), "sample_number" ))) {
+  if (any(str_detect(names(temp), "sample_number"))) {
     temp <- 
       mutate(temp, sample_number = as.character(sample_number))
   }
-  
+
   # add date_time, 
   # first, converting excel date_time to HMS
   # i.e. 1899-01-01 12:15:34 UTC to 12:15:13
   # then, add date and time
-  temp <- mutate(
-    temp,
-    sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
-    date_time = date_mm_dd_yy + sample_collection_time_gmt,
-    .after = sample_collection_time_gmt) %>%
-    
-    # remover extract column if exists
-    select(-any_of("time_filtered_24_00")) %>%
-    
+  temp <- 
+    temp %>%
     # fix date when entered as mm:dd:yy instead of mm/dd/yyyy
     {if (nrow(filter(., date_mm_dd_yy > as_date("2015-01-01"))) < 1) {
       mutate(., 
@@ -234,51 +233,68 @@ read_logsheets <-  function(.x, .y, .z, .l,
              date_mm_dd_yy = str_replace_all(date_mm_dd_yy, "(.*/.*/)", "\\120"),
              date_mm_dd_yy = anytime::anydate(date_mm_dd_yy),
              .before = 1)
-    } else {.}}
+    } else {.}}  %>%
+    
+    mutate(
+    sample_collection_time_gmt = sample_collection_time_gmt*86400,
+    sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+    date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
+    .after = sample_collection_time_gmt
+    ) %>%
+    
+    # remover extract column if exists
+    select(-any_of("time_filtered_24_00"))  %>% 
+    mutate(station = str_remove(station, "~"),
+           station = str_replace_all(station, " ", ""),
+           station = str_to_upper(station),
+           station = case_when(
+             str_detect(station, "9.69999") ~ "9.7",
+             str_detect(station, "9.80000") ~ "9.8",
+             .default =  station))
   
   return(temp)
   
   # ---- end of function
 }
 
+
 ##%######################################################%##
 #                                                          #
-####         Search Cloud Directory for Folders         ####
+####      Search Metadata Directories for Folders       ####
 #                                                          #
 ##%######################################################%##
-#' Search Cloud Directory for Folders
+#' Search Metadata Directories for Folders
 #'
 #' FUNCTION_DESCRIPTION
 #'
-#' @param .cloud_dir Starting cloud directory
+#' @param .dir_path Starting directory path.
 #' @param .sub_folder Subfolders exists within every level
 #'                    Can be:
 #'                    - a string (ex `"dir1"`),
 #'                    - a vector (ex `c("dir1", "dir2")`), or 
 #'                    - a list (ex `list("dir1", "dir2")`)
-#'
+#' @param return_type Return type, either `vector` or `tibble`
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
-search_cloud_folders <- function(
-    .cloud_dir,
+search_meta_folders <- function(
+    .dir_path,
     .sub_folder = NULL,
     return_type = c("vector", "tibble")) {
   
   return_type <- match.arg(return_type)
   
-  file_loc <- here::here(.cloud_dir) %>%
+  file_loc <- 
+    here::here(.dir_path) %>%
     fs::dir_ls(type = "directory") %>%
     fs::dir_ls(type = "directory")
   
   if (is.list(.sub_folder) || is.character(.sub_folder)) {
-    message("Using subfolder")
     file_loc <- 
     here::here(file_loc, as.list(.sub_folder)) %>%
     Filter(fs::dir_exists, .)
     
   } else if (is.null(.sub_folder) || is.na(.sub_folder)) {
-    message("Not using subfolder")
     file_loc <- Filter(fs::dir_exists, file_loc)  
   } else {
     stop("`.sub_folder` is not of type list, or character, or is NULL")

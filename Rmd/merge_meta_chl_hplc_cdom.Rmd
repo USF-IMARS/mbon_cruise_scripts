@@ -14,13 +14,17 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  readxl
+  # readxl
+  openxlsx
 )
 
 library("conflicted")
 
 conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
+
+source(here("scripts", "misc_functions.R"))
+source(here(".Rprofile"))
 
 # `NA` values to skip when reading `.xlsx.
 na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
@@ -29,115 +33,109 @@ na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow",
 # where to pull data from
 # "cloud" - cloud path ~/<box-location>/mbon_imars_cruises/
 # "local" - local path in this project, ~/data/metadata/
-locat <- "cloud" 
+locat <- "cloud"
+
+# check cloud - 1, local - 2, or both - 3
+check <- 1
 ```
 
 # ---- Search files ----
 ## Cloud Directory
-To make searching faster, the first time you run this it will search the cloud
-directory location for the folder names with `~/<year>/<cruise>/<metadata>`.
-This will take a few minutes, but it will save in the root of this project. 
-
-When re-running, it will only look at previous `box_search`, so you may need to
-re-run if new folders are added.
-
 After the first time, you will get a variable called `cloud_dir`. You should 
 copy this into a `.Rprofile` so when you restart `R`, the path will be set.
 
 i.e. copy "cloud_dir <- `<path-to-box>/mbon_imars_cruises`" 
 *make sure to change `<path-to-box>` to the location on your computer.*
 ```{r find-files-box}
+# folder path in cloud directory, 
+# - If cancel, will be NULL
 if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
-box_search2 <- 
-  search_cloud_folders(
-    .cloud_dir  = here(cloud_dir, "years"),
-    .sub_folder = list("metadata"),
-    return_type = "vector") %>%
-  dir_ls(
-    regexp = "\\.(xlsx)$"
-  ) %>%
-  str_subset("~|ignore", negate = TRUE) %>%
-  tibble(file_path = .,
-         base  = basename(.)) %>%
-  filter(str_detect(file_path, "(?i)fknms_")) %>%
-  mutate(
-    cruise_id = str_extract(file_path, "\\w{1,2}\\d{4,5}"),
-    year = str_extract(file_path, "[0-9]{4}"),
-    year = as.numeric(year)
-  ) %T>% print()
-```
 
-
-```{r find-files-box}
-# folder path in cloud directory
-if (!file_exists(here("box_search.csv"))) {
-  # if need box_search.csv 
-  if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
-  # super inefficient
-  # box_search <- 
-  # dir_ls(
-  #   here(cloud_dir, "years"),
-  #   regexp  = "metadata",
-  #   type    = "directory",
-  #   recurse = TRUE) %>%
-  #   tibble(folder = .)
+if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
+  message(glue("Searching `{cloud_dir}` for metadata!"))
+  box_search <- 
+    search_meta_folders(
+      .dir_path   = here(cloud_dir, "years"),
+      .sub_folder = "metadata",
+      return_type = "vector")
   
-  write_csv(box_search, here("box_search.csv"), append = TRUE)
-} else {
-  box_search <- read_csv(here("box_search.csv"), show_col_types = FALSE)
-}
-
-files_all <-
-  dir_ls(box_search$folder,
-         regexp  = "\\.(xlsx)$",
-         recurse = TRUE) %>%
-  str_subset("~|ignore", negate = TRUE) %>%
-  tibble(file_path = .,
-         base  = basename(.)) %>%
-  mutate(
-    # cruise_id = str_replace(file_path, ".*cruises/[0-9]+/(.*)/m.*", "\\1"),
-    cruise_id = str_extract(file_path, "\\w{1,2}\\d{4,5}"),
+  files_all <- 
+    dir_ls(
+      path   = box_search,
+      regexp = "\\.(xlsx)$"
+    ) %>%
+    # remove files to ignore or locked files (i.e. ~$)
+    str_subset("~|ignore", negate = TRUE) %>% 
+    tibble(file_path = .,
+           base  = basename(.)) 
+  
+  files_filt <- 
+    files_all %>%
+    # filter for cruise files
+    filter(str_detect(file_path, "(?i)fknms_")) %>%
     
-    year = str_extract(file_path, "[0-9]{4}") %>%
-           as.numeric()
-  ) %T>% print()
-
-files_filt <- 
-  files_all %>%
-  filter(str_detect(file_path, "(?i)fknms_")) %T>% 
-  print()
+    # add columns for cruise ID and year
+    mutate(
+      cruise_id = str_extract(file_path, "\\w{1,2}\\d{4,5}"),
+      
+      year = str_extract(file_path, "[0-9]{4}"),
+      year = as.numeric(year)
+    ) %T>% print()
+} else {
+  message("Not looking for files in `cloud directory` because set as NULL.")
+  box_search <- NULL
+}
 ```
 
 ## Local Directory
 This is the location within this project that should be created when loading the
-first time.
-```{r find-files-local}
-files_local <-
-  dir_ls(here("data", "metadata"),
-         regexp  = "^[^~]*\\.(xlsx)$",
-         recurse = TRUE) %>%
-  tibble(file_path   = ., 
-         base    = basename(.)) %>%
+first time. 
 
-  # ignore some files
-  filter(str_detect(basename(file_path), "fknms_") &
-         !str_detect(file_path, "ignore")) %T>% 
-  print()
+If you do not want to use a cloud directory, you may use a local one.
+
+If using both
+```{r find-files-local}
+if (is.null(box_search) | check == 2 | check == 3) {
+  message("Searching local project for metadata!")
+  files_local <-
+    search_meta_folders(
+      .dir_path   = here("data", "metadata"),
+      .sub_folder = NULL,
+      return_type = "vector") %>%
+    dir_ls(
+      regexp  = "\\.(xlsx)$",
+      recurse = TRUE
+      )  %>%
+    str_subset("~|ignore", negate = TRUE) %>% 
+    tibble(
+      file_path = .,
+      base = basename(.)) %>%
+  
+    # ignore some files
+    filter(str_detect(basename(file_path), "fknms_")) %T>% 
+    print()
+}
 ```
 ## Compare Local and Cloud
-Check the differences between the two to see if any discrepencies exists. 
+Check the differences between the two to see if any discrepancies exists. 
 You should only need to use the `cloud_dir` location
 ```{r compare}
-files_local$base %in% files_filt$base
-files_all$base %in% files_local$base
-
-anti_join(files_all, files_local,   by = "base")
-anti_join(files_filt, files_local,  by = "base")
-inner_join(files_filt, files_local, by = "base")
-
-full_join(files_filt, files_local,  by = "base") %>%
-  arrange(year, base) %>%
-  filter(is.na(file_path.y)) 
+stopifnot(
+  "Will not be checking between cloud and local directories. Continue!" = 
+    exists("files_filt") & exists("files_local"))
+files_local[files_local$base %in% files_filt$base, 2]
+files_filt[!files_filt$base %in% files_local$base, 2]
+files_filt[files_filt$base %in% files_local$base, 2]
+  
+  anti_join(files_all, files_local,   by = "base") # all files in cloud, not in cloud
+  anti_join(files_local, files_filt,  by = "base") # files in local, not in cloud
+  anti_join(files_filt, files_local,  by = "base") # files in cloud, not in local
+  inner_join(files_filt, files_local, by = "base") # overlap between both
+  
+  # result is ones not in the local metadata files
+  full_join(files_filt, files_local,  by = "base") %>%
+    arrange(year, base) %>%
+    filter(is.na(file_path.y)) 
 ```
 
 # ---- Extract sheet name and row to read ----
@@ -150,7 +148,8 @@ Extracts row info where data starts by looking for prefix `Sample`
 Extracts how many columns to read in. This looks for either `notes` or 
 `collector` as the last column.
 ```{r sheet-info}
-files <- switch(locat,
+files <- switch(
+  locat,
   "cloud" = files_filt,
   "local" = files_local
 )
@@ -166,95 +165,12 @@ prev_cruise_id <-
 
 files <- 
   files %>%
-  # slice_tail(n = 5)
   filter(!cruise_id %in% prev_cruise_id)
-
 
 files <- get_sheet_info(files)
 
 files
-```
 
-
-```{r sheet-info}
-# recal <- tibble()
-# 
-# for (i in seq(nrow(files))) {
-#   # select sheet name with `field_logsheet`
-#   cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
-#   temp_sht <- excel_sheets(files$file_path[i]) 
-#   sht_num  <- which(str_detect(temp_sht, "field_"))
-# 
-#   if (is_empty(sht_num)) {
-#     sht_num <- which(str_detect(temp_sht, "Sheet1")) 
-#   } 
-#   
-#   if (is_empty(sht_num)) {
-#     sht_num <- menu(temp_sht, 
-#                      title = glue(
-#                        "\n-----\n\n",
-#                        "Which sheet contains metadata?", 
-#                        "\n(0 for none)"))
-#   }
-#   
-#   # skip if no sheet name
-#   if (sht_num == 0) {
-#     recal <- 
-#       bind_rows(
-#         recal,
-#         tibble(file_path = files$file_path[i]))
-#     next
-#   }
-#   
-#   # read sheet 
-#   temp <- read_excel(
-#     files$file_path[i],
-#     sheet        = sht_num, 
-#     n_max        = 5,
-#     col_names    = FALSE,
-#     .name_repair = "unique_quiet") 
-# 
-#   # row number that contains headers
-#   row <- which(apply(temp, 1, function(x) any(grepl("(?i)sample", x))))
-#   
-#   if (is_empty(row) || is.na(row)) {
-#     View(temp)
-#     row <- readline("Which line is the header? ") %>%
-#            as.numeric()
-#   }
-#   
-#   # skip if no row info
-#   if (is_empty(row) || is.na(row)) {
-#     recal <-
-#       bind_rows(recal, 
-#               tibble(file_path    = files$file_path[i], 
-#                      sht_num = sht_num))
-#     next
-#     }
-#   
-#   # get last column to read
-#   # either `notes` or `collector`
-#   last_c <- which(grepl("(?i)notes|(?i)collector", temp[row,])) %>%
-#             max()
-#   
-#   recal <- 
-#     bind_rows(
-#       recal,
-#       tibble(
-#         file_path = files$file_path[i],
-#         sht_num = sht_num,
-#         row     = row,
-#         last_c  = last_c
-#       )
-#     )
-# }
-# 
-# # joins recal and files
-# files <- recal %>%
-#   drop_na(everything()) %>%
-#   left_join(files, by = "file_path")
-# 
-# rm(recal)
 ```
 # ---- Read all data as strings and merge ----
 No filtering of data is done. It will remove all `NA`s that was specified above.
@@ -262,47 +178,51 @@ No filtering of data is done. It will remove all `NA`s that was specified above.
 og_data_chr <-
   suppressMessages(
     files %>%
-      mutate(
-        data = pmap(
-          list(file_path, sht_num, row, last_c),
-          function(.x, .y, .z, .l) {
-            temp <- read_xlsx(
-              path         = .x,
-              sheet        = .y,
-              skip         = .z - 1,
-              range        = cell_cols(c(NA, .l)),
-              .name_repair = janitor::make_clean_names,
-              na           = na_skip,
-              col_types    = "text"
-            ) %>%
-              # remove column
-              select(-any_of("time_filtered_24_00"))
-          }
-        )
-      ) %>%
-      unnest(data) %>%
-      # combine different time column names into one
-      unite(
-        "sample_collection_time_gmt",
-        contains(c("sample_collection_time_gmt", 
-                   "time_gmt", 
-                   "time_sampled_24_00")),
-        sep    = "",
-        na.rm  = TRUE,
-        remove = TRUE
-      ) %>%
-      # convert to time by converting decimal (fraction of day in second) to HMS
-      # convert decmial to seconds then convert to time
-      # 24*60*60 = 86400 seconds in a day
-      # i.e. 0.4826388888888889 = 41700 seconds
-      # then hms::as_hms(41700) = 11:35:00
-      type_convert() %>%
-      mutate(
-        sample_collection_time_gmt = 
-          hms::as_hms(sample_collection_time_gmt * 24 * 60 * 60)
+    mutate(
+      data = pmap(
+        list(file_path, sht_num, row, last_c),
+        function(.x, .y, .z, .l) {
+          temp <- openxlsx::read.xlsx(
+            xlsxFile    = .x,
+            sheet       = .y,
+            cols        = 1:.l,
+            startRow    = .z,
+            na.strings  = na_skip,
+            detectDates = TRUE
+          ) %>%
+            janitor::clean_names() %>%
+            mutate(across(everything(), \(x) as.character(x))) %>%
+            # remove column
+            select(-any_of("time_filtered_24_00"))
+        }
       )
-  )
+    ) %>%
+    unnest(data) %>%
+    # combine different time column names into one
+    unite(
+      "sample_collection_time_gmt",
+      contains(c(
+        "sample_collection_time_gmt",
+        "time_gmt",
+        "time_sampled_24_00"
+      )),
+      sep    = "",
+      na.rm  = TRUE,
+      remove = TRUE
+    ) %>%
+    # convert to time by converting decimal (fraction of day in second) to HMS
+    # convert decmial to seconds then convert to time
+    # 24*60*60 = 86400 seconds in a day
+    # i.e. 0.4826388888888889 = 41700 seconds
+    # then hms::as_hms(41700) = 11:35:00
+    type_convert() %>%
+    mutate(
+      sample_collection_time_gmt =
+        hms::as_hms(sample_collection_time_gmt * 24 * 60 * 60)
+    )
+  ) %T>% print()
 ```
+
 # ---- Load data and correct formats if needed ----
 Loads all data and fixes column formatting to merge afterwards.
 This ignores potential NAs using any of 
@@ -353,53 +273,56 @@ files %>%
   unnest(data) %>%
   filter(!is.na(vol_ml) & 
          date_mm_dd_yy <= as_date("2015-01-01")) 
+
+rm(mismatch)
 ```
 
 # ---- Summarise Results ----
 ```{r unnest}
-data_unnest <-
+meta_list <- list()
+
+meta_list$sample_meta_data <-  
   files %>%
   unnest(data) %>% 
-  mutate(station = str_remove(station, "~"),
-         station = str_replace_all(station, " ", ""),
-         station = str_to_upper(station),
-         station = case_when(
-           str_detect(station, "9.69999") ~ "9.7",
-           str_detect(station, "9.80000") ~ "9.8",
-           TRUE ~ station)) %>%
   select(-c(file_path:last_c)) %>%
   
   filter(
-     # removes rows that contain no data encoded as `1899-12-31 00:00:00` or `NA`
+     # removes rows that contain no data encoded as 
+     # `1899-12-31 00:00:00` or `NA`
      # and vol_ml is `NA`
     !( (date_mm_dd_yy < as_date("2015-01-01") | is.na(date_mm_dd_yy))
       & is.na(vol_ml))
     
     # filter where sample_type (chl|hplc|cdom) has no vol and no date/time
     & !(is.na(date_time) & is.na(vol_ml))) %>%
-  
+  mutate(
+     .by = cruise_id,
+     cruise_start = min(date_mm_dd_yy, na.rm = TRUE)
+   ) %>%
+   arrange(cruise_start) %>%
+  select(-cruise_start) %>%
   group_by(cruise_id, station, depth_m) %>%
-  filter(!(
+  filter(
+    # .by = c(cruise_id, station, depth_m),
+    !(
     !is.na(notes) 
-    &
-      str_detect(notes, "skipped b/c low on amber vials")) 
-    & 
-      if_any(vol_ml, ~ !any(
+    & str_detect(notes, "skipped b/c low on amber vials")) 
+    & if_any(vol_ml, ~ !any(
         str_detect(sample_type, "(?i)chl|hplc") 
         & (is.na(.x) | .x == 0))) 
-    & 
-      !(!is.na(notes) 
+    & !(!is.na(notes) 
         & str_detect(
           notes, 
-          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost")))
+          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost"))) #%>%
+   
 
-data_unnest %$% unique(station)
+meta_list$sample_meta_data %$% unique(station)
 ```
 
 
 ```{r station-summary}
-data_summary <- 
-  data_unnest %>%
+meta_list$station_summary <- 
+  meta_list$sample_meta_data %>%
   mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
   ) %>%
     select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
@@ -411,15 +334,14 @@ data_summary <-
     names_repair = janitor::make_clean_names,
     values_fn    = list(vol_ml = length)
     ) %>%
-      ungroup()
-
-data_summary
+      ungroup() %T>%
+  print()
 ```
 
 
 ```{r cruise-summary}
-cruise_summary <- 
-  data_summary %>% 
+meta_list$cruise_summary <- 
+  meta_list$station_summary %>% 
   summarise(
     .by  = cruise_id,
     date = min(date_mm_dd_yy, na.rm = TRUE),
@@ -430,15 +352,15 @@ cruise_summary <-
     year   = year(date),
     month  = month(date),
     .after = date) %>%
-  arrange(date) 
-
-cruise_summary
+  arrange(date) %T>% 
+  print()
 ```
 
 
 ```{r sample-progress}
-sample_progress <- 
-  data_unnest %>%
+# sample_progress <-
+meta_list$temp <- 
+  meta_list$sample_meta_data %>%
   ungroup() %>%
   transmute(
     cruise_id,
@@ -448,40 +370,23 @@ sample_progress <-
     present_missing   = NA,
     collection_date   = date_time, 
     collected_by      = collector,
-    processed_date    = NA_Date_,
-    processed_by      = NA,
-    post_process_date = NA_Date_,
-    post_process_by   = NA,
-    submit_date       = NA_Date_,
-    submit_database   = NA,
-    submit_by         = NA
          ) %>%
-    group_by(sample_type) %>%
-    nest()
-
-
-# cruise_summary %>%
-#   mutate(
-#     chl_analyzed = glue("of {chl_a}"),
-#     hplc_analyzed = glue("of {hplc}"),
-#     cdom_analyzed = glue("of {cdom}"),
-#   )
-View(cruise_summary)
+    nest(.by = sample_type) %>% 
+  mutate(
+    name_list = case_match(
+      sample_type,
+      "Chl-a" ~ "chl_progress",
+  "HPLC" ~ "hplc_progress",
+  "CDOM" ~ "cdom_progress" 
+    )
+  ) %>%
+    pull(data, name = name_list) %T>% 
+  print()
 ```
 
 ## WIP: Append Data to Inventory
 ```{r}
-unshelf(readxl)
-shelf(openxlsx)
-
-test_list <- list(
-  "cruise_summary"   = cruise_summary,
-  "chl_progress"     = sample_progress$data[[1]],
-  "hplc_progress"    = sample_progress$data[[2]],
-  "cdom_progress"    = sample_progress$data[[3]],
-  "station_summary"  = data_summary,
-  "sample_meta_data" = data_unnest
-)
+meta_list <- list_flatten(meta_list, name_spec = "{inner}")
 
 wb <- loadWorkbook(inventory)
 
@@ -491,14 +396,14 @@ for (i in getSheetNames(inventory)) {
   print(i)
   
   # ---- reorder data for sheet `sample_meta_data`
-  if (i == "sample_meta_data") {
-    test_list[[i]] <- select(test_list[[i]], names(readWorkbook(wb, i)))
-  }
+  # if (i == "sample_meta_data") {
+    meta_list[[i]] <- select(meta_list[[i]], any_of(names(readWorkbook(wb, i))))
+  # }
 
   writeData(
     wb       = wb,
     sheet    = i,
-    x        = test_list[[i]],
+    x        = meta_list[[i]],
     colNames = FALSE,
     startRow = nrow(
       readWorkbook(
@@ -508,8 +413,48 @@ for (i in getSheetNames(inventory)) {
     ) + 2
   )
 }
-
 openXL(wb)
+```
+
+
+```{r}
+sv <- TRUE
+if (sv) {
+    cli::cli_alert_warning(
+      c(
+        "Make sure you want to save before continuing\n",
+        "[Enter] to continue\n",
+        "[Esc]   to cancel\n"
+      )
+    )
+    readline("")
+
+   dir_create(here("data", "metadata", "inventory"))
+    cli::cli_alert_info("Saving File!")
+    # save
+    saveWorkbook(
+      wb = wb,
+      file = here(
+        "data", "metadata", "inventory",
+        glue(
+         "imars_inventory",
+          format(Sys.Date(), "_%Y%m%d"),
+          ".xlsx"
+        )
+      ),
+      overwrite = TRUE
+    )
+}
+
+if (FALSE) {
+  here("data", "metadata", "inventory") %>%
+  dir_ls(regexp = "imars_inventory") %>%
+  str_subset("~\\$", negate = TRUE) %>%
+  sort(decreasing = TRUE) %>%
+  first() %>%
+  file_copy(new_path = inventory,
+            overwrite = TRUE)
+}
 ```
 
 
@@ -576,22 +521,21 @@ openXL(wb)
 
 
 ```{r save-inventory}
-list("cruise_summary"   = cruise_summary, 
-     "chl_progress"     = sample_progress$data[[1]],
-     "hplc_progress"    = sample_progress$data[[2]],
-     "cdom_progress"    = sample_progress$data[[3]],
-     "station_summary"  = data_summary,
-     "sample_meta_data" = data_unnest
-     ) %>%
-  
-test  %>%
-  pull(data2) %>%
-openxlsx::write.xlsx(., 
-                     file = here("test_inventory.xlsx"),
-                     overwrite = FALSE, 
-                     append = TRUE)
-
-shell.exec(here("imars_inventory_chl_hplc_cdom.xlsx"))
+# list("cruise_summary"   = cruise_summary, 
+#      "chl_progress"     = sample_progress$data[[1]],
+#      "hplc_progress"    = sample_progress$data[[2]],
+#      "cdom_progress"    = sample_progress$data[[3]],
+#      "station_summary"  = data_summary,
+#      "sample_meta_data" = data_unnest
+#      ) 
+# test  %>%
+#   pull(data2) %>%
+# openxlsx::write.xlsx(., 
+#                      file = here("test_inventory.xlsx"),
+#                      overwrite = FALSE, 
+#                      append = TRUE)
+# 
+# shell.exec(here("imars_inventory_chl_hplc_cdom.xlsx"))
 ```
 
 
