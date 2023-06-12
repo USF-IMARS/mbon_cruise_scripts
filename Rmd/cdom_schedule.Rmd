@@ -31,6 +31,7 @@ NEED TO MAKE SURE INVENTORY IS UP TO DATE
 - go to `merge_meta_chl_hplc_cdom.Rmd` to update inventory
 ```{r}
 source(here(".Rprofile"))
+source(here("scripts", "misc_functions.R"))
 
 schedule_file <- 
   here(cloud_dir, "blank_sheets") %>%
@@ -49,40 +50,49 @@ meta_data <-
   ) %>%
   filter(collection_date > as_date("2022-03-25")) %>%
   select(cruise_id, station,	"sample ID" = identifier) %>%
-  mutate(sample_number = str_extract(`sample ID`, "-(.*)", group = 1))
-
-meta_data
-
-# meta_data <-
-here(cloud_dir, "years", "2023", c("H23138", "WS23061"), "metadata") %>%
-  dir_ls(
-    regexp = "^[^\\$]*fknms_sample_logsheet"
-  ) %>%
-  # str_subset("H") |>
-  # shell.exec()
-  map(
-    ~ openxlsx::read.xlsx(.x, sheet = "field_logsheet",
-                          detectDates = TRUE) %>%
-      janitor::clean_names() %>%
-      mutate(sample_number = as.character(sample_number),
-             cruise_id =  str_extract(.x, "\\w{1,2}\\d{4,5}")) %>%
-      filter(str_detect(sample_type, "(?i)cdom"))
-  ) %>%
-  list_rbind() %>% #names()
-  arrange(desc(cruise_id)) %>%
-  select(
-    cruise_id,
-    station,
-    "sample ID" = identifier,
-    sample_number
-  ) %>%
-  mutate(
+  mutate(sample_number = str_extract(`sample ID`, "-(.*)", group = 1)) %>%
+    mutate(
     dups = case_when(
       str_detect(sample_number, "(?i)b$") ~ "dup",
       str_detect(`sample ID`, "(?i)b$") ~ "dup",
-      .default = NA
+      .default = NA)
     )
-  ) %T>% print()
+
+# 
+# # meta_data <-
+#    search_meta_folders(
+#       .dir_path   = here(cloud_dir, "years"),
+#       .sub_folder = "metadata",
+#       return_type = "vector") %>%
+#     str_subset(
+#       str_c("H23138", "WS23061", sep = "|")) %>%
+# 
+#   dir_ls(
+#     regexp = "^[^\\$]*fknms_sample_logsheet"
+#   ) %>%
+#   map(
+#     ~ openxlsx::read.xlsx(.x, sheet = "field_logsheet",
+#                           detectDates = TRUE) %>%
+#       janitor::clean_names() %>%
+#       mutate(sample_number = as.character(sample_number),
+#              cruise_id =  str_extract(.x, "\\w{1,2}\\d{4,5}")) %>%
+#       filter(str_detect(sample_type, "(?i)cdom"))
+#   )# %>%
+#   list_rbind() %>% #names()
+#   arrange(desc(cruise_id)) %>%
+#   select(
+#     cruise_id,
+#     station,
+#     "sample ID" = identifier,
+#     sample_number
+#   ) %>%
+  # mutate(
+  #   dups = case_when(
+  #     str_detect(sample_number, "(?i)b$") ~ "dup",
+  #     str_detect(`sample ID`, "(?i)b$") ~ "dup",
+  #     .default = NA
+  #   )
+#   ) %T>% print()
 
 ```
 
@@ -99,6 +109,8 @@ cdom_cruise <-
   nest(.by = cruise_id)
 
 wb <- loadWorkbook(schedule_file) 
+r
+
 
 for (i in seq(nrow(cdom_cruise))) {
 
@@ -160,13 +172,9 @@ for (i in seq(nrow(cdom_cruise))) {
               stack = TRUE,
               style = createStyle(fgFill = "#C6E0B4"))
   }
- 
-  
- 
-
 }
 
-# openXL(wb)
+openXL(wb)
 ```
 
 ```{r}
