@@ -45,7 +45,9 @@ grant_info <-
   list(
   info = rbind(
     # grant name
-    "The Southeast US Marine Biodiversity Observation Network (MBON): Toward Operational Marine Life Data for Conservation and Sustainability",
+    str_c("The Southeast US Marine Biodiversity Observation Network (MBON): ",
+          "Toward Operational Marine Life Data for Conservation and ",
+          "Sustainability"),
     
     # grant number
     "80NSSC22K1779",
@@ -83,8 +85,8 @@ metadata <-
             detectDates = FALSE) %>%
   filter(str_detect(sample_type, "(?i)hplc")) %>%
   mutate(
-    date = janitor::excel_numeric_to_date(date_mm_dd_yy),
-    time = hms::as_hms(sample_collection_time_gmt),
+    date     = janitor::excel_numeric_to_date(date_mm_dd_yy),
+    time     = hms::as_hms(sample_collection_time_gmt),
     datetime = ymd_hms(glue("{date} {time}"), truncated = 3),
     station  = str_remove(station, "\\.0$"),
     .before  = date_mm_dd_yy
@@ -237,8 +239,10 @@ meta_format <-
     month       = month(date, label = TRUE, abbr = TRUE),
     day         = day(date),
     sdy         = yday(date),
+    time,
     time        = round_hms(time, digits = 0),
     time        = str_remove_all(time, ":"),
+    time        = str_sub(time, end = 4),
     lon,
     lat,
     filter.type = "GF/F",
@@ -274,8 +278,9 @@ meta_format <-
   ) %>%
   arrange(year, month, nchar(sample), sample) %T>%
   print()
-```
 
+unique(meta_format$cruise)
+```
 ## Check Spatial Locations
 ```{r check-spatial, fig.height=15, fig.width=20}
 (meta_format %>%
@@ -292,107 +297,217 @@ meta_format <-
   plotly::ggplotly()
 ```
 
-## Check for Missing Data
-```{r check-na}
-naniar::vis_miss(meta_format)
-```
-
-# Save Workbook
-```{r save-wb}
-wb <- loadWorkbook(template)
-
-writeData(
-  wb,
-  sheet    = 1,
-  x        = grant_info$info,
-  startRow = grant_loc[1],
-  startCol = grant_loc[2] + 1,
-  colNames = FALSE
-)
-
-writeData(wb, 
-          sheet = 1,
-          x = meta_format,
-          startRow = loc[1] + 1,
-          colNames = FALSE)
-
-# open
-openXL(wb)
-
-# save
-saveWorkbook(
-  wb = wb,
-  file = here(
-    "data", "metadata",
-    glue(
-      grant_info$last_nm,
-      format(Sys.Date(), "_%Y%m%d_"),
-      str_c(cruise_id, collapse = "_"),
-      ".xlsx"
-    )
-  )
-)
-
-```
-
 ```{r}
 # find previously saved files
 prev_f <-
   # local_sv %>%                         # local
-  here(cloud_dir, "blank_sheets") %>%  # cloud
-  
-  dir_ls(regexp = glue("^[^~]*hplc.*\\.xlsx$")
-         )
+  here(cloud_dir, "blank_sheets") %>% # cloud
 
-getSheetNames(prev_f)[2:4]
+  dir_ls(regexp = glue("^[^~]*hplc.*\\.xlsx$"))
 
-hplc_check <- 
-map(2:4, ~ read.xlsx(prev_f, sheet = .x, startRow = 2)  %>%
-           mutate(absent = as.character(absent),
-                  notes = as.character(notes))) %>%
+getSheetNames(prev_f)[-c(1, 5:12)]
+
+hplc_check <-
+  getSheetNames(prev_f)[-c(1, 5:12)] %>%
+  map(., ~ read.xlsx(prev_f, sheet = .x, startRow = 2) %>%
+    mutate(
+      sheet = .x,
+      collection_date = as.character(collection_date),
+      station = as.character(station),
+      present = as.character(present),
+      absent = as.character(absent),
+      notes  = as.character(notes),
+      collected_by = as.character(collected_by)
+    ))   %>%
   list_rbind() 
 
-meta_format_filt <- 
-meta_format %>%
-  filter(cruise %in% getSheetNames(prev_f)[2:4]) %>%
-  left_join(hplc_check,
-            by = join_by(sample == identifier)) %>%
-            filter(if_any(c(present, absent), \(x) !is.na(x)) &
-                     !is.na(present)) %>%
-                      select(-c(present:notes))
+hplc_miss <- 
+  filter(hplc_check, str_detect(absent, "X"))
 
-wb <- loadWorkbook(template)
+hplc_check <-
+  filter(hplc_check, str_detect(present, "X"))
 
-writeData(
-  wb,
-  sheet    = 1,
-  x        = grant_info$info,
-  startRow = grant_loc[1],
-  startCol = grant_loc[2] + 1,
-  colNames = FALSE
-)
+# meta_format_check <-
+#   meta_format %>%
+#   filter(cruise %in% getSheetNames(prev_f)) %>% 
+#   full_join(hplc_check,
+#     by = join_by(sample == identifier),
+#     na_matches = "never"
+#   ) %>%
+#   mutate(
+#     arr = str_extract(sheet, "\\d+"),
+#     arr = if_else(is.na(arr), 
+#                   str_extract(cruise, "\\d+"),
+#                   arr 
+#                   )
+#   ) %>%
+#     
+#   arrange(arr) %>%
+#   select(-c(1:3, 6, 9, name.of.water.body, filter.type:contains("shipment")),
+#          -arr)
+# 
+# meta_format_filt <- 
+#   meta_format_check %>%
+#   filter(if_any(c(present, absent), \(x) !is.na(x)) &
+#     !is.na(present)) %>%
+#   select(-c(present:notes)) 
+# 
+# naniar::vis_miss(meta_format_check)
+# naniar::vis_miss(meta_format_filt)
+# 
+#   
+# if (TRUE || !file_exists(here("data", "metadata", "hplc_check"))) {
+#   cli::cli_alert_info("Saving `hplc_check` file.")
+#   openxlsx::write.xlsx(
+#     meta_format_check,
+#     file = here("data", "metadata",
+#      glue("hplc_check",
+#           ".xlsx")
+#           ),
+#     na = "",
+#     overwrite = FALSE
+#   )
+#   shell.exec(here("data", "metadata",
+#      glue("hplc_check",
+#           ".xlsx")
+#           ))
+# }
 
-writeData(wb, 
-          sheet = 1,
-          x = meta_format_filt,
-          startRow = loc[1] + 1,
-          colNames = FALSE)
 
-# open
-openXL(wb)
-
-# save
-saveWorkbook(
-  wb = wb,
-  file = here(
-    "data", "metadata",
-    glue(
-      grant_info$last_nm,
-      format(Sys.Date(), "_%Y%m%d_"),
-      str_c(cruise_id, collapse = "_"),
-      ".xlsx"
-    )
+meta_format <-
+  meta_format %>%
+  left_join(select(hplc_check, identifier, notes), 
+            by = join_by("sample" == "identifier")
   )
-)
+```
+
+## Check for Missing Data
+```{r check-na}
+print(naniar::vis_miss(select(meta_format, -1, -2)))
+```
+
+# Save Workbook
+```{r save-wb}
+sv <- TRUE
+if (TRUE) {
+  wb <- loadWorkbook(template)
+
+  writeData(
+    wb,
+    sheet    = 1,
+    x        = grant_info$info,
+    startRow = grant_loc[1],
+    startCol = grant_loc[2] + 1,
+    colNames = FALSE
+  )
+
+  writeData(
+    wb,
+    sheet    = 1,
+    x        = meta_format,
+    startRow = loc[1] + 1,
+    colNames = FALSE
+  )
+
+  if (!sv) {
+    # open
+    openXL(wb)
+
+  } else if (sv) {
+    cli::cli_alert_warning(
+      c(
+        "Make sure you want to save before continuing\n",
+        "[Enter] to continue\n",
+        "[Esc]   to cancel\n"
+      )
+    )
+    readline("")
+
+
+    cli::cli_alert_info("Saving File!")
+    # save
+    saveWorkbook(
+      wb = wb,
+      file = here(
+        "data", "metadata",
+        glue(
+          grant_info$last_nm,
+          format(Sys.Date(), "_%Y%m%d_"),
+          str_c(cruise_id, collapse = "_"),
+          ".xlsx"
+        )
+      )
+    )
+  }
+}
+
+
+if (FALSE) {
+  here("data", "metadata") %>%
+  dir_ls(regexp = "Diger") %>%
+  str_subset("~\\$", negate = T) %>%
+  sort(decreasing = TRUE) %>%
+  first() %>%
+  file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"))
+}
+```
+
+
+
+
+```{r}
+# sv <- FALSE
+# if (FALSE) {
+#   wb <- loadWorkbook(template)
+# 
+#   writeData(
+#     wb,
+#     sheet    = 1,
+#     x        = grant_info$info,
+#     startRow = grant_loc[1],
+#     startCol = grant_loc[2] + 1,
+#     colNames = FALSE
+#   )
+# 
+#   writeData(wb,
+#     sheet = 1,
+#     x = meta_format_filt,
+#     startRow = loc[1] + 1,
+#     colNames = FALSE
+#   )
+# 
+# 
+#   if (!sv) {
+#     # open
+#     openXL(wb)
+# 
+#     sv <- TRUE
+#   } else if (sv) {
+#     cli::cli_alert_warning(
+#       c(
+#         "Make sure you want to save before continuing\n",
+#         "[Enter] to continue\n",
+#         "[Esc]   to cancel\n"
+#       )
+#     )
+#     readline("")
+# 
+# 
+#     cli::cli_alert_info("Saving File!")
+#     # save
+#     saveWorkbook(
+#       wb   = wb,
+#       file = here(
+#         "data", "metadata",
+#         glue(
+#           grant_info$last_nm,
+#           format(Sys.Date(), "_%Y%m%d_"),
+#           str_c(cruise_id, collapse = "_"),
+#           ".xlsx"
+#         )
+#       )
+#     )
+#   }
+# }
 ```
 
