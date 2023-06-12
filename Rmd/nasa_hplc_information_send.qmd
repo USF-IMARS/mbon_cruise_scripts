@@ -409,11 +409,8 @@ if (TRUE) {
     colNames = FALSE
   )
 
-  if (!sv) {
-    # open
-    openXL(wb)
-
-  } else if (sv) {
+  openXL(wb)
+  if (sv) {
     cli::cli_alert_warning(
       c(
         "Make sure you want to save before continuing\n",
@@ -422,8 +419,8 @@ if (TRUE) {
       )
     )
     readline("")
-
-
+  
+  
     cli::cli_alert_info("Saving File!")
     # save
     saveWorkbook(
@@ -445,7 +442,7 @@ if (TRUE) {
 if (FALSE) {
   here("data", "metadata") %>%
   dir_ls(regexp = "Diger") %>%
-  str_subset("~\\$", negate = T) %>%
+  str_subset("~\\$", negate = TRUE) %>%
   sort(decreasing = TRUE) %>%
   first() %>%
   file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"))
