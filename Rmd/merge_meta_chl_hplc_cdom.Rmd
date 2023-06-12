@@ -6,7 +6,7 @@ output: html_document
 ---
 
 # TODO: format like merge_data.Rmd
-# ---- Load Libraries ----
+# ---- 1.0 Load Libraries ----
 ```{r setup}
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
@@ -39,8 +39,8 @@ locat <- "cloud"
 check <- 1
 ```
 
-# ---- Search files ----
-## Cloud Directory
+# ---- 2.0 Search files ----
+## --- 2.1 Cloud Directory ---
 After the first time, you will get a variable called `cloud_dir`. You should 
 copy this into a `.Rprofile` so when you restart `R`, the path will be set.
 
@@ -87,7 +87,7 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
 }
 ```
 
-## Local Directory
+## --- 2.2 Local Directory ---
 This is the location within this project that should be created when loading the
 first time. 
 
@@ -116,7 +116,7 @@ if (is.null(box_search) | check == 2 | check == 3) {
     print()
 }
 ```
-## Compare Local and Cloud
+## --- 2.3 Compare Local and Cloud ---
 Check the differences between the two to see if any discrepancies exists. 
 You should only need to use the `cloud_dir` location
 ```{r compare}
@@ -138,7 +138,7 @@ files_filt[files_filt$base %in% files_local$base, 2]
     filter(is.na(file_path.y)) 
 ```
 
-# ---- Extract sheet name and row to read ----
+# ---- 3.0 Extract sheet name and row to read ----
 Extracts sheet info by looking for prefix `field` or `Sheet1`
 - if none are found, it will ask which of the sheets it could be
 
@@ -172,7 +172,7 @@ files <- get_sheet_info(files)
 files
 
 ```
-# ---- Read all data as strings and merge ----
+# ---- 4.0 Read all data as strings and merge ----
 No filtering of data is done. It will remove all `NA`s that was specified above.
 ```{r all-data-as-str}
 og_data_chr <-
@@ -223,7 +223,7 @@ og_data_chr <-
   ) %T>% print()
 ```
 
-# ---- Load data and correct formats if needed ----
+# ---- 5.0 Load data and correct formats if needed ----
 Loads all data and fixes column formatting to merge afterwards.
 This ignores potential NAs using any of 
 - "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", "*", or any 
@@ -242,7 +242,7 @@ files <-
 
 files$data
 ```
-# ---- Check Mismatched ----
+## --- 5.1 Check Mismatched ---
 Check which sheets and columns have different types from the rest so you can fix
 using the above code. 
 
@@ -277,8 +277,9 @@ files %>%
 rm(mismatch)
 ```
 
-# ---- Summarise Results ----
-```{r unnest}
+# ---- 6.0 Summarise Results ----
+# --- 6.1 Unnest Metadata ---
+```{r unnest-metadata}
 meta_list <- list()
 
 meta_list$sample_meta_data <-  
@@ -319,6 +320,7 @@ meta_list$sample_meta_data <-
 meta_list$sample_meta_data %$% unique(station)
 ```
 
+## --- 6.2 Station Summary ---
 
 ```{r station-summary}
 meta_list$station_summary <- 
@@ -338,7 +340,7 @@ meta_list$station_summary <-
   print()
 ```
 
-
+## --- 6.3 Cruise Summary ---
 ```{r cruise-summary}
 meta_list$cruise_summary <- 
   meta_list$station_summary %>% 
@@ -356,7 +358,7 @@ meta_list$cruise_summary <-
   print()
 ```
 
-
+## --- 6.4 Sample Progress ---
 ```{r sample-progress}
 # sample_progress <-
 meta_list$temp <- 
@@ -384,8 +386,8 @@ meta_list$temp <-
   print()
 ```
 
-## WIP: Append Data to Inventory
-```{r}
+# ---- 7.0 Append Data to Inventory ----
+```{r add-new-data}
 meta_list <- list_flatten(meta_list, name_spec = "{inner}")
 
 wb <- loadWorkbook(inventory)
@@ -396,9 +398,10 @@ for (i in getSheetNames(inventory)) {
   print(i)
   
   # ---- reorder data for sheet `sample_meta_data`
-  # if (i == "sample_meta_data") {
-    meta_list[[i]] <- select(meta_list[[i]], any_of(names(readWorkbook(wb, i))))
-  # }
+  meta_list[[i]] <- 
+    select(
+      meta_list[[i]],
+      any_of(names(readWorkbook(wb, i))))
 
   writeData(
     wb       = wb,
@@ -416,9 +419,10 @@ for (i in getSheetNames(inventory)) {
 openXL(wb)
 ```
 
-
-```{r}
+## --- 7.1 Save to Local and Cloud ---
+```{r save-local}
 sv <- TRUE
+# save local
 if (sv) {
     cli::cli_alert_warning(
       c(
@@ -446,6 +450,7 @@ if (sv) {
     )
 }
 
+# save to cloud
 if (FALSE) {
   here("data", "metadata", "inventory") %>%
   dir_ls(regexp = "imars_inventory") %>%
@@ -457,7 +462,7 @@ if (FALSE) {
 }
 ```
 
-
+# delete
 ```{r}
 # wb <-
 #   inventory %>%
