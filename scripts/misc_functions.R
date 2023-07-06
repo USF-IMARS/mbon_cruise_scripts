@@ -268,36 +268,58 @@ read_logsheets <-  function(.x, .y, .z, .l,
 #' FUNCTION_DESCRIPTION
 #'
 #' @param .dir_path Starting directory path.
-#' @param .sub_folder Subfolders exists within every level
+#' @param .folder_search Subfolders exists within every level
 #'                    Can be:
 #'                    - a string (ex `"dir1"`),
 #'                    - a vector (ex `c("dir1", "dir2")`), or 
 #'                    - a list (ex `list("dir1", "dir2")`)
 #' @param return_type Return type, either `vector` or `tibble`
+#' @param recurse_level How many levels down a folder subdirectory should be 
+#'                      examined. (NOTE: limit to lowest number as possible as 
+#'                      more levels could create a runtime problem)
+#'
+#' @author Sebastian Di Geronimo (May 2023)
+#'
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
 search_meta_folders <- function(
     .dir_path,
-    .sub_folder = NULL,
-    return_type = c("vector", "tibble")) {
+    .folder_search = NULL,
+    return_type    = c("vector", "tibble"),
+    recurse_level  = FALSE) {
   
   return_type <- match.arg(return_type)
   
-  file_loc <- 
-    here::here(.dir_path) %>%
-    fs::dir_ls(type = "directory") %>%
-    fs::dir_ls(type = "directory")
-  
-  if (is.list(.sub_folder) || is.character(.sub_folder)) {
-    file_loc <- 
-    here::here(file_loc, as.list(.sub_folder)) %>%
-    Filter(fs::dir_exists, .)
+  # reformat to "*<subfolder_1>|*<subfolder_2>
+  if (all(!is.na(.folder_search)) && !is.null(.folder_search)) {
     
-  } else if (is.null(.sub_folder) || is.na(.sub_folder)) {
-    file_loc <- Filter(fs::dir_exists, file_loc)  
+    message(
+      paste("Searching for sub-folder(s):",
+            paste(c("\b", .folder_search), 
+                  collapse = "\n"), "\n"))
+    
+    .folder_search <- 
+      as.character(.folder_search) %>%
+      paste0("*", ., collapse = "|")
+  } else if (is.null(.folder_search)) {
+      message("Not searching for subdirectory.")
   } else {
-    stop("`.sub_folder` is not of type list, or character, or is NULL")
+    stop("`.folder_search` is not of type list, or character, or is NULL",
+         call. = FALSE)
+    }
+  
+  file_loc <-
+    here::here(.dir_path) %>%
+    fs::dir_ls(
+      type = "directory",
+      glob = .folder_search,
+      fail = FALSE,
+      recurse = recurse_level
+      ) 
+  
+  if (purrr::is_empty(file_loc)) {
+    warning("No directories were found.")
   }
   
   switch(return_type,
@@ -305,7 +327,5 @@ search_meta_folders <- function(
     tibble = tibble::tibble(folder = file_loc) 
   )
   
-  
-
   # ---- end of function
 }
