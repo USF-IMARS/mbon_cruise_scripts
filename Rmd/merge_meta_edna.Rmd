@@ -7,8 +7,11 @@ output: html_document
 
 # ---- Load Libraries ----
 ```{r setup}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
 librarian::shelf(
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   # broom # optional
   
@@ -16,10 +19,12 @@ librarian::shelf(
   readxl, hms
 )
 
-library("conflicted")
+# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 
 # `NA` values to skip when reading `.xlsx.
 na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
@@ -27,6 +32,52 @@ na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow",
 ```
 
 # ---- Search Box for FKNMS Logsheets ----
+```{r find-files-box}
+# folder path in cloud directory, 
+# - If cancel, will be NULL
+if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
+
+if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
+  # message(glue("Searching `{cloud_dir}` for metadata!"))
+  box_search <- 
+    # search_meta_folders(
+    #   .dir_path   = here(cloud_dir, "years"),
+    #   .folder_search = "metadata",
+    #   return_type = "vector")
+   search_meta_folders(
+      .dir_path   = here(cloud_dir, "years"),
+      .folder_search = "metadata",
+      return_type = "vector",
+      recurse_level = 2) 
+  
+  files_all <- 
+    dir_ls(
+      path   = box_search,
+      regexp = "\\.(xlsx)$"
+    ) %>%
+    # remove files to ignore or locked files (i.e. ~$)
+    str_subset("~|ignore", negate = TRUE) %>% 
+    tibble(file_path = .,
+           base  = basename(.)) 
+  
+  files_filt <- 
+    files_all %>%
+    # filter for cruise files
+    filter(str_detect(file_path, "(?i)fknms_")) %>%
+    
+    # add columns for cruise ID and year
+    mutate(
+      cruise_id = str_extract(file_path, "\\w{1,2}\\d{4,5}"),
+      
+      year = str_extract(file_path, "[0-9]{4}"),
+      year = as.numeric(year)
+    ) %T>% print()
+} else {
+  message("Not looking for files in `cloud directory` because set as NULL.")
+  box_search <- NULL
+}
+```
+
 ```{r search-fknms}
 # folder paths in cloud directory
 if (!file_exists(here("box_search.csv"))) {
