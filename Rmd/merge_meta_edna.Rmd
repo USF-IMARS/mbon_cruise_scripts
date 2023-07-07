@@ -29,6 +29,9 @@ conflicts_prefer(
 # `NA` values to skip when reading `.xlsx.
 na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
              "*", stringi::stri_dup("-", 1:20))
+
+source(here("scripts", "misc_functions.R"))
+source(here(".Rprofile"))
 ```
 
 # ---- Search Box for FKNMS Logsheets ----
@@ -37,13 +40,9 @@ na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow",
 # - If cancel, will be NULL
 if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
 
-if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
+if (!is.null(cloud_dir)) {
   # message(glue("Searching `{cloud_dir}` for metadata!"))
   box_search <- 
-    # search_meta_folders(
-    #   .dir_path   = here(cloud_dir, "years"),
-    #   .folder_search = "metadata",
-    #   return_type = "vector")
    search_meta_folders(
       .dir_path   = here(cloud_dir, "years"),
       .folder_search = "metadata",
@@ -58,12 +57,7 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
     # remove files to ignore or locked files (i.e. ~$)
     str_subset("~|ignore", negate = TRUE) %>% 
     tibble(file_path = .,
-           base  = basename(.)) 
-  
-  files_filt <- 
-    files_all %>%
-    # filter for cruise files
-    filter(str_detect(file_path, "(?i)fknms_")) %>%
+           base  = basename(.))  %>%
     
     # add columns for cruise ID and year
     mutate(
@@ -71,181 +65,72 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
       
       year = str_extract(file_path, "[0-9]{4}"),
       year = as.numeric(year)
-    ) %T>% print()
+    )
+  
+  files_filt <- 
+    files_all %>%
+    # filter for cruise files
+    filter(str_detect(file_path, "(?i)fknms_")) %T>% 
+    print()
+  
 } else {
   message("Not looking for files in `cloud directory` because set as NULL.")
   box_search <- NULL
 }
-```
-
-```{r search-fknms}
-# folder paths in cloud directory
-if (!file_exists(here("box_search.csv"))) {
-  # if need box_search.csv 
-  if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
-  box_search <- 
-  dir_ls(
-    here(cloud_dir, "years"),
-    regexp  = "metadata",
-    type    = "directory",
-    recurse = TRUE) %>%
-    tibble(folder = .) %>%
-    filter(!str_detect(folder, "train"))
-} else {
-  # read cloud directory search
-  box_search <- read_csv(here("box_search.csv"), 
-                         show_col_types = FALSE)
-}
-
-# find all file names with log in it
-files_all <- 
-  dir_ls(box_search$folder,
-         regexp  = "^[^~]*\\.(xlsx)$",
-         recurse = TRUE) %>%
-  tibble(file_path = .,
-         base      = basename(.)) %>%
-    
-  # extract path and file name, and year
-  mutate(
-    cruise_id = str_extract(file_path, 
-                            "(FK|WS|WB|SV)[0-9]{4,5}"),
-         year = str_extract(file_path, "[0-9]{4}"),
-         year = as.numeric(year)
-    )
 
 # filter files after 2017, and not 2019 because this is when I started
-# remove `ignore` file, and any without `fknms` in the name
 files_filt <-
-  files_all %>%
-  filter(str_detect(basename(file_path), "fknms_") &
+  files_filt %>%
+  filter(
          year > 2017 &
-         year != 2019 &
-         !str_detect(file_path, "ignore|blank"))
+         year != 2019
+  #       ) %>%
+  # filter(
+  #   str_detect(cruise_id, "WS23061|H23138")
+  ) %T>% 
+  print()
 ```
 # ---- Read Sheet Info ----
 ```{r read-meta-info}
 files <- files_filt
 
-recal <- tibble()
-
-for (i in seq(nrow(files))) {
-# for (i in 1) {
-  # select sheet name with `field_logsheet`
-  cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
-  temp_sht <- excel_sheets(files$file_path[i]) 
-  sht_num  <- which(str_detect(temp_sht, "(?i)edna") & 
-                    !str_detect(temp_sht, "(?i)print"))
-  
-  if (identical(sht_num, integer(0))) {
-    cli::cli_alert_danger("Files doesn't have an eDNA sheet. Skipping file!")
-     recal <-
-      bind_rows(
-        recal,
-        tibble(file_path = files$file_path[i]))
-    next
-  }
-  
-  if (is_empty(sht_num)) {
-    sht_num <- menu(temp_sht, 
-                    title = glue(
-                      "\n-----\n\n",
-                      "Which sheet contains metadata?", 
-                      "\n(0 for none)"))
-  }
-  
-  # skip if no sheet name
-  if (sht_num == 0) {
-    recal <- 
-      bind_rows(
-        recal,
-        tibble(file_path = files$file_path[i]))
-    next
-  }
-  
-  # read sheet 
-  temp <- read_excel(
-    files$file_path[i],
-    sheet        = sht_num, 
-    n_max        = 5,
-    col_names    = FALSE,
-    .name_repair = "unique_quiet") 
-  
-  # row number that contains headers
-  row <- which(apply(temp, 1, function(x) any(grepl("(?i)MM:DD:YY", x))))
-  
-  if (is_empty(row) || is.na(row)) {
-    View(temp)
-    row <- readline("Which line is the header? ") %>%
-      as.numeric()
-  }
-  
-  # skip if no row info
-  if (is_empty(row) || is.na(row)) {
-    recal <-
-      bind_rows(recal, 
-                tibble(file_path    = files$file_path[i], 
-                       sht_num = sht_num))
-    next
-  }
-  
-  # get last column to read
-  # either `notes` or `collector`
-  last_c <- which(grepl("(?i)notes|(?i)collector", temp[row,])) %>%
-    max()
-  
-  recal <- 
-    bind_rows(
-      recal,
-      tibble(
-        file_path = files$file_path[i],
-        sht_num = sht_num,
-        row     = row,
-        last_c  = last_c
-      )
-    )
-}
-
-# joins recal and files
 files <- 
-  recal %>%
-  # drop row if no sheet exists in the file
-  drop_na(everything()) %>%
-  
-  # join with original info
-  left_join(files, by = "file_path")
+  get_sheet_info(
+    files,
+    sheet_type = "edna") %T>% 
+  print()
+
 ```
 # ---- Read Files ----
+```{r}
+# filter(files, str_detect(file_path, 'fknms_sample_logsheet_12_2021')) %>%
+files %>%
+  # slice(10) %>%
+  filter(str_detect(file_path, "OCT")) %>%
+  pull(file_path) %>%
+  # openxlsx2::read_xlsx(sheet = "eDNA", detectDates = T,
+  #                     # rows = 1:
+  #                       )# %>%
+ 
+  shell.exec()
+```
+
 ```{r read-meta-sheets}
 files <-
   files %>%
+  # slice(10) %>%
+  
+  # filter(cruise_id == "H23138") %>%
+  # filter(str_detect(file_path, 'OCT')) %>%
+  
   mutate(
     data = pmap(
-      list(file_path, sht_num, row, last_c), 
-      function(.x, .y, .z, .l) {
-        # load data
-        # select sheet, skip number of lines to sample 1, stop columns after
-        # `notes` or `collector`, remove NA values, clean names
-        temp <- read_xlsx(
-          path         = .x,
-          sheet        = .y,
-          skip         = .z - 1,
-          range        = cell_cols(c(NA, .l)),
-          .name_repair = janitor::make_clean_names,
-          na           = na_skip
-        ) %>%
-          mutate(
-            notes = as.character(notes)
-          ) 
-        
-        # filter out if sheet contained "did not take any"
-        if (isTRUE(any(str_detect(temp, "(?i)Did not take any")))) {
-          temp <- filter(temp, str_detect(notes, "(?i)did not"))
-        }
-        
-        return(temp)
-      }
-    )
-  )
+      list(file_path, sht_num, row, last_c, "edna", list(na_skip)), 
+      read_logsheets
+      ),
+    data_row =  map_int(data, \(x) nrow(x))
+    ) %>%
+  filter(data_row > 0)
 ```
 # ---- Check Mismatched Column Types or Names ----
 This will show the column that have a different type than what it should be. The
@@ -271,7 +156,6 @@ mismatch
 #   filter(str_detect(file_path, "<enter-bad-base-file-name>")) %$% 
 #   shell.exec(file_path)
 ```
-
 # ---- Unnest Metadata and Format ----
 ```{r unnest-meta}
 data_all <-
@@ -281,6 +165,7 @@ data_all <-
   filter(!if_all(mm_dd_yy:vol_ml, is.na) 
          & mm_dd_yy > as_date("2015-01-01")) %>%
   mutate(
+    # time_gmt = round(time_gmt*86400),
     time_gmt = as_hms(time_gmt),
     year     = year(mm_dd_yy),
     month    = month(mm_dd_yy, label = TRUE),
@@ -295,12 +180,13 @@ data_all <-
       is.na(depth_m) ~ 1,
       TRUE ~ depth_m),
     sample      = str_remove(sample, "\\*"),
-    station      = str_replace(station, "(?i)blank.*", "blank"),
+    station     = str_replace(station, "(?i)blank.*", "blank"),
     replicate   = str_extract(sample, "(?i)[a-c]$|[1-6]$"), 
     replicate   = str_to_upper(replicate),
     filter_type = "sterivex",
     .after      = sample
-  ) 
+  ) %T>% 
+  print()
 ```
 
 
@@ -309,10 +195,9 @@ data_all <-
 data_summary <-
   data_all %>%
   filter(!(str_detect(station, "(?i)blan") |
-         str_detect(sample, "(?i)blan"))) %>%
-  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
-  ) %>%
-  select(-sample, -replicate, -sample_n, -notes,  -collector) %>%
+    str_detect(sample, "(?i)blan"))) %>%
+  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)) %>%
+  select(-sample, -replicate, -sample_n, -notes, -collector) %>%
   pivot_wider(
     data         = .,
     names_from   = c(filter_type), # category column(s) to pivot wide
@@ -320,15 +205,16 @@ data_summary <-
     names_sep    = "_",
     names_repair = janitor::make_clean_names,
     values_fn    = list(vol_ml = length)
-    )
+  )
 
-dat_blnk <- 
-  filter(data_all, 
-         str_detect(station, "(?i)blan") |
-         str_detect(sample, "(?i)blan")) %>%
-  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
+dat_blnk <-
+  filter(
+    data_all,
+    str_detect(station, "(?i)blan") |
+      str_detect(sample, "(?i)blan")
   ) %>%
-  select(-sample, -replicate, -sample_n, -notes,  -collector) %>%
+  mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)) %>%
+  select(-sample, -replicate, -sample_n, -notes, -collector) %>%
   pivot_wider(
     data         = .,
     names_from   = c(filter_type), # category column(s) to pivot wide
@@ -336,22 +222,22 @@ dat_blnk <-
     names_sep    = "_",
     names_repair = janitor::make_clean_names,
     values_fn    = list(vol_ml = length)
-    ) %>%
-     summarise(
-    .by  = cruise_id,
+  ) %>%
+  summarise(
+    .by = cruise_id,
     date = min(mm_dd_yy, na.rm = TRUE),
     across(sterivex, sum, na.rm = TRUE)
-    ) %>%
-    rename("blank" = sterivex) %>%
+  ) %>%
+  rename("blank" = sterivex) %>%
   select(-date)
 
-cruise_summary <- 
-  data_summary %>% 
+cruise_summary <-
+  data_summary %>%
   summarise(
     .by  = cruise_id,
     date = min(mm_dd_yy, na.rm = TRUE),
     across(sterivex, sum, na.rm = TRUE)
-    ) 
+  )
 
 cruise_summary %>%
   left_join(dat_blnk) %>%
@@ -359,45 +245,38 @@ cruise_summary %>%
     date   = as_date(date),
     year   = year(date),
     month  = month(date),
-    .after = date) %>%
-  arrange(date) 
+    .after = date
+  ) %>%
+  arrange(date)
 
 cruise_summary
 
 # save current sheet
-if (FALSE) {
-  data_all %>%
-  write_csv(
-    here("data", "metadata", 
-         glue("edna_metadata",
-          # time of save, so you don't overwrite
-          format(Sys.time(), '_%Y%m%d_%H%M%S'),
-          ".csv")),
-    na = ""
-    )
-  cruise_summary %>%
-  write_csv(
-    here("data", "metadata", 
-         glue("edna_summary",
-          # time of save, so you don't overwrite
-          format(Sys.time(), '_%Y%m%d_%H%M%S'),
-          ".csv")),
-    na = ""
-    )
-}
-```
-```{r}
-data_all %>%
-  filter(cruise_id == "WS21212")
-```
+save_csv(
+  .data          = data_all,
+  save_location  = here("data", "metadata", "edna_meta"),
+  save_name      = "edna_metadata",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = "%Y-%m-%d"
+)
 
+save_csv(
+  .data          = cruise_summary,
+  save_location  = here("data", "metadata", "edna_meta"),
+  save_name      = "edna_summary",
+  overwrite      = FALSE,
+  verbose        = TRUE,
+  time_stamp_fmt = "%Y-%m-%d"
+)
+```
 
 # ---- Merge to Enrique's Format ----
 ```{r convert-to-enrique}
 master_file <-
 suppressWarnings(master <- 
   here("data", "metadata") %>%
-  dir_ls(., regex = "master_up-to-2022") %>%
+  dir_ls(., regex = "master_up-to-2022", recurse = 2) %>%
   read_xlsx(., 
             sheet = "eDNA2",
             .name_repair = "unique_quiet"))
@@ -430,22 +309,47 @@ finals <-
     "filter type" = "filter_type"
   ) 
 
-finals <- bind_rows(master, finals)
+finals <- 
+  bind_rows(master, finals) %>%
+  filter(cruise_id %in% pull(cruise_summary, cruise_id)) %>%
+  select(-1)
 
 if (FALSE) {
+  arg <- list()
+  arg$noaa_dir <- here("data", "metadata", "edna_meta", "send_noaa")
+  dir_create(arg$noaa_dir)
+  
+  arg$dates <-
+    pull(finals, mm_dd_yy) %>%
+    as_date() %>%
+    sort() %>%
+    # range() %>%
+    format("%b_%Y") %>%
+    unique() %>%
+    paste(collapse = "_") %>%
+    str_to_lower()
+
   finals %>%
-  xlsx::write.xlsx(.,
-    here("data", "metadata", glue("master_up-to-",
-                                  sort(finals$mm_dd_yy, 
-                                       decreasing = TRUE)[1] %>%
-                                    as_date() %>%
-                                    format("%b-%Y"), 
-                                  ".xlsx")), 
-    sheetName = "eDNA2", 
-    append    = TRUE, 
-    showNA    = FALSE,
-    row.names = TRUE
-  )
+    xlsx::write.xlsx(.,
+      here(
+        arg$noaa_dir,
+        glue(
+          "eDNA_sample_master_",
+          arg$dates,
+          # sort(finals$mm_dd_yy,
+          #   decreasing = TRUE
+          # )[1] %>%
+          #   as_date() %>%
+          #   format("%b-%Y"),
+          ".xlsx"
+        )
+      ),
+      sheetName = "eDNA2",
+      append = TRUE,
+      # append = FALSE, # uncomment if want to overwrite
+      showNA = FALSE,
+      row.names = TRUE
+    )
 }
 ```
 # ---- Added Dec 2022 and Jan 2023 Cruise ----
@@ -538,5 +442,129 @@ if (FALSE) {
 #     append = TRUE, showNA = FALSE
 #   )
 # }
+```
+
+# TO `REMOVE`
+```{r delete}
+# 
+# recal <- tibble()
+# 
+# for (i in seq(nrow(files))) {
+# # for (i in 1) {
+#   # select sheet name with `field_logsheet`
+#   cli::cli_alert_info("Getting sheet info for file: {.file {files$base[i]}}")
+#   temp_sht <- excel_sheets(files$file_path[i]) 
+#   sht_num  <- which(str_detect(temp_sht, "(?i)edna") & 
+#                     !str_detect(temp_sht, "(?i)print"))
+#   
+#   if (identical(sht_num, integer(0))) {
+#     cli::cli_alert_danger("Files doesn't have an eDNA sheet. Skipping file!")
+#      recal <-
+#       bind_rows(
+#         recal,
+#         tibble(file_path = files$file_path[i]))
+#     next
+#   }
+#   
+#   if (is_empty(sht_num)) {
+#     sht_num <- menu(temp_sht, 
+#                     title = glue(
+#                       "\n-----\n\n",
+#                       "Which sheet contains metadata?", 
+#                       "\n(0 for none)"))
+#   }
+#   
+#   # skip if no sheet name
+#   if (sht_num == 0) {
+#     recal <- 
+#       bind_rows(
+#         recal,
+#         tibble(file_path = files$file_path[i]))
+#     next
+#   }
+#   
+#   # read sheet 
+#   temp <- read_excel(
+#     files$file_path[i],
+#     sheet        = sht_num, 
+#     n_max        = 5,
+#     col_names    = FALSE,
+#     .name_repair = "unique_quiet") 
+#   
+#   # row number that contains headers
+#   row <- which(apply(temp, 1, function(x) any(grepl("(?i)MM:DD:YY", x))))
+#   
+#   if (is_empty(row) || is.na(row)) {
+#     View(temp)
+#     row <- readline("Which line is the header? ") %>%
+#       as.numeric()
+#   }
+#   
+#   # skip if no row info
+#   if (is_empty(row) || is.na(row)) {
+#     recal <-
+#       bind_rows(recal, 
+#                 tibble(file_path    = files$file_path[i], 
+#                        sht_num = sht_num))
+#     next
+#   }
+#   
+#   # get last column to read
+#   # either `notes` or `collector`
+#   last_c <- which(grepl("(?i)notes|(?i)collector", temp[row,])) %>%
+#     max()
+#   
+#   recal <- 
+#     bind_rows(
+#       recal,
+#       tibble(
+#         file_path = files$file_path[i],
+#         sht_num = sht_num,
+#         row     = row,
+#         last_c  = last_c
+#       )
+#     )
+# }
+# 
+# # joins recal and files
+# files <- 
+#   recal %>%
+#   # drop row if no sheet exists in the file
+#   drop_na(everything()) %>%
+#   
+#   # join with original info
+#   left_join(files, by = "file_path")
+
+
+# files <-
+#   files %>%
+#   mutate(
+#     data = pmap(
+#       list(file_path, sht_num, row, last_c), 
+#       function(.x, .y, .z, .l) {
+#         # load data
+#         # select sheet, skip number of lines to sample 1, stop columns after
+#         # `notes` or `collector`, remove NA values, clean names
+#         temp <- read_xlsx(
+#           path         = .x,
+#           sheet        = .y,
+#           skip         = .z - 1,
+#           range        = cell_cols(c(NA, .l)),
+#           .name_repair = janitor::make_clean_names,
+#           na           = na_skip
+#         ) %>%
+#           mutate(
+#             notes = as.character(notes)
+#           ) 
+#         
+#         # filter out if sheet contained "did not take any"
+#         if (isTRUE(any(str_detect(temp, "(?i)Did not take any")))) {
+#           temp <- filter(temp, str_detect(notes, "(?i)did not"))
+#         }
+#         
+#         return(temp)
+#       }
+#     )
+#   )
 ```
 
