@@ -102,26 +102,11 @@ files <-
 
 ```
 # ---- Read Files ----
-```{r}
-# filter(files, str_detect(file_path, 'fknms_sample_logsheet_12_2021')) %>%
-files %>%
-  # slice(10) %>%
-  filter(str_detect(file_path, "OCT")) %>%
-  pull(file_path) %>%
-  # openxlsx2::read_xlsx(sheet = "eDNA", detectDates = T,
-  #                     # rows = 1:
-  #                       )# %>%
- 
-  shell.exec()
-```
-
 ```{r read-meta-sheets}
 files <-
   files %>%
-  # slice(10) %>%
-  
-  # filter(cruise_id == "H23138") %>%
-  # filter(str_detect(file_path, 'OCT')) %>%
+  # slice() %>%
+  # filter(str_detect(file_path, "")) %>%
   
   mutate(
     data = pmap(
@@ -165,7 +150,6 @@ data_all <-
   filter(!if_all(mm_dd_yy:vol_ml, is.na) 
          & mm_dd_yy > as_date("2015-01-01")) %>%
   mutate(
-    # time_gmt = round(time_gmt*86400),
     time_gmt = as_hms(time_gmt),
     year     = year(mm_dd_yy),
     month    = month(mm_dd_yy, label = TRUE),
@@ -188,8 +172,6 @@ data_all <-
   ) %T>% 
   print()
 ```
-
-
 
 ```{r unnest-meta}
 data_summary <-
@@ -336,11 +318,6 @@ if (FALSE) {
         glue(
           "eDNA_sample_master_",
           arg$dates,
-          # sort(finals$mm_dd_yy,
-          #   decreasing = TRUE
-          # )[1] %>%
-          #   as_date() %>%
-          #   format("%b-%Y"),
           ".xlsx"
         )
       ),
