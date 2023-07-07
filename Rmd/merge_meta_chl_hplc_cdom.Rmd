@@ -9,7 +9,7 @@ output: html_document
 # ---- 1.0 Load Libraries ----
 ```{r setup}
 librarian::shelf(
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   # broom # optional
   
@@ -18,10 +18,12 @@ librarian::shelf(
   openxlsx
 )
 
-library("conflicted")
+# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 
 source(here("scripts", "misc_functions.R"))
 source(here(".Rprofile"))
@@ -52,12 +54,13 @@ i.e. copy "cloud_dir <- `<path-to-box>/mbon_imars_cruises`"
 if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
 
 if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
-  message(glue("Searching `{cloud_dir}` for metadata!"))
+  # message(glue("Searching `{cloud_dir}` for metadata!"))
   box_search <- 
-    search_meta_folders(
+   search_meta_folders(
       .dir_path   = here(cloud_dir, "years"),
-      .sub_folder = "metadata",
-      return_type = "vector")
+      .folder_search = "metadata",
+      return_type = "vector",
+      recurse_level = 2) 
   
   files_all <- 
     dir_ls(
@@ -67,12 +70,7 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
     # remove files to ignore or locked files (i.e. ~$)
     str_subset("~|ignore", negate = TRUE) %>% 
     tibble(file_path = .,
-           base  = basename(.)) 
-  
-  files_filt <- 
-    files_all %>%
-    # filter for cruise files
-    filter(str_detect(file_path, "(?i)fknms_")) %>%
+           base  = basename(.)) %>%
     
     # add columns for cruise ID and year
     mutate(
@@ -80,7 +78,14 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
       
       year = str_extract(file_path, "[0-9]{4}"),
       year = as.numeric(year)
-    ) %T>% print()
+    )
+  
+  files_filt <- 
+    files_all %>%
+    # filter for cruise files
+    filter(str_detect(file_path, "(?i)fknms_")) %T>% 
+    print()
+  
 } else {
   message("Not looking for files in `cloud directory` because set as NULL.")
   box_search <- NULL
@@ -100,8 +105,9 @@ if (is.null(box_search) | check == 2 | check == 3) {
   files_local <-
     search_meta_folders(
       .dir_path   = here("data", "metadata"),
-      .sub_folder = NULL,
-      return_type = "vector") %>%
+      # .folder_search = "fknms*",
+      return_type = "vector",
+      recurse_level = 4) %>%
     dir_ls(
       regexp  = "\\.(xlsx)$",
       recurse = TRUE
@@ -172,6 +178,7 @@ files <- get_sheet_info(files)
 files
 
 ```
+
 # ---- 4.0 Read all data as strings and merge ----
 No filtering of data is done. It will remove all `NA`s that was specified above.
 ```{r all-data-as-str}
