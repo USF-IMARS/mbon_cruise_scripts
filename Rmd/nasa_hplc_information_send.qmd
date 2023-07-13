@@ -697,7 +697,8 @@ if (FALSE) {
   str_subset("~\\$", negate = TRUE) %>%
   sort(decreasing = TRUE) %>%
   first() %>%
-  file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"))
+  file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"),
+            overwrite = TRUE)
 }
 ```
 
