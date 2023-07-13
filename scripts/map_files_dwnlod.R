@@ -251,6 +251,9 @@ load_map_obj <- function(
   library("cli")
   
   
+  # fixes issue with reading raster file using decimal degrees
+  sf::sf_use_s2(FALSE)
+  
   coast_file_name <- "GSHHS_h_L1.shp"
   state_file_name <- "WDBII_border_h_L2.shp"
   
@@ -274,6 +277,7 @@ load_map_obj <- function(
       coast_topo <- NULL
     } else {
       cli::cli_alert_info("Loading: {.file {coast_file_name}}")
+      
       coast_topo <-
       coast_topo %>%
         st_read(.) %>%
