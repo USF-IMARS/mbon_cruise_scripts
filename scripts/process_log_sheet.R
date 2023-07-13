@@ -495,10 +495,10 @@ process_log_sheet <- function(.meta, cal, cruise,
                startRow = 4)
   
   # ---- Write Comments
-  writeComment(wb, sht_nm[2], col = "L", row = 4, comment = comm$fluor)
-  writeComment(wb, sht_nm[2], col = "N", row = 4, comment = comm$blank)
-  writeComment(wb, sht_nm[2], col = "R", row = 4, comment = comm$low_read)
-  writeComment(wb, sht_nm[2], col = "T", row = 4, comment = comm$high_read)
+  writeComment(wb, sht_nm[2], col = "L", row = 3, comment = comm$fluor)
+  writeComment(wb, sht_nm[2], col = "N", row = 3, comment = comm$blank)
+  writeComment(wb, sht_nm[2], col = "R", row = 3, comment = comm$low_read)
+  writeComment(wb, sht_nm[2], col = "T", row = 3, comment = comm$high_read)
   
   
   # ---- Freeze Pane
