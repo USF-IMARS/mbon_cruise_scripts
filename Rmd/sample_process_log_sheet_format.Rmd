@@ -33,7 +33,7 @@ conflicts_prefer(
   dplyr::select()
   )
 
-source(here("scripts/process_log_sheet.R"))
+source(here("scripts", "process_log_sheet.R"))
 
 
 sht_nm <- c("metadata", "Chl-a")
@@ -68,9 +68,6 @@ crs_log_exst <-
   dir_ls() %>%
   tibble(files = .) %>%
   mutate(cruise_id = str_extract(files, "[A-Z]{2,3}\\d{4,5}"))
-  # as.character() %>%
-  # basename()  %>%
-  # str_extract("[A-Z0-9]{6,7}")
 
 meta_all <- 
   dir_ls(here(cloud_dir), 
@@ -87,21 +84,6 @@ meta_all <-
       date_mm_dd_yy = janitor::convert_to_date(date_mm_dd_yy, tz = "UTC"),
       
     ) 
-
-# meta_all <- 
-#   dir_ls(here(cloud_dir), 
-#         regexp = "imars_inventory_chl_hplc_cdom") %>%
-#   readxl::read_xlsx(sheet = "sample_meta_data",
-#                     col_types = c(rep("guess", 14), 
-#                                   "numeric", "text", "numeric")) %>%
-#   
-#   # remove cruises fully completed pre-COVID
-#   filter(
-#     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
-#     & !(cruise_id %in% crs_log_exst$cruise_id)
-#     ) %>%
-#       mutate(date_mm_dd_yy = as_date(date_mm_dd_yy),
-#              sample_number = as.character(sample_number))
 
 if (update_log) {
   cli_alert_warning(c("You've set update_log = {update_log}. You will be ", 
@@ -151,39 +133,51 @@ save_meta <-
   cli_alert_danger("Stop?")
 }
 
-openXL(save_meta$sheets[[1]])
 ```
 
 
 
 ```{r save}
-ignore  <- TRUE # redo all or ignore some
-overwrt <- FALSE
-dir_loc <- here(cloud_dir, "process_logs")
-# dir_loc <- here("data", "process_logs", Sys.Date()) # test location
+arg <- 
+  list(
+    ignore  = TRUE, # redo all or ignore some
+    overwrt = FALSE,
+    
+    # directory location
+    dir_loc = here(cloud_dir, "process_logs") # cloud
+    # dir_loc = here("data", "process_logs", Sys.Date()) # local
+  )
 
-dir_create(dir_loc)
+
+dir_create(arg$dir_loc)
+
 
 for (i in seq(nrow(save_meta))) {
   if (nrow(meta_all) > 0) {
-      file_name <- here(dir_loc,
-                        glue("{save_meta$cruise_id[i]}_",
-                             "{save_meta$data[[i]]$year[[1]]}_",
-                             "{min(format(save_meta$data[[i]]$date_mm_dd_yy, ", 
-                             "\"%m\"), na.rm = TRUE)}_abs.xlsx"))
-  } else if (update_log) {
-    file_name <-  
-      here(dir_loc, basename(save_meta$files[[i]]))
+    arg$file_name <-
+      here(
+        arg$dir_loc,
+        glue(
+          "{save_meta$cruise_id[i]}_",
+          "{save_meta$data[[i]]$year[[1]]}_",
+          "{min(format(save_meta$data[[i]]$date_mm_dd_yy, \"%m\"), na.rm = TRUE)}",
+          "_abs.xlsx"
+          )
+      )
+    } else if (update_log) {
+    arg$file_name <-  
+      here(arg$dir_loc, basename(save_meta$files[[i]]))
   }
-   if (!file_exists(file_name) | !ignore) {
-     cli_alert_info("Trying to create file {.file {basename(file_name)}}")
+   if (!file_exists(arg$file_name) | !arg$ignore) {
+     cli_alert_info("Trying to create file {.file {basename(arg$file_name)}}")
      try(
        saveWorkbook(save_meta$sheets[[i]],
-                    file_name,
-                    overwrite = overwrt,
-                    returnValue = TRUE), silent = FALSE)
+                    arg$file_name,
+                    overwrite = arg$overwrt,
+                    returnValue = TRUE), 
+       silent = FALSE)
    } else {
-     cli_alert_info("Ignoring file {.file {basename(file_name)}}")
+     cli_alert_info("Ignoring file {.file {basename(arg$file_name)}}")
    }
   
 }
@@ -194,6 +188,23 @@ for (i in seq(nrow(save_meta))) {
 
 Styles
 ```{r old-code}
+# original way to load data
+# meta_all <- 
+#   dir_ls(here(cloud_dir), 
+#         regexp = "imars_inventory_chl_hplc_cdom") %>%
+#   readxl::read_xlsx(sheet = "sample_meta_data",
+#                     col_types = c(rep("guess", 14), 
+#                                   "numeric", "text", "numeric")) %>%
+#   
+#   # remove cruises fully completed pre-COVID
+#   filter(
+#     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
+#     & !(cruise_id %in% crs_log_exst$cruise_id)
+#     ) %>%
+#       mutate(date_mm_dd_yy = as_date(date_mm_dd_yy),
+#              sample_number = as.character(sample_number))
+
+
 # sstyles <-
 #   list(
 #       styl_date     = createStyle(numFmt = "DATE"),
