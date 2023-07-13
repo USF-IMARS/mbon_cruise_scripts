@@ -13,20 +13,25 @@ file name and Turner Triology values.
 # Load Libraries ----
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
 librarian::shelf(
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   # broom # optional
   
   # additional
-  openxlsx, cli
+  openxlsx, cli,
+  quiet = TRUE
 )
 
-library("conflicted")
+# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
-
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 
 source(here("scripts/process_log_sheet.R"))
 
@@ -52,7 +57,7 @@ cal <-
     cal_date = as_date(cal_date)
   )
 cal
-update_log <- TRUE 
+update_log <- FALSE 
 ```
 
 # Read Log and filter Cruise IDs without Process Log File ----
@@ -69,16 +74,34 @@ crs_log_exst <-
 
 meta_all <- 
   dir_ls(here(cloud_dir), 
-        regexp = "imars_inventory_chl_hplc_cdom") %>%
-  readxl::read_xlsx(sheet = "sample_meta_data",
-                    col_types = c(rep("guess", 14), 
-                                  "numeric", "text", "numeric")) %>%
-  
+         regexp = "imars_inventory_chl_hplc_cdom") %>%
+  read.xlsx(sheet = "sample_meta_data") %>%
   # remove cruises fully completed pre-COVID
   filter(
     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
     & !(cruise_id %in% crs_log_exst$cruise_id)
-    )
+    ) %>%
+    mutate(
+      date_time = janitor::convert_to_datetime(date_time, tz = "UTC"),
+      date_time = as.POSIXct(date_time, tz = "UTC"),
+      date_mm_dd_yy = janitor::convert_to_date(date_mm_dd_yy, tz = "UTC"),
+      
+    ) 
+
+# meta_all <- 
+#   dir_ls(here(cloud_dir), 
+#         regexp = "imars_inventory_chl_hplc_cdom") %>%
+#   readxl::read_xlsx(sheet = "sample_meta_data",
+#                     col_types = c(rep("guess", 14), 
+#                                   "numeric", "text", "numeric")) %>%
+#   
+#   # remove cruises fully completed pre-COVID
+#   filter(
+#     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
+#     & !(cruise_id %in% crs_log_exst$cruise_id)
+#     ) %>%
+#       mutate(date_mm_dd_yy = as_date(date_mm_dd_yy),
+#              sample_number = as.character(sample_number))
 
 if (update_log) {
   cli_alert_warning(c("You've set update_log = {update_log}. You will be ", 
@@ -128,6 +151,7 @@ save_meta <-
   cli_alert_danger("Stop?")
 }
 
+openXL(save_meta$sheets[[1]])
 ```
 
 
@@ -168,8 +192,8 @@ for (i in seq(nrow(save_meta))) {
 
 # ---- Don't Need to Go Beyond ----
 
-## Styles
-```{r styles}
+Styles
+```{r old-code}
 # sstyles <-
 #   list(
 #       styl_date     = createStyle(numFmt = "DATE"),
@@ -200,11 +224,11 @@ for (i in seq(nrow(save_meta))) {
 #                                    borderStyle = "dotted")
 # ) 
 
-```
 
-# ---- Metadata Sheet Formatting ----
+
+# Metadata Sheet Formatting ---
 ## Read Info
-```{r read-info}
+
 # meta <-
 #   meta_all %>%
 #   filter(str_detect(cruise_id, cruise)) %>%
@@ -262,16 +286,16 @@ for (i in seq(nrow(save_meta))) {
 #            .after = "Instrument ")
 # 
 # meta
-```
+
 
 ## Create Workbook
-```{r workbook}
-# # ---- Create Worksheet ----
+
+# # ---- Create Worksheet ---
 # wb <- createWorkbook(
 #                creator = "Sebastian Di Geronimo", 
 #                title = glue("{cruise} Process Log"))
 # 
-# # ---- add meta data ----
+# # ---- add meta data ---
 # addWorksheet(wb, sheetName = sht_nm[1])
 # 
 # writeData(wb, sheet = sht_nm[1], startCol = 1, startRow = 1, x = meta,
@@ -289,7 +313,7 @@ for (i in seq(nrow(save_meta))) {
 # setRowHeights(wb, sheet = sht_nm[1], rows = 1, heights = 73.2)
 # setColWidths(wb, sheet = sht_nm[1], cols = "S", widths = 39.56)
 # 
-# # ---- style ----
+# # ---- style ---
 # options(openxlsx.dateFormat = "mm/dd/yy")
 # addStyle(wb, sht_nm[1],
 #          style      = sstyles$styl_date,
@@ -345,11 +369,10 @@ for (i in seq(nrow(save_meta))) {
 #          rows       = 1:nrow(meta) + 1,
 #          gridExpand = TRUE, 
 #          stack      = TRUE)
-```
 
 
-# ---- Chl-a Process Log ----
-```{r chl-a}
+# ---- Chl-a Process Log ---
+
 # chl_a <-
 #   meta_all %>%
 #   filter(str_detect(cruise_id, cruise)) %>%
@@ -391,10 +414,9 @@ for (i in seq(nrow(save_meta))) {
 #   relocate("Process date", .after = "Sample ID")
 # 
 
-```
 
 ## -- Formulas for Chlorophyll-a --
-```{r chl-a-formulas}
+
 # # =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
 # no_acid_ratio <- paste0(
 #   "IF(", paste0("R", 1:nrow(chl_a) + 3), ">0,((", paste0("Q", 1:nrow(chl_a) + 3), 
@@ -433,10 +455,10 @@ for (i in seq(nrow(save_meta))) {
 #     chla_conc = chla_conc) 
 # 
 # rm(no_acid_ratio, chla_conc)
-```
+
 
 ## -- Chlor-a Sheet --
-```{r}
+
 # # comments
 # comm <- 
 #   list(
@@ -453,7 +475,7 @@ for (i in seq(nrow(save_meta))) {
 #       "*Jen*: Report average of all 'high' readings collected that day.", 
 #       author  = "Jen", visible = FALSE)
 #     )
-# # --- Create Worksheet ----
+# # --- Create Worksheet ---
 # # wb <- loadWorkbook(file_examp)
 # addWorksheet(wb, sheetName = sht_nm[2])
 # 
