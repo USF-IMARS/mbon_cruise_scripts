@@ -82,7 +82,9 @@ metadata <-
   here(cloud_dir) %>%
   dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
   read.xlsx(sheet = "sample_meta_data",
-            detectDates = FALSE) %>%
+            detectDates = FALSE
+            # rows = 1:1700
+            ) %>%
   filter(str_detect(sample_type, "(?i)hplc")) %>%
   mutate(
     date     = janitor::excel_numeric_to_date(date_mm_dd_yy),
@@ -95,7 +97,7 @@ metadata <-
 # select cruise IDs for submission
 cruise_id <- 
 metadata %$% unique(cruise_id) %>%
-  str_subset(str_c("W[SB]2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
+  str_subset(str_c("(W[SB]|H)2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
   str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
 
 # filter metadata to match cruise IDs
@@ -103,17 +105,16 @@ metadata_filt <-
   metadata %>%
   filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
 ```
-
 This gets the cell locations within the `template` to add data into
 ```{r cell-locations}
-sheet_nm <- getSheetNames(template)
+grant_info$sheet_nm <- getSheetNames(template)
 
 # row for adding metadata
-loc <-
+grant_info$loc <-
   which(
     read.xlsx(
       template,
-      sheet         = sheet_nm,
+      sheet         = grant_info$sheet_nm,
       colNames      = FALSE,
       skipEmptyRows = FALSE,
     ) == "PI",
@@ -121,21 +122,21 @@ loc <-
   )
 
 # column names to use
-col_names <- 
+grant_info$col_names <- 
 read.xlsx(
   template,
-  sheet         = sheet_nm,
-  startRow      = loc[1],
+  sheet         = grant_info$sheet_nm,
+  startRow      = grant_info$loc[1],
   skipEmptyCols = FALSE
 ) %>%
   names()
 
 # location to add grant info
-grant_loc <-
+grant_info$grant_loc <-
   which(
     read.xlsx(
       template,
-      sheet         = sheet_nm,
+      sheet         = grant_info$sheet_nm,
       colNames      = FALSE,
       skipEmptyCols = FALSE,
     ) == "Project:",
@@ -218,6 +219,7 @@ max_depth
 ## Conversion
 ```{r format-info}
 metadata_filt
+
 meta_format <-
   metadata_filt %>%
   mutate(
@@ -251,7 +253,7 @@ meta_format <-
     # other,
     # other,
   ) %>%
-  select(contains(col_names)) %>%
+  select(contains(grant_info$col_names)) %>%
   mutate(
     .by = c(cruise, station, depth),
     indicate.if.filters.are.replicates = case_when(
@@ -282,10 +284,136 @@ meta_format <-
 unique(meta_format$cruise)
 ```
 ## Check Spatial Locations
+```{r}
+# scripts to download and create maps
+source(here("scripts", "map_files_dwnlod.R"))
+# fixes issue with reading raster file using decimal degrees
+sf::sf_use_s2(FALSE)
+
+# path to base map files
+map_loc <- here("data", "map_shp")
+
+# spatial extent
+exnt <- c(xmin = -84, # West
+          xmax = -80, # East
+          ymin = 24,  # South
+          ymax = 28.5 # North 
+        )
+
+# download topography (.nc) and coastline (.shp)
+world_download(
+  path_land  = map_loc,
+  path_topo  = map_loc,
+  extent     = exnt,
+  use_suffix = NULL
+)
+
+# select and read coastline file from GSHHS then crop
+# load maps
+map_obj <-
+  load_map_obj(
+    .map_coast = map_loc,
+    .map_state = NULL,
+    .map_bath  = NULL,
+    .map_file  = "etopo1.nc",
+    .extent    = exnt
+  )
+```
+
+## Plot Base Map
+```{r base-map}
+deg <- 0.5
+
+base_plt <- 
+base_map_plot(map_obj$coast_topo, .bathy = NULL, 
+              c(exnt[1] - deg, exnt[2] + deg, exnt[3] - deg, exnt[4] + deg)
+              # exnt
+              )
+base_plt
+rm(deg)
+```
+
+
+```{r, fig.height=15, fig.width=20}
+meta_format %>%
+  nest(.by = name.of.water.body) %>%
+  mutate(
+    map_plt = map2(
+      .x = name.of.water.body,
+      .y = data,
+      function(name, data) {
+        base_plt +
+          geom_point(
+            data = data,
+            aes(
+              x = lon, y = lat,
+              cruise = cruise,
+              group = station
+            ),
+            color = "gray80",
+            shape = 3
+          ) +
+          geom_text(
+            aes(
+              x = lon,
+              y = lat,
+              label = station
+            ),
+            data  = data,
+            size  = 3,
+            hjust = 0
+          ) +
+          theme_bw()
+      }
+    )
+  ) %>%
+  pull(map_plt)
+
+
+(base_plt +
+  geom_point(
+    data = select(meta_format, -name.of.water.body),
+    aes(
+      x = lon,
+      y = lat,
+      cruise = cruise,
+      group = station
+    ),
+    color = "gray80",
+    shape = 3
+  ) +
+  geom_point(
+    data = meta_format,
+    aes(
+      x = lon,
+      y = lat,
+      cruise = cruise,
+      group = station,
+      color = name.of.water.body
+    ),
+    show.legend = FALSE
+  ) +
+  geom_text(
+    aes(
+      x = lon,
+      y = lat,
+      label = station
+    ),
+    data = meta_format,
+    # data  = filter(meta_format, str_detect(name.of.water.body, "Florida Keys")),
+    size = 2,
+    hjust = 0
+  ) +
+  facet_grid(~name.of.water.body) +
+  theme_bw())
+```
+
 ```{r check-spatial, fig.height=15, fig.width=20}
 (meta_format %>%
-   # filter(station == "24" | station == "MR") %>%
+   # filter(station == "2" | station == "MR") %>%
+   # filter(station == "2") %>%
   ggplot(aes(x = lon, y = lat, 
+             cruise = cruise,
               group = station
              )) +
   geom_point(data = select(meta_format, -name.of.water.body),
@@ -295,6 +423,118 @@ unique(meta_format$cruise)
    facet_grid(~name.of.water.body)
   ) %>%
   plotly::ggplotly()
+```
+```{r}
+meta_format %>%
+  filter(station == "WS") %>%
+  mutate(
+    .keep = "used",
+    cruise,
+    station,
+    most = statip::mfv(lat),
+    most2 = statip::mfv(lon),
+    dif_lat = lat - most,
+    dif2 = lon - most2,
+    # dif_lat = lat - 25.165448,
+    # dif2 = lon - -81.650623
+  )
+
+
+```
+
+## Check if Samples are within 10 days of the Start of Cruise
+```{r, fig.width=20, fig.height=10}
+cruise_event <- 
+  meta_format %>%
+  mutate(
+    .keep = "used",
+        start_date = str_extract(cruise, "\\d+"),
+        start_year = str_extract(start_date, "\\d{2}"),
+        start_year = str_c("20", start_year),
+        doy = str_remove(start_date, "\\d{2}"),
+        doy = as.numeric(doy),
+        start_date = as.Date(paste0(start_year, "-01-01"), tz = "UTC") - days(1),
+        start_date = as.Date(doy, origin = start_date, tz = "UTC"),
+        end_date = start_date + days(10),
+        start_date = as.POSIXct(start_date, tz = "GMT"),
+        end_date = as.POSIXct(end_date, tz = "GMT")
+    ) %>%
+    select(-doy, -start_year) %>%
+    distinct() 
+meta_format %>%
+  mutate(
+    date = glue("{year}-{month}-{day}"),
+    date = as_date(date),
+    date = as.POSIXct(date),
+  ) %>%
+  nest(.by = cruise) %>%
+  mutate(
+    plt = map2(
+      cruise,
+      data,
+      function(cruise_title, data) {
+        dates <- filter(cruise_event, cruise %in% cruise_title)
+
+        limit <- list(
+          min = min(c(dates$start_date, data$date), na.rm = TRUE) - days(1),
+          max = max(c(dates$end_date, data$date), na.rm = TRUE) + days(1)
+        )
+
+        if (any(dates$start_date > data$date)) {
+          station <- 
+            data$station[which(data$date < dates$start_date)] %>%
+            str_c(collapse = ", ")
+          warning(paste(
+            "-------\n", "Check this cruise ID:", cruise_title,
+            "\nFor stations:", station, "\n-------\n\n"
+            ))
+          cruise_title <- glue("WARNING FOR\n{cruise_title}:\n",
+                               "Stations: {station}")
+        }
+        
+        ggplot(
+          data = data,
+          aes(x = date, y = station, color = station)
+        ) +
+          geom_rect(
+            data = dates,
+            aes(
+              xmin = start_date,
+              xmax = end_date,
+              ymin = Inf,
+              ymax = -Inf
+            ),
+            fill = "grey70",
+            color = "black",
+            alpha = 0.5,
+            show.legend = FALSE,
+            inherit.aes = FALSE
+          ) +
+          geom_point(
+            size = 2,
+            show.legend = FALSE
+          ) +
+          labs(
+            title = cruise_title,
+            x = NULL,
+            y = "Station"
+          ) +
+          scale_x_datetime(
+            limits = c(
+              limit$min,
+              limit$max
+            ),
+            date_breaks = "1 days",
+            date_labels = "%d %b %Y"
+          ) +
+          ggthemes::theme_calc() +
+          theme(axis.text.x = element_text(angle = 45, hjust = 1))
+        
+        # ---- end of function
+      }
+    )
+  ) %>%
+  pull(plt)
 ```
 
 ```{r}
@@ -376,14 +616,25 @@ hplc_check <-
 
 meta_format <-
   meta_format %>%
-  left_join(select(hplc_check, identifier, notes), 
-            by = join_by("sample" == "identifier")
+  right_join(
+    x = .,
+    y = select(hplc_check, identifier, notes), 
+    by = join_by("sample" == "identifier")
   )
 ```
-
 ## Check for Missing Data
 ```{r check-na}
 print(naniar::vis_miss(select(meta_format, -1, -2)))
+count(meta_format, name = "total number of samples")
+count(meta_format, cruise, name = "total number per crusie")
+
+count(meta_format, cruise, indicate.if.filters.are.replicates, 
+      name = "total") %>%
+  filter(str_detect(indicate.if.filters.are.replicates, "D")) %>%
+  mutate(total = as.integer(total/2))
+
+count(meta_format, station, 
+      name = "total")
 ```
 
 # Save Workbook
@@ -396,8 +647,8 @@ if (TRUE) {
     wb,
     sheet    = 1,
     x        = grant_info$info,
-    startRow = grant_loc[1],
-    startCol = grant_loc[2] + 1,
+    startRow = grant_info$grant_loc[1],
+    startCol = grant_info$grant_loc[2] + 1,
     colNames = FALSE
   )
 
@@ -405,7 +656,7 @@ if (TRUE) {
     wb,
     sheet    = 1,
     x        = meta_format,
-    startRow = loc[1] + 1,
+    startRow = grant_info$loc[1] + 1,
     colNames = FALSE
   )
 
@@ -433,7 +684,8 @@ if (TRUE) {
           str_c(cruise_id, collapse = "_"),
           ".xlsx"
         )
-      )
+      ),
+    overwrite = TRUE
     )
   }
 }
@@ -448,8 +700,6 @@ if (FALSE) {
   file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"))
 }
 ```
-
-
 
 
 ```{r}
