@@ -27,7 +27,8 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  openxlsx, hms
+  openxlsx, hms,
+  quiet = TRUE
 )
 
 # shelf(conflicted) # may be needed if won't allow loading of certain packages
@@ -254,14 +255,14 @@ meta_format <-
     # other,
   ) %>%
   select(contains(grant_info$col_names)) %>%
-  mutate(
-    .by = c(cruise, station, depth),
-    indicate.if.filters.are.replicates = case_when(
-      n() < 2 ~ "S",
-      n() < 3 ~ "D",
-      n() >= 3 ~ "T"
-    )
-  ) %>%
+  # mutate(
+  #   .by = c(cruise, station, depth),
+  #   indicate.if.filters.are.replicates = case_when(
+  #     n() < 2 ~ "S",
+  #     n() < 3 ~ "D",
+  #     n() >= 3 ~ "T"
+  #   )
+  # ) %>%
   mutate(
     name.of.water.body = case_match(
       station,
@@ -318,10 +319,8 @@ map_obj <-
     .map_file  = "etopo1.nc",
     .extent    = exnt
   )
-```
 
-## Plot Base Map
-```{r base-map}
+# Plot Base Map
 deg <- 0.5
 
 base_plt <- 
@@ -329,10 +328,9 @@ base_map_plot(map_obj$coast_topo, .bathy = NULL,
               c(exnt[1] - deg, exnt[2] + deg, exnt[3] - deg, exnt[4] + deg)
               # exnt
               )
-base_plt
+
 rm(deg)
 ```
-
 
 ```{r, fig.height=15, fig.width=20}
 meta_format %>%
@@ -423,23 +421,6 @@ meta_format %>%
    facet_grid(~name.of.water.body)
   ) %>%
   plotly::ggplotly()
-```
-```{r}
-meta_format %>%
-  filter(station == "WS") %>%
-  mutate(
-    .keep = "used",
-    cruise,
-    station,
-    most = statip::mfv(lat),
-    most2 = statip::mfv(lon),
-    dif_lat = lat - most,
-    dif2 = lon - most2,
-    # dif_lat = lat - 25.165448,
-    # dif2 = lon - -81.650623
-  )
-
-
 ```
 
 ## Check if Samples are within 10 days of the Start of Cruise
@@ -620,7 +601,32 @@ meta_format <-
     x = .,
     y = select(hplc_check, identifier, notes), 
     by = join_by("sample" == "identifier")
+  ) %>%
+    mutate(
+    .by = c(cruise, station, depth),
+    indicate.if.filters.are.replicates = case_when(
+      n() < 2 ~ "S",
+      n() < 3 ~ "D",
+      n() >= 3 ~ "T"
+    )
+  ) %>%
+  mutate(
+    notes = if_else(year < 2017,
+                     glue(
+  "{notes}",
+  "Sample were kept in -80C freezer until May 2023, then kept in liquid N2",
+  "until shipment", 
+  .sep = " ",
+  .na = ""),
+  glue("{notes}", .na = NULL)),
+    filter.storage.before.shipment.to.GFC = 
+      if_else(
+        year < 2017,
+        glue("{filter.storage.before.shipment.to.GFC}, and liquid N2 dry shipper"),
+        filter.storage.before.shipment.to.GFC),
+  notes = as.character(notes)
   )
+
 ```
 ## Check for Missing Data
 ```{r check-na}
@@ -629,7 +635,8 @@ count(meta_format, name = "total number of samples")
 count(meta_format, cruise, name = "total number per crusie")
 
 count(meta_format, cruise, indicate.if.filters.are.replicates, 
-      name = "total") %>%
+      name = "total", 
+      .drop = FALSE) %>%
   filter(str_detect(indicate.if.filters.are.replicates, "D")) %>%
   mutate(total = as.integer(total/2))
 
