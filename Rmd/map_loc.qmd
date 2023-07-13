@@ -156,7 +156,6 @@ loc_labs <-
     labl = glue("{labl}, ({n()})")
   )
 
-
 loca2 <- 
   loca %>%
   select(-notes, -sample_type) %>%
@@ -263,6 +262,7 @@ imars_map <-
     geom        = "richtext", 
     x           = -81.5,
     y           = 28,
+    # label       = glue("{cruise_id$cruise_id[1]} (eDNA)"),
     label       = glue("{cruise_id$cruise_id[1]} (IMaRS)"),
     size        = 10,
     fontface    = "bold",
@@ -313,7 +313,7 @@ imars_map <-
     size  = 2.5,
     hjust = 0,
   ) +
-
+  
   scale_color_manual(
     name   = "Samples",
     # values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF", "#BA55D3")
@@ -352,7 +352,8 @@ sv_arg <-
     file_name =
       here(
         "data", "metadata", "cruise_map",
-        glue("{cruise_id[[1]]}_imars_sample_locations.jpeg")
+        # glue("{cruise_id$cruise_id}_edna_sample_locations.jpeg")
+        glue("{cruise_id$cruise_id}_imars_sample_locations.jpeg")
       )
   )
 
@@ -364,6 +365,175 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   cowplot::save_plot(
    sv_arg$file_name,
    plot   = imars_map,
+   dpi    = 600,
+   base_width  = 8.5,
+   base_height = 11
+  )
+} 
+
+rm(sv_arg)
+```
+
+
+# ---- eDNA map only ----
+```{r edna-stations}
+loc_lab2 <- 
+ loca %>%
+  group_by(station) %>%
+  mutate(vals = 1) %>%
+  select(-c(notes, lat, lon)) %>%
+  pivot_wider(
+               # id_cols = optional vector of unaffected columns,
+               names_from  = c(sample_type),
+               values_from = vals,
+               names_sep   = "_",
+               values_fn   = sum
+  ) %>% 
+  ungroup() %>%
+  select(1, eDNA) %>%
+  filter(!is.na(eDNA)) %>%
+  mutate(
+    .keep = "none",
+    station,
+    labl = case_when(
+      eDNA == 1 ~ "eDNA",
+      eDNA == 2 ~ "eDNA surf and bottom",
+    )
+  ) 
+
+loca2_edna <- 
+loca %>%
+  select(-notes, -sample_type) %>%
+  distinct(station, .keep_all = TRUE) %>%
+  right_join(., loc_lab2, by = "station") %>%
+  mutate(
+    lon = if_else(station == 58, -81.65333333, lon),
+    lat = if_else(station == 58, 25.16666667, lat),
+    lon = if_else(station == 68, -81.16666667, lon),
+    lat = if_else(station == 68, 24.93, lat)
+  )
+
+noaa_loc <-
+  loc_file %>%
+  read_xlsx(sheet = 4, 
+            .name_repair = janitor::make_clean_names)  %>%
+  rename("station" = waypoint) %>%
+  unite(col = "lat", 2:4, sep = " ") %>%
+  unite(col = "lon", 3:5, sep = " ") %>%
+  mutate(
+    station = case_when(
+                        str_detect(station, "MR") ~ "MR",
+                        str_detect(station, "21/ LK") ~ "LK",
+                        str_detect(station, "WS") ~ "WS",
+                        TRUE ~ station
+                        ),
+    lon = parzer::parse_lon(lon),
+    lat = parzer::parse_lat(lat), 
+    .before = 2
+    ) %>%
+  filter(!(station %in% loca2_edna$station))
+  
+
+loca2_edna[loca2_edna$station %in% noaa_loc$station,]
+noaa_loc[!(noaa_loc$station %in% loca2_edna$station),]$station
+```
+
+```{r edna-stations-map, fig.width=8.5, fig.height=11}
+set.seed(123)
+edna_map <-
+  base_plt +
+  # ---- Cruise ID
+  annotate(
+    geom        = "richtext", 
+    x           = -81.5,
+    y           = 28,
+    label       = glue("{cruise_id$cruise_id[1]} (eDNA)"),
+    size        = 10,
+    fontface    = "bold",
+    fill        = NA,
+    label.color = NA,
+    family = "serif"
+  ) +
+  # ---- Cruise Dates
+  annotate(
+    geom        = "richtext", 
+    x           = -81.5,
+    y           = 27.85, 
+    label       = cruise_id$label[1],
+    size        = 7,
+    fontface    = "bold",
+    fill        = NA,
+    label.color = NA,
+    family = "serif"
+  ) +
+  # ---- NOAA Locations
+  geom_point(
+    data  = noaa_loc,
+    aes(x = lon, 
+        y = lat),
+    shape = 3,
+    color = "gray",
+    size  = 1
+  ) +
+  # I may want to add labels for all none sampled locations
+  # geom_text_repel(data = all_loc, aes(x = lon, y = lat, label = station),
+  #                size = 2,
+  #                # hjust = -1,
+  #                color = "gray"
+  #                # vjust = 1
+  #                ) +
+  # ---- Sample Locations
+  geom_point(
+    data = loca2_edna,
+    aes(x = lon, 
+        y = lat, 
+        color = labl),
+  ) +
+  geom_text_repel(
+    aes(x = lon, 
+        y = lat, 
+        label = station),
+    data  = loca2_edna,
+    size  = 2.5,
+    hjust = 0,
+  ) +
+  
+  scale_color_manual(
+    name   = "Samples",
+    values = c( "#E69F00", "#56B4E9", "#009E73")
+  ) +
+  labs(color = NULL) +
+
+  theme(
+    legend.position = c(0.2, 0.14),
+    legend.text     = element_text(size = 10),
+    legend.title    = element_text(size = 15)
+  )
+edna_map
+```
+
+## eDNA Save Map
+```{r save-edna-map, fig.width=8.5, fig.height=11}
+sv_arg <-
+  list(
+    save_path = here("data", "metadata", "cruise_map")
+  ) %>%
+  c(
+    file_name =
+      here(
+        "data", "metadata", "cruise_map",
+        glue("{cruise_id$cruise_id}_edna_sample_locations.jpeg")
+      )
+  )
+
+if (!file_exists(sv_arg$file_name) || FALSE) {
+  # create directory if doens't exist
+  fs::dir_create(sv_arg$save_path)
+  
+  # save map
+  cowplot::save_plot(
+   sv_arg$file_name,
+   plot   = edna_map,
    dpi    = 900,
    base_width  = 8.5,
    base_height = 11
