@@ -570,48 +570,48 @@ update_proc_log <- function(files, cal) {
     files %>% 
     loadWorkbook()
   
+  # `Fluorometer Calibration date`
   writeData(
     wb,
     sheet    = "Chl-a",
     startRow = 4,
     startCol = 13,
-    # `Fluorometer Calibration date`
     x        = update[[names(cal)[1]]]
   )
   
+  # `'No Acid' Slope`
   writeData(
     wb,
     sheet    = "Chl-a",
     startRow = 4,
     startCol = 15,
-    # `'No Acid' Slope`
     x        = update[[names(cal)[2]]]
   )
   
+  # `'No Acid' y-int`
   writeData(
     wb,
     sheet    = "Chl-a",
     startRow = 4,
     startCol = 16,
-    # `'No Acid' y-int`
     x        = update[[names(cal)[3]]]
   )
   
+  # `Cal. 'No Acid' Low`
   writeData(
     wb,
     sheet    = "Chl-a",
     startRow = 4,
     startCol = 17,
-    # `Cal. 'No Acid' Low`
     x        = update[[names(cal)[4]]]
   )
   
+  # `Cal. 'No Acid' High`
   writeData(
     wb,
     sheet    = "Chl-a",
     startRow = 4,
     startCol = 19,
-    # `Cal. 'No Acid' High`
     x        = update[[names(cal)[5]]]
   )
   
