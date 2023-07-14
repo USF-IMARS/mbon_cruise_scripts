@@ -639,3 +639,87 @@ save_csv <- function(
   
   # ---- end of function
 }
+
+
+##%######################################################%##
+#                                                          #
+####   Plot Cruise Dates with Expected Range of Dates   ####
+#                                                          #
+##%######################################################%##
+#' Plot Cruise Dates with Expected Range of Dates
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param cruise_title Cruise ID
+#' @param data Date to search
+#' @param .cruise_event data.frame or tibble with 3 columns:
+#'                      - `cruise` containing cruise IDs
+#'                      - `start_date` containing the start date of cruise
+#'                      - `end_date` containing the end date of cruise
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+plot_cruise_dates <- function(cruise_title, data, .cruise_event) {
+  
+  
+  dates <- filter(.cruise_event, cruise %in% cruise_title)
+  
+  limit <- list(
+    min = min(c(dates$start_date, data$date), na.rm = TRUE) - days(1),
+    max = max(c(dates$end_date, data$date), na.rm = TRUE) + days(1)
+  )
+  
+  if (any(dates$start_date > data$date)) {
+    station <- 
+      data$station[which(data$date < dates$start_date)] %>%
+      str_c(collapse = ", ")
+    warning(paste(
+      "-------\n", "Check this cruise ID:", cruise_title,
+      "\nFor stations:", station, "\n-------\n\n"
+    ))
+    cruise_title <- glue("WARNING FOR\n{cruise_title}:\n",
+                         "Stations: {station}")
+  }
+  
+  ggplot(
+    data = data,
+    aes(x = date, y = station, color = station)
+  ) +
+    geom_rect(
+      data = dates,
+      aes(
+        xmin = start_date,
+        xmax = end_date,
+        ymin = Inf,
+        ymax = -Inf
+      ),
+      fill = "grey70",
+      color = "black",
+      alpha = 0.5,
+      show.legend = FALSE,
+      inherit.aes = FALSE
+    ) +
+    geom_point(
+      size = 2,
+      show.legend = FALSE
+    ) +
+    labs(
+      title = cruise_title,
+      x = NULL,
+      y = "Station"
+    ) +
+    scale_x_datetime(
+      limits = c(
+        limit$min,
+        limit$max
+      ),
+      date_breaks = "1 days",
+      date_labels = "%d %b %Y"
+    ) +
+    ggthemes::theme_calc() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  
+    # ---- end of function
+}
