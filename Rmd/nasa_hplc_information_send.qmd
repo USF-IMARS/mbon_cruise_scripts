@@ -276,8 +276,10 @@ meta_format <-
 
 unique(meta_format$cruise)
 ```
+
+
 ## Check Spatial Locations
-```{r}
+```{r load-base-map}
 # scripts to download and create maps
 source(here("scripts", "map_files_dwnlod.R"))
 # fixes issue with reading raster file using decimal degrees
@@ -323,7 +325,7 @@ base_map_plot(map_obj$coast_topo, .bathy = NULL,
 rm(deg)
 ```
 
-```{r, fig.height=15, fig.width=20}
+```{r map-data-names, fig.height=15, fig.width=20}
 meta_format %>%
   nest(.by = name.of.water.body) %>%
   mutate(
@@ -409,13 +411,19 @@ meta_format %>%
              color = "gray80",
              shape = 3) +
   geom_point(aes(color = name.of.water.body)) + 
-   facet_grid(~name.of.water.body)
+  labs(
+    x = NULL,
+    y = NULL,
+    color = NULL) +
+   facet_grid(~name.of.water.body) +
+   theme_bw()
   ) %>%
-  plotly::ggplotly()
+  plotly::ggplotly()  %>%
+  plotly::layout(legend = list(orientation = "h", x = 0.2))
 ```
 
 ## Check if Samples are within 10 days of the Start of Cruise
-```{r, fig.width=20, fig.height=10}
+```{r date-start-end, fig.width=20, fig.height=10}
 new <- new.env()
 source(here("scripts", "misc_functions.R"), local = new)
 attach(new)
@@ -462,7 +470,7 @@ meta_format %>%
 detach()
 ```
 
-```{r}
+```{r final-format}
 # find previously saved files
 prev_f <-
   # local_sv %>%                         # local
@@ -494,40 +502,74 @@ hplc_check <-
 
 # filter out samples that are absent from the freezer
 meta_format <-
+  # test <-
   meta_format %>%
   right_join(
     x  = .,
-    y  = select(hplc_check, identifier, notes), 
+    y  = select(hplc_check, identifier, notes),
     by = join_by("sample" == "identifier")
   ) %>%
-  
   # add letter if single, duplicate or triplicate
   mutate(
-  .by = c(cruise, station, depth),
-  indicate.if.filters.are.replicates = case_when(
-    n() < 2 ~ "S",
-    n() < 3 ~ "D",
-    n() >= 3 ~ "T"
+    .by = c(cruise, station, depth),
+    indicate.if.filters.are.replicates = case_when(
+      str_detect(cruise, "WS16") ~ "D",
+      n() < 2 ~ "S",
+      n() < 3 ~ "D",
+      n() >= 3 ~ "T"
+    ),
+    notes = case_when(
+      str_detect(sample, str_c("WS15264_", seq(41, 80), collapse = "|")) &
+        row_number() >= 2 ~ "*optional processing duplicate,",
+      str_detect(sample, str_c("WS15320_", c(seq(40, 74), 78, 80), collapse = "|")) &
+        row_number() >= 2 ~ "*optional processing duplicate,",
     )
   ) %>%
-  
-  # add not for samples in 2015/2016
+  # expand ship name in cruise column
   mutate(
+    cruise = case_when(
+      str_detect(cruise, "WS") ~ str_replace(cruise, "WS", "Walton Smith "),
+      str_detect(cruise, "WB") ~ str_replace(cruise, "WB", "Weather Bird II "),
+      str_detect(cruise, "H") ~ str_replace(cruise, "H", "Hogarth ")
+    )
+  ) %>%
+  full_join(
+    here("data", "raw", "hplc") %>%
+      dir_ls(regexp = "09-02.*xlsx$") %>%
+      str_subset("~", negate = TRUE) %>%
+      read.xlsx(sheet = "SS from clients", startRow = 19) %>%
+      filter(str_detect(sample, "WS16319")) %>%
+      select("dup" = sample, cruise, station, depth),
+    by = c("cruise", "station", "depth")
+  ) %>%
+  # add note for samples in 2015/2016
+  mutate(
+    notes = if_else(
+      str_detect(sample, "WS16"),
+      glue("**duplicate previously extracted in M-K 09-02 report, sample {dup},"),
+      notes
+    ),
     notes = if_else(year < 2017,
-                     glue(
-  "{notes}",
-  "Sample were kept in -80C freezer until May 2023, then kept in liquid N2",
-  "until shipment", 
-  .sep = " ",
-  .na = ""),
-  glue("{notes}", .na = NULL)),
-    filter.storage.before.shipment.to.GFC = 
+      glue(
+        "{notes}",
+        paste(
+          "samples kept in -80C freezer until May 2023, then kept in liquid N2",
+          "until shipment"
+        ),
+        .sep = " ",
+        .na = ""
+      ),
+      glue("{notes}", .na = NULL)
+    ),
+    filter.storage.before.shipment.to.GFC =
       if_else(
         year < 2017,
         glue("{filter.storage.before.shipment.to.GFC}, and liquid N2 dry shipper"),
-        filter.storage.before.shipment.to.GFC),
-  notes = as.character(notes)
-  )
+        filter.storage.before.shipment.to.GFC
+      ),
+    notes = as.character(notes)
+  ) %>%
+  select(-dup)
 
 ```
 ## Check for Missing Data
@@ -611,7 +653,7 @@ if (FALSE) {
 }
 ```
 
-
+# ---- OLD CODE ----
 ```{r}
 # sv <- FALSE
 # if (FALSE) {
