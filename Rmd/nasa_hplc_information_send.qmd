@@ -255,14 +255,6 @@ meta_format <-
     # other,
   ) %>%
   select(contains(grant_info$col_names)) %>%
-  # mutate(
-  #   .by = c(cruise, station, depth),
-  #   indicate.if.filters.are.replicates = case_when(
-  #     n() < 2 ~ "S",
-  #     n() < 3 ~ "D",
-  #     n() >= 3 ~ "T"
-  #   )
-  # ) %>%
   mutate(
     name.of.water.body = case_match(
       station,
@@ -320,13 +312,12 @@ map_obj <-
     .extent    = exnt
   )
 
-# Plot Base Map
+# Plot Base Map with larger degree extent
 deg <- 0.5
 
 base_plt <- 
 base_map_plot(map_obj$coast_topo, .bathy = NULL, 
               c(exnt[1] - deg, exnt[2] + deg, exnt[3] - deg, exnt[4] + deg)
-              # exnt
               )
 
 rm(deg)
@@ -425,6 +416,11 @@ meta_format %>%
 
 ## Check if Samples are within 10 days of the Start of Cruise
 ```{r, fig.width=20, fig.height=10}
+new <- new.env()
+source(here("scripts", "misc_functions.R"), local = new)
+attach(new)
+rm(new)
+
 cruise_event <- 
   meta_format %>%
   mutate(
@@ -442,6 +438,8 @@ cruise_event <-
     ) %>%
     select(-doy, -start_year) %>%
     distinct() 
+
+
 meta_format %>%
   mutate(
     date = glue("{year}-{month}-{day}"),
@@ -450,72 +448,83 @@ meta_format %>%
   ) %>%
   nest(.by = cruise) %>%
   mutate(
-    plt = map2(
-      cruise,
-      data,
-      function(cruise_title, data) {
-        dates <- filter(cruise_event, cruise %in% cruise_title)
-
-        limit <- list(
-          min = min(c(dates$start_date, data$date), na.rm = TRUE) - days(1),
-          max = max(c(dates$end_date, data$date), na.rm = TRUE) + days(1)
-        )
-
-        if (any(dates$start_date > data$date)) {
-          station <- 
-            data$station[which(data$date < dates$start_date)] %>%
-            str_c(collapse = ", ")
-          warning(paste(
-            "-------\n", "Check this cruise ID:", cruise_title,
-            "\nFor stations:", station, "\n-------\n\n"
-            ))
-          cruise_title <- glue("WARNING FOR\n{cruise_title}:\n",
-                               "Stations: {station}")
-        }
-        
-        ggplot(
-          data = data,
-          aes(x = date, y = station, color = station)
-        ) +
-          geom_rect(
-            data = dates,
-            aes(
-              xmin = start_date,
-              xmax = end_date,
-              ymin = Inf,
-              ymax = -Inf
-            ),
-            fill = "grey70",
-            color = "black",
-            alpha = 0.5,
-            show.legend = FALSE,
-            inherit.aes = FALSE
-          ) +
-          geom_point(
-            size = 2,
-            show.legend = FALSE
-          ) +
-          labs(
-            title = cruise_title,
-            x = NULL,
-            y = "Station"
-          ) +
-          scale_x_datetime(
-            limits = c(
-              limit$min,
-              limit$max
-            ),
-            date_breaks = "1 days",
-            date_labels = "%d %b %Y"
-          ) +
-          ggthemes::theme_calc() +
-          theme(axis.text.x = element_text(angle = 45, hjust = 1))
-        
-        # ---- end of function
-      }
+    plt = pmap(
+      list(
+        cruise,
+        data
+      ),
+      plot_cruise_dates, # function
+      .cruise_event = .env$cruise_event
+    
+    # plt = map2(
+    #   cruise,
+    #   data,
+    #   plot_cruise_dates # function
+      # function(cruise_title, data) {
+      #   dates <- filter(cruise_event, cruise %in% cruise_title)
+      # 
+      #   limit <- list(
+      #     min = min(c(dates$start_date, data$date), na.rm = TRUE) - days(1),
+      #     max = max(c(dates$end_date, data$date), na.rm = TRUE) + days(1)
+      #   )
+      # 
+      #   if (any(dates$start_date > data$date)) {
+      #     station <- 
+      #       data$station[which(data$date < dates$start_date)] %>%
+      #       str_c(collapse = ", ")
+      #     warning(paste(
+      #       "-------\n", "Check this cruise ID:", cruise_title,
+      #       "\nFor stations:", station, "\n-------\n\n"
+      #       ))
+      #     cruise_title <- glue("WARNING FOR\n{cruise_title}:\n",
+      #                          "Stations: {station}")
+      #   }
+      #   
+      #   ggplot(
+      #     data = data,
+      #     aes(x = date, y = station, color = station)
+      #   ) +
+      #     geom_rect(
+      #       data = dates,
+      #       aes(
+      #         xmin = start_date,
+      #         xmax = end_date,
+      #         ymin = Inf,
+      #         ymax = -Inf
+      #       ),
+      #       fill = "grey70",
+      #       color = "black",
+      #       alpha = 0.5,
+      #       show.legend = FALSE,
+      #       inherit.aes = FALSE
+      #     ) +
+      #     geom_point(
+      #       size = 2,
+      #       show.legend = FALSE
+      #     ) +
+      #     labs(
+      #       title = cruise_title,
+      #       x = NULL,
+      #       y = "Station"
+      #     ) +
+      #     scale_x_datetime(
+      #       limits = c(
+      #         limit$min,
+      #         limit$max
+      #       ),
+      #       date_breaks = "1 days",
+      #       date_labels = "%d %b %Y"
+      #     ) +
+      #     ggthemes::theme_calc() +
+      #     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      #   
+      #   # ---- end of function
+      # }
     )
   ) %>%
   pull(plt)
+
+detach()
 ```
 
 ```{r}
