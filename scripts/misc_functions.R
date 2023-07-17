@@ -454,7 +454,7 @@ last_mod <-  function(fpath, check = TRUE) {
 ##%######################################################%##
 #' Base File Name and File Name Expression
 #'
-#' This function take a location to save aphiaID file and a base name to 
+#' This function take a location to save file and a base name to 
 #' search for in either locally or the cloud
 #'
 #' @param loc Location to save file
@@ -464,8 +464,41 @@ last_mod <-  function(fpath, check = TRUE) {
 #'                       - default = YYYYMMDD_HHMMSS (i.e "%Y%m%d_%H%M%S")
 #'                       - if no suffix, `NULL`
 #'                       - if want custom, `<custom_message>`
+#'                       - if help, will give a table of formats with examples
 #'
-#' @return Returns a list of two, file_base and file_expr.
+#' @return Returns a list of three:
+#'          - file location  = file_loc
+#'          - base file name = file_base,
+#'          - file expression to be evaluated = file_expr
+#'          
+#' @details
+#' The time stamp can be formated based on 
+#' Code	Meaning	Code	Meaning
+#'      %a - Abbreviated weekday	
+#'      %A - Full weekday
+#'      %b - Abbreviated month	
+#'      %B - Full month
+#'      %c - Locale-specific date and time	
+#'      %d - Decimal date
+#'      %H - Decimal hours (24 hour)	
+#'      %I - Decimal hours (12 hour)
+#'      %j - Decimal day of the year	
+#'      %m - Decimal month
+#'      %M - Decimal minute	
+#'      %p - Locale-specific AM/PM
+#'      %S - Decimal second	
+#'      %U - Decimal week of the year (starting on Sunday)
+#'      %w - Decimal Weekday (0=Sunday)	
+#'      %W - Decimal week of the year (starting on Monday)
+#'      %x - Locale-specific Date	
+#'      %X - Locale-specific Time
+#'      %y - 2-digit year	
+#'      %Y - 4-digit year
+#'      %z - Offset from GMT	
+#'      %Z - Time zone (character)
+#'
+#' @author Sebastian Di Geronimo (June, 2023)
+#'          
 #' @examples
 #' # ADD_EXAMPLES_HERE
 #' 
@@ -473,6 +506,39 @@ file_expr <- function(loc            = NULL,
                       file_base      = NULL,
                       exts           = "csv",
                       time_stamp_fmt = "%Y%m%d_%H%M%S") {
+  
+  # ---- help for deciding time stamp format
+  if (!is.null(time_stamp_fmt) && str_detect(time_stamp_fmt, "help")) {
+    return(tribble(
+      ~code, ~meaning,
+      "%a",  "Abbreviated weekday", 
+      "%A",  "Full weekday",
+      "%b",  "Abbreviated month", 
+      "%B",  "Full month", 
+      "%c",  "Locale-specific date and time", 
+      "%d",  "Decimal date", 
+      "%H",  "Decimal hours (24 hour)", 
+      "%I",  "Decimal hours (12 hour)", 
+      "%j",  "Decimal day of the year",	
+      "%m",  "Decimal month", 
+      "%M",  "Decimal minute",	
+      "%p",  "Locale-specific AM/PM", 
+      "%S",  "Decimal second", 
+      "%U",  "Decimal week of the year (starting on Sunday)", 
+      "%w",  "Decimal Weekday (0=Sunday)", 
+      "%W",  "Decimal week of the year (starting on Monday)", 
+      "%x",  "Locale-specific Date", 
+      "%X",  "Locale-specific Time", 
+      "%y",  "2-digit year", 
+      "%Y",  "4-digit year", 
+      "%z",  "Offset from GMT",	
+      "%Z",  "Time zone (character)", 
+    ) %>%
+      mutate(
+        example = format(ymd_hms("2000-01-01 02:11:51"), code),
+        example = sprintf("%s == `%s`", "2000-01-01 02:11:51", example)
+      ))
+  }
   
   # catch time stamp format if NULL  
   time_stamp_fmt <-
@@ -722,4 +788,214 @@ plot_cruise_dates <- function(cruise_title, data, .cruise_event) {
   
   
     # ---- end of function
+}
+
+
+
+##%######################################################%##
+#                                                          #
+####      Setup Cruise Directory and Blank Files        ####
+#                                                          #
+##%######################################################%##
+#' Setup Cruise Directory and Blank Files
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param cruise_location Location to create cruise directory and
+#'                        sub-directories
+#' @param cruise_id Cruise ID
+#' @param cruise_date Start date of cruise as `date`
+#' @param blank_location Location of blank files
+#' @param sub_dir Sub-directories to create:
+#'                - "metadata" for logsheets 
+#'                - "forms" for paperwork
+#'                - "CDOM" for CDOM data
+#'                - "apad" for filter pad data
+#'                - "bb3" for BB3 data
+#'                
+#' @param volunteer `logical` if need volunteer paperwork
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+cruise_setup <- function(
+    cruise_location,
+    cruise_id,
+    cruise_date,
+    blank_location,
+    sub_dir = c("metadata", "forms", "CDOM", "apad", "bb3"),
+    volunteer = FALSE,
+    map_file = NULL) {
+  
+  # ---- Find blank files
+  if (!dir_exists(blank_location)) {
+    cli::cli_abort(
+      c("{.var blank_location} {.emph doesn't exists}. Fix path and try again!",
+        "{.var blank_location} = {.path {blank_location}}"))
+  }
+  
+  blank_files <- 
+    blank_location %>%
+    dir_ls(type = "file") %>%
+    str_subset("~|ignore", negate = TRUE)
+  
+  # ---- Create cruise folders
+  cruise_dir <- 
+    here(
+      cruise_location,
+      year(cruise_date),
+      cruise_id)
+  
+  cli::cli_h1("Cruise ID: {cruise_id}")
+  
+  if (any(!dir_exists(here(cruise_dir, sub_dir)))) {
+    cli::cli_alert_info("Creating Sub-directories: {.var {sub_dir}}")
+    dir_create(here(cruise_dir, sub_dir))
+    
+    fs::dir_tree(cruise_dir)
+  } else {
+   cli::cli_alert_info("No new directories created!") 
+   fs::dir_tree(cruise_dir)
+  }
+  
+  
+  # ---- Copying Blank Logsheet
+  
+  # blank name
+  blk_logsheet_file <- str_subset(blank_files, "sample_logsheet")
+  
+  # new name
+  logsheet_file <- 
+    here(
+      cruise_dir, "metadata",
+      glue(
+        "fknms_sample_logsheet_",
+        "{sprintf(\"%.2d\", month(cruise_date))}_",
+        "{year(cruise_date)}_{cruise_id}.xlsx"
+        ) 
+    )
+  
+  if (!file_exists(logsheet_file)) {
+    cli::cli_alert_info(
+      c("Copying blank logsheet file:\n",
+        "Location:  {.path {dirname(logsheet_file)}}\n",
+        "File Name: {.path {basename(logsheet_file)}}\n\n")
+    )
+    
+    file_copy(
+      blk_logsheet_file,
+      logsheet_file
+    )
+    
+  } else {
+    cli::cli_alert_info(
+      c("Logsheet exists:\n",
+        "Location:  {.path {dirname(logsheet_file)}}\n",
+        "File Name: {.path {basename(logsheet_file)}}\n\n")
+    )
+  }
+  
+  # ---- Copying Blank USF Self-insurance
+  # blank name
+  blk_slf_insur_file <- str_subset(blank_files, "USF_letter_of_self_insurance")
+  
+  slf_insur_file <- 
+    here(
+      cruise_dir, "forms",
+      glue("USF_letter_of_self_insurance_WS_",
+           "{year(cruise_date)}_",
+           "{month(cruise_date, label = TRUE, abbr = FALSE)}_",
+           "LAST_NAME_PARTICIPANTS.pdf")
+    )
+  
+  slf_insur_exists <- dir_ls(here(cruise_dir, "forms"), 
+                             regexp = "USF_letter_of_self_insurance_WS")
+  
+  if (is_empty(slf_insur_exists)) {
+    cli::cli_alert_info(
+      c("Copying blank self-insurance file:\n",
+        "Location:  {.path {dirname(slf_insur_file)}}\n",
+        "File Name: {.path {basename(slf_insur_file)}}\n", 
+        "{.strong Remember to edit {.var LAST_NAME_PARTICIPANTS}}\n\n")
+    )
+    
+    file_copy(
+      blk_slf_insur_file,
+      slf_insur_file
+    )
+    
+  } else {
+    cli::cli_alert_info(
+      c("These self-insurance file(s) exist:\n",
+        "Location:  {.path {dirname(slf_insur_exists)}}\n",
+        "File Name(s): {.path {basename(slf_insur_exists)}}\n\n")
+    )
+    }
+  
+  # ---- Volunteer Paperwork
+  if (volunteer) {
+    cli::cli_alert_warning("Volunteer paperwork is requested!")
+    
+    blk_volunteer <- str_subset(blank_files, "(?i)volunteer_")
+    
+    volunteer_file <- 
+      basename(blk_volunteer) %>%
+      str_replace( 
+       "mm\\.dd\\.(yyyy|year)_name",
+       format(cruise_date, "%b_%d_%Y_LAST_NAME")
+       ) %>%
+      here(cruise_dir, "forms", .)
+    
+    vol_paper <- 
+      dir_ls(here(cruise_dir, "forms"), 
+             regexp = "(?i)volunteer")
+    
+    if (is_empty(vol_paper)) {
+      cli::cli_alert_info(
+        c("Copying Volunteer paperwork:\n",
+          "Location:  {.path {dirname(volunteer_file)[1]}}\n",
+          "File Name: {.path {basename(volunteer_file)}}\n", 
+          "{.strong Remember to edit {.var LAST_NAME}}\n\n")
+      )
+      
+      file_copy(
+        blk_volunteer,
+        volunteer_file
+      )
+      
+    } else {
+      cli::cli_alert_info(
+        c("These volunteer paperwork file(s) exist:\n",
+          "Location:  {.path {dirname(vol_paper)[1]}}\n",
+          "File Name(s): {.path {basename(vol_paper)}}\n\n")
+      )
+    }
+  }
+  
+  
+  # ---- Copy Map to Directory
+  if (is.null(map_file)) {
+    cli::cli_alert_info("No map file given.")
+  } else {
+    if (file_exists(here(cruise_dir, "metadata", basename(map_file)))) {
+      cli::cli_alert_info(
+        c("Map exists in:\n",
+          "Location:  {.path {dirname(map_file)}}\n",
+          "File Name: {.path {basename(map_file)}}\n\n")
+      )
+    } else {
+      cli::cli_alert_info(
+        c("Copying Sampling Map:\n",
+          "Location:  {.path {dirname(map_file)}}\n",
+          "File Name: {.path {basename(map_file)}}\n\n")
+      )
+      
+      file_copy(
+        map_file,
+        here(cruise_dir, "metadata")
+      )
+    }
+  }
+  
+  # ---- end of function
 }

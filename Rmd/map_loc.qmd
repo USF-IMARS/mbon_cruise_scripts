@@ -58,7 +58,9 @@ cruise_id <-
       .x = start_dates,
       .y = end_dates,
       date_label
-    )
+    ),
+    start_dates = as_date(start_dates, format = "%B %d %Y"),
+    end_dates   = as_date(end_dates, format = "%B %d %Y"),
   ) %T>%
   print()
 
@@ -352,7 +354,6 @@ sv_arg <-
     file_name =
       here(
         "data", "metadata", "cruise_map",
-        # glue("{cruise_id$cruise_id}_edna_sample_locations.jpeg")
         glue("{cruise_id$cruise_id}_imars_sample_locations.jpeg")
       )
   )
@@ -371,7 +372,34 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   )
 } 
 
-rm(sv_arg)
+# rm(sv_arg)
+```
+
+# Create Cloud Directory for Cruise and Copy Files
+Function to create the cruise directory within the `cruise_location`.
+Sub-directories created: 
+  - "metadata" for logsheets 
+  - "forms" for paperwork
+  - "CDOM" for CDOM data
+  - "apad" for filter pad data
+  - "bb3" for BB3 data
+
+This function will copy blank files of:
+  - logsheet
+  - self-insurance
+  - volunteer paperwork (`Volunteer` = `TRUE` shows that volunteer paperwork is 
+                         needed)
+  - map file if exists locally
+
+```{r}
+cruise_setup(
+  cruise_location = here(cloud_dir, "years"),
+  cruise_id = cruise_id$cruise_id,
+  cruise_date = cruise_id$start_dates,
+  blank_location = here(cloud_dir, "blank_sheets", "pre_cruise_blank_sheets"),
+  volunteer = TRUE,
+  map_file = sv_arg$file_name
+)
 ```
 
 
