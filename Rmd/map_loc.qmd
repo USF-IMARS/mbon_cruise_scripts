@@ -31,7 +31,14 @@ conflicts_prefer(
   )
 
 # scripts to download and create maps
-source(here("scripts", "map_files_dwnlod.R"))
+proj_functions <- new.env()
+source(here("scripts", "map_files_dwnlod.R"), local = proj_functions)
+source(here("scripts", "misc_functions.R"), local = proj_functions)
+attach(proj_functions)
+rm(proj_functions)
+
+# functions available in `proj_functions` envrionment
+ls("proj_functions")
 
 # fixes issue with reading raster file using decimal degrees
 sf::sf_use_s2(FALSE)
@@ -362,6 +369,8 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   # create directory if doens't exist
   fs::dir_create(sv_arg$save_path)
   
+  cli::cli_alert_info("Creating map!")
+  
   # save map
   cowplot::save_plot(
    sv_arg$file_name,
@@ -370,9 +379,9 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
    base_width  = 8.5,
    base_height = 11
   )
-} 
-
-# rm(sv_arg)
+} else {
+  cli::cli_alert_info("Map already exists, not overwriting!")
+}
 ```
 
 # Create Cloud Directory for Cruise and Copy Files
@@ -400,6 +409,8 @@ cruise_setup(
   volunteer = TRUE,
   map_file = sv_arg$file_name
 )
+
+rm(sv_arg)
 ```
 
 

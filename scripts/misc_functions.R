@@ -980,7 +980,7 @@ cruise_setup <- function(
     if (file_exists(here(cruise_dir, "metadata", basename(map_file)))) {
       cli::cli_alert_info(
         c("Map exists in:\n",
-          "Location:  {.path {dirname(map_file)}}\n",
+          "Location:  {.path {here(cruise_dir, \"metadata\")}}\n",
           "File Name: {.path {basename(map_file)}}\n\n")
       )
     } else {
