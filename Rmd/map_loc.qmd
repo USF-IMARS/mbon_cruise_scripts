@@ -16,11 +16,10 @@ librarian::shelf(
   # broom # optional
   
   # added
-  ggrepel, ggtext, readxl, ggnewscale,
+  ggrepel, ggtext, readxl, ggnewscale, cli,
   
   # idk if needed
   fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot,
-  # datefixR
 )
 
 library("conflicted")
@@ -77,7 +76,35 @@ cli::cli_alert_warning(
   "\t or go back to fix it!"))
 invisible(readline())
 ```
+# Create Cloud Directory for Cruise and Copy Files
+Function to create the cruise directory within the `cruise_location`.
+Sub-directories created: 
+  - "metadata" for logsheets 
+  - "forms" for paperwork
+  - "CDOM" for CDOM data
+  - "apad" for filter pad data
+  - "bb3" for BB3 data
 
+This function will copy blank files of:
+  - logsheet
+  - self-insurance
+  - volunteer paperwork (`Volunteer` = `TRUE` shows that volunteer paperwork is 
+                         needed)
+  - map file if exists locally
+```{r cruise-directory}
+loc_file2 <-
+cruise_setup(
+  cruise_location = here(cloud_dir, "years"),
+  cruise_id       = cruise_id$cruise_id,
+  cruise_date     = cruise_id$start_dates,
+  blank_location  = here(cloud_dir, "blank_sheets", "pre_cruise_blank_sheets"),
+  volunteer       = TRUE,
+  return_path     = TRUE
+  ) %>%
+  here("metadata") %>%
+  dir_ls(regexp = "fknms") %>%
+  str_subset("~", negate = TRUE)
+```
 
 ```{r paths}
 # paths to data location files
@@ -98,84 +125,68 @@ exnt <- c(xmin = -84, # West
 
 ## Load Data Locations (Lat/Lon)
 ```{r load-locations}
-# sample
-loca <-  
-  loc_file %>%
-  readxl::read_xlsx(sheet = 5,
-                    .name_repair = janitor::make_clean_names,
-                    )
+# sample locations
+loca <-
+  if (is_empty(loc_file2)) {
+    cli_alert_info("Cruise Path was not found. Using old file.")
+    loc_file %>%
+      readxl::read_xlsx(
+        sheet = 5,
+        .name_repair = janitor::make_clean_names,
+      ) %>%
+      filter(!is.na(depth_level))
+  } else {
+    cli_alert_info("Cruise path was found. Using logsheet.")
+    readxl::read_excel(
+      loc_file2,
+      sheet = "lat_lon",
+      range = cellranger::cell_cols("A:I")
+    ) %>%
+      filter(!is.na(depth_level))
+  }
 
-# NOAA 
+# NOAA locations
 all_loc <- 
   loc_file %>%
   readxl::read_xlsx(sheet = 2, 
             .name_repair = janitor::make_clean_names) %>%
   filter(!(station %in% loca$station))
 
-# zooplankton
+# zooplankton locations
 zoo_loc <- 
   loc_file %>%
   readxl::read_xlsx(sheet = 3, 
             .name_repair = janitor::make_clean_names) 
-
-
 ```
 
 ## Match NOAA and IMaRS Locations
+Labels:
+"CHL, HPLC, CDOM",
+"CHL, HPLC (replicate), CDOM",
+"CHL, HPLC, CDOM, eDNA",
+"CHL, HPLC (replicate), CDOM, eDNA",
+"CHL, HPLC, CDOM, eDNA surf and bot"
 ```{r data-manipulation}
-plt_labels <- c(
-  "CHL, HPLC and CDOM",
-  "CHL, HPLC (replicate) and CDOM",
-  "CHL, HPLC, CDOM, and eDNA",
-  "CHL, HPLC (replicate), CDOM and eDNA",
-  "CHL, HPLC, CDOM, eDNA for surf and bot"
-)
-
 # define labels for map
-loc_labs <-
+loca <-
   loca %>%
-  group_by(station) %>%
-  mutate(vals = 1) %>%
-  select(-c(notes, lat, lon)) %>%
-  pivot_wider(
-               # id_cols = optional vector of unaffected columns,
-               names_from  = c(sample_type),
-               values_from = vals,
-               names_sep   = "_",
-               values_fn   = sum
-  ) %>% 
-  ungroup() %>%
-  janitor::clean_names() %>%
-  rowwise() %>%
-  mutate(sums = sum(chl_a, hplc, cdom, e_dna, na.rm = TRUE),
-         labl = case_when(
-                  sums == 4 ~ plt_labels[1], # "CHL, HPLC and CDOM",
-                  sums == 5 && hplc == 2 ~ plt_labels[2], #"CHL, HPLC (replicate) and CDOM",
-                  sums == 5 && e_dna == 1 ~ plt_labels[3],#"CHL, HPLC, CDOM, and eDNA",
-                  sums == 6 ~ plt_labels[4], #"CHL, HPLC (replicate), CDOM and eDNA",
-                  sums == 10 ~ plt_labels[5],#"CHL, HPLC, CDOM, eDNA for surf and bot",
-                  .default = NA_character_
-         ),
-         labl = fct(labl, 
-                    levels = plt_labels)) %>%
-  ungroup() %>%
-  select(-c(chl_a:sums)) %>%
-  mutate(
+    mutate(
+      .after = lat,
+      
+      depth_level = str_remove(depth_level, "^surf$"),
+      labl = glue("CHL, HPLC, {hplc_replicate}, CDOM, {edna} {depth_level}", 
+                  .na = ""),
+      labl = str_replace(labl, "HPLC, HPLC replicate", "HPLC (replicate)"),
+      labl = str_remove_all(labl, " ,|,\\s+$")
+    ) %>%
+    mutate(
     .by = labl,
-    labl = glue("{labl}, ({n()})")
-  )
+    station,
+    lon, lat,
+    labl = glue("{labl} ({n()})")
+  ) %T>% 
+ print()
 
-loca2 <- 
-  loca %>%
-  select(-notes, -sample_type) %>%
-  distinct(station, .keep_all = TRUE) %>%
-  right_join(., loc_labs, by = "station") %>%
-  mutate(
-    lon = if_else(station == 58, -81.65333333, lon),
-    lat = if_else(station == 58, 25.16666667, lat),
-    lon = if_else(station == 68, -81.16666667, lon),
-    lat = if_else(station == 68, 24.93, lat)
-  )
 ```
 
 ## Additional noaa locations starting Feb 2023
@@ -189,39 +200,18 @@ noaa_loc <-
   unite(col = "lon", 3:5, sep = " ") %>%
   mutate(
     station = case_when(
-                        str_detect(station, "MR") ~ "MR",
-                        str_detect(station, "21/ LK") ~ "LK",
-                        str_detect(station, "WS") ~ "WS",
-                        TRUE ~ station
-                        ),
+      str_detect(station, "MR") ~ "MR",
+      str_detect(station, "21/ LK") ~ "LK",
+      str_detect(station, "WS") ~ "WS",
+      .default = station
+      ),
     lon = parzer::parse_lon(lon),
     lat = parzer::parse_lat(lat), 
     .before = 2
-    ) %>%
-  filter(!(station %in% loca2$station))
-  
+    )
 
-loca2[loca2$station %in% noaa_loc$station,]
-noaa_loc[!(noaa_loc$station %in% loca2$station),]$station
-
-# addtional locations ----
-# add_loc <- paste("BG7", "CW7", "ROME5", sep = "|")
-
-# noaa_loc_add <- 
-#   noaa_loc %>%
-#   filter(str_detect(waypoint, add_loc)) %>%
-#   
-#   mutate(
-#     
-#     station = waypoint,
-#     labl = "CHL, HPLC, CDOM, and eDNA",
-#    
-#     
-#     ) 
-# 
-# loca2 <- loca2 %>% 
-#   bind_rows(noaa_loc_add)
-  
+# stations not being samples by IMaRS
+filter(noaa_loc, !(station %in% loca$station)) %$% station
 ```
 
 # ---- Base Map Data ----
@@ -230,35 +220,37 @@ Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Shee
 
 Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 
-```{r download-map}
-# download topography (.nc) and coastline (.shp)
-world_download(
-  path_land  = map_loc,
-  path_topo  = map_loc,
-  extent     = exnt,
-  use_suffix = NULL
-)
-```
-
-## Load Base Maps for Plotting 
-```{r load-map-files}
-# select and read coastline file from GSHHS then crop
-# load maps
-map_obj <-
-  load_map_obj(
-    .map_coast = map_loc,
-    .map_state = NULL,
-    .map_bath  = map_loc,
-    .map_file  = "etopo1.nc",
-    .extent    = exnt
-  )
-```
-
-## Plot Base Map
 ```{r base-map}
-base_plt <- 
-base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
-base_plt
+if (exists("base_plt")) {
+  
+  cli::cli_alert_info("{.var base_plot} is already loaded!")
+  
+} else {
+  
+  ## ---- download topography (.nc) and coastline (.shp)
+  world_download(
+    path_land  = map_loc,
+    path_topo  = map_loc,
+    extent     = exnt,
+    use_suffix = NULL
+  )
+  
+  ## ---- Load Base Maps for Plotting
+  # select and read coastline file from GSHHS then crop
+  map_obj <-
+    load_map_obj(
+      .map_coast = map_loc,
+      .map_state = NULL,
+      .map_bath  = map_loc,
+      .map_file  = "etopo1.nc",
+      .extent    = exnt
+    )
+
+  ## ---- Plot Base Map
+  base_plt <-
+    base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
+  base_plt
+}
 ```
 
 # ---- Plot Locations ----
@@ -271,13 +263,12 @@ imars_map <-
     geom        = "richtext", 
     x           = -81.5,
     y           = 28,
-    # label       = glue("{cruise_id$cruise_id[1]} (eDNA)"),
     label       = glue("{cruise_id$cruise_id[1]} (IMaRS)"),
     size        = 10,
     fontface    = "bold",
     fill        = NA,
     label.color = NA,
-    family = "serif"
+    family      = "serif"
   ) +
   # ---- Cruise Dates
   annotate(
@@ -289,11 +280,11 @@ imars_map <-
     fontface    = "bold",
     fill        = NA,
     label.color = NA,
-    family = "serif"
+    family      = "serif"
   ) +
   # ---- NOAA Locations
   geom_point(
-    data  = noaa_loc,
+    data  = filter(noaa_loc, !(station %in% loca$station)),
     aes(x = lon, 
         y = lat),
     shape = 3,
@@ -309,7 +300,7 @@ imars_map <-
   #                ) +
   # ---- Sample Locations
   geom_point(
-    data = loca2,
+    data = loca,
     aes(x = lon, 
         y = lat, 
         color = labl),
@@ -318,18 +309,16 @@ imars_map <-
     aes(x = lon, 
         y = lat, 
         label = station),
-    data  = loca2,
-    size  = 2.5,
-    hjust = 0,
+    data   = loca,
+    size   = 2.5,
+    hjust  = 0,
+    family = "serif"
   ) +
   
   scale_color_manual(
     name   = "Samples",
-    # values = c("#FF7F24", "#EE3B3B", "#00FF00", "#1E90FF", "#BA55D3")
-    values = c("#999999", "#E69F00", "#56B4E9", "#009E73",
-            "#CC79A7")
-  ) +
-  labs(color = NULL) +
+    values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7")
+    ) +
 
   # ---- Zooplankton
   new_scale_color() +
@@ -349,6 +338,7 @@ imars_map <-
     legend.text     = element_text(size = 10),
     legend.title    = element_text(size = 15)
   )
+
 imars_map
 ```
 ## Save Map
@@ -374,107 +364,38 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   # save map
   cowplot::save_plot(
    sv_arg$file_name,
-   plot   = imars_map,
-   dpi    = 600,
+   plot        = imars_map,
+   dpi         = 600,
    base_width  = 8.5,
    base_height = 11
   )
 } else {
   cli::cli_alert_info("Map already exists, not overwriting!")
 }
-```
 
-# Create Cloud Directory for Cruise and Copy Files
-Function to create the cruise directory within the `cruise_location`.
-Sub-directories created: 
-  - "metadata" for logsheets 
-  - "forms" for paperwork
-  - "CDOM" for CDOM data
-  - "apad" for filter pad data
-  - "bb3" for BB3 data
-
-This function will copy blank files of:
-  - logsheet
-  - self-insurance
-  - volunteer paperwork (`Volunteer` = `TRUE` shows that volunteer paperwork is 
-                         needed)
-  - map file if exists locally
-
-```{r}
-cruise_setup(
-  cruise_location = here(cloud_dir, "years"),
-  cruise_id = cruise_id$cruise_id,
-  cruise_date = cruise_id$start_dates,
-  blank_location = here(cloud_dir, "blank_sheets", "pre_cruise_blank_sheets"),
-  volunteer = TRUE,
-  map_file = sv_arg$file_name
-)
-
+if (!file_exists(here(dirname(loc_file2), basename(sv_arg$file_name)))) {
+  file_copy(
+        sv_arg$file_name,
+        here(dirname(loc_file2)),
+        overwrite = TRUE
+      )
+} else {
+  cli_alert_info("Map already copied to cruise directory!")
+}
 rm(sv_arg)
 ```
 
 
 # ---- eDNA map only ----
 ```{r edna-stations}
-loc_lab2 <- 
- loca %>%
-  group_by(station) %>%
-  mutate(vals = 1) %>%
-  select(-c(notes, lat, lon)) %>%
-  pivot_wider(
-               # id_cols = optional vector of unaffected columns,
-               names_from  = c(sample_type),
-               values_from = vals,
-               names_sep   = "_",
-               values_fn   = sum
-  ) %>% 
-  ungroup() %>%
-  select(1, eDNA) %>%
-  filter(!is.na(eDNA)) %>%
-  mutate(
-    .keep = "none",
-    station,
-    labl = case_when(
-      eDNA == 1 ~ "eDNA",
-      eDNA == 2 ~ "eDNA surf and bottom",
-    )
-  ) 
+loca_edna <-
+  loca %>%
+  select(station, lon, lat, depth_level, edna) %>%
+  filter(!is.na(edna)) %>%
+  mutate(labl = glue("{edna} {depth_level}"))
 
-loca2_edna <- 
-loca %>%
-  select(-notes, -sample_type) %>%
-  distinct(station, .keep_all = TRUE) %>%
-  right_join(., loc_lab2, by = "station") %>%
-  mutate(
-    lon = if_else(station == 58, -81.65333333, lon),
-    lat = if_else(station == 58, 25.16666667, lat),
-    lon = if_else(station == 68, -81.16666667, lon),
-    lat = if_else(station == 68, 24.93, lat)
-  )
-
-noaa_loc <-
-  loc_file %>%
-  read_xlsx(sheet = 4, 
-            .name_repair = janitor::make_clean_names)  %>%
-  rename("station" = waypoint) %>%
-  unite(col = "lat", 2:4, sep = " ") %>%
-  unite(col = "lon", 3:5, sep = " ") %>%
-  mutate(
-    station = case_when(
-                        str_detect(station, "MR") ~ "MR",
-                        str_detect(station, "21/ LK") ~ "LK",
-                        str_detect(station, "WS") ~ "WS",
-                        TRUE ~ station
-                        ),
-    lon = parzer::parse_lon(lon),
-    lat = parzer::parse_lat(lat), 
-    .before = 2
-    ) %>%
-  filter(!(station %in% loca2_edna$station))
-  
-
-loca2_edna[loca2_edna$station %in% noaa_loc$station,]
-noaa_loc[!(noaa_loc$station %in% loca2_edna$station),]$station
+# stations not sampling eDNA
+filter(noaa_loc, !(station %in% loca_edna$station)) %$% station
 ```
 
 ```{r edna-stations-map, fig.width=8.5, fig.height=11}
@@ -483,7 +404,7 @@ edna_map <-
   base_plt +
   # ---- Cruise ID
   annotate(
-    geom        = "richtext", 
+    geom        = "richtext",
     x           = -81.5,
     y           = 28,
     label       = glue("{cruise_id$cruise_id[1]} (eDNA)"),
@@ -491,25 +412,39 @@ edna_map <-
     fontface    = "bold",
     fill        = NA,
     label.color = NA,
-    family = "serif"
+    family      = "serif"
   ) +
   # ---- Cruise Dates
   annotate(
-    geom        = "richtext", 
+    geom        = "richtext",
     x           = -81.5,
-    y           = 27.85, 
+    y           = 27.85,
     label       = cruise_id$label[1],
     size        = 7,
     fontface    = "bold",
     fill        = NA,
     label.color = NA,
-    family = "serif"
+    family      = "serif"
   ) +
+  # # uncomment for generalized map
+  # annotate(
+  #   geom        = "richtext",
+  #   x           = -81.3,
+  #   y           = 27.5,
+  #   label       = ("Current eDNA\n\nMBON Efforts"),
+  #   size        = 9,
+  #   fontface    = "bold",
+  #   fill        = NA,
+  #   label.color = NA,
+  #   family = "serif"
+  # ) +
   # ---- NOAA Locations
   geom_point(
-    data  = noaa_loc,
-    aes(x = lon, 
-        y = lat),
+    data = filter(noaa_loc, !(station %in% loca$station)),
+    aes(
+      x = lon,
+      y = lat
+    ),
     shape = 3,
     color = "gray",
     size  = 1
@@ -523,25 +458,29 @@ edna_map <-
   #                ) +
   # ---- Sample Locations
   geom_point(
-    data = loca2_edna,
-    aes(x = lon, 
-        y = lat, 
-        color = labl),
+    data = loca_edna,
+    aes(
+      x = lon,
+      y = lat,
+      color = labl
+    ),
   ) +
   geom_text_repel(
-    aes(x = lon, 
-        y = lat, 
-        label = station),
-    data  = loca2_edna,
-    size  = 2.5,
-    hjust = 0,
+    aes(
+      x = lon,
+      y = lat,
+      label = station
+    ),
+    data   = loca_edna,
+    size   = 2.5,
+    hjust  = 0,
+    family = "serif"
   ) +
-  
+
   scale_color_manual(
     name   = "Samples",
-    values = c( "#E69F00", "#56B4E9", "#009E73")
+    values = c("#E69F00", "#56B4E9", "#009E73")
   ) +
-  labs(color = NULL) +
 
   theme(
     legend.position = c(0.2, 0.14),
@@ -562,6 +501,7 @@ sv_arg <-
       here(
         "data", "metadata", "cruise_map",
         glue("{cruise_id$cruise_id}_edna_sample_locations.jpeg")
+        # glue("mbon_edna_sample_locations.jpeg")
       )
   )
 
@@ -573,7 +513,7 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   cowplot::save_plot(
    sv_arg$file_name,
    plot   = edna_map,
-   dpi    = 900,
+   dpi    = 600,
    base_width  = 8.5,
    base_height = 11
   )

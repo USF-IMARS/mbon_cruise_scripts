@@ -825,7 +825,8 @@ cruise_setup <- function(
     blank_location,
     sub_dir = c("metadata", "forms", "CDOM", "apad", "bb3"),
     volunteer = FALSE,
-    map_file = NULL) {
+    map_file = NULL,
+    return_path = FALSE) {
   
   # ---- Find blank files
   if (!dir_exists(blank_location)) {
@@ -996,6 +997,8 @@ cruise_setup <- function(
       )
     }
   }
+  
+  if (return_path) return(cruise_dir)
   
   # ---- end of function
 }
