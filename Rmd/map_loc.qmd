@@ -125,25 +125,57 @@ exnt <- c(xmin = -84, # West
 
 ## Load Data Locations (Lat/Lon)
 ```{r load-locations}
-# sample locations
-loca <-
-  if (is_empty(loc_file2)) {
-    cli_alert_info("Cruise Path was not found. Using old file.")
+if (is_empty(loc_file2)) {
+  cli_alert_info("Cruise Path was not found. Using old file.")
+  # sample locations
+  loca <-
     loc_file %>%
-      readxl::read_xlsx(
-        sheet = 5,
-        .name_repair = janitor::make_clean_names,
-      ) %>%
-      filter(!is.na(depth_level))
-  } else {
-    cli_alert_info("Cruise path was found. Using logsheet.")
+    readxl::read_xlsx(
+      sheet = 5,
+      .name_repair = janitor::make_clean_names,
+    ) %>%
+    filter(!is.na(depth_level))
+
+  # zooplankton locations
+  zoo_loc <-
+    loc_file %>%
+    readxl::read_xlsx(
+      sheet = 3,
+      .name_repair = janitor::make_clean_names
+    )
+} else {
+  cli_alert_info("Cruise path was found. Using logsheet.")
+  # sample locations
+  loca <-
     readxl::read_excel(
       loc_file2,
       sheet = "lat_lon",
       range = cellranger::cell_cols("A:I")
     ) %>%
-      filter(!is.na(depth_level))
-  }
+    filter(!is.na(depth_level))
+
+  # zooplankton locations
+  zoo_loc <-
+    readxl::read_excel(
+      loc_file2,
+      sheet = "zooplankton",
+      range = cellranger::cell_rows(c(13, 13 + 8)),
+      .name_repair = janitor::make_clean_names
+    ) %>%
+    select(station,
+      "lat" = lat_in,
+      "lon" = lon_in,
+      mesh_size_um
+    ) %>%
+    summarise(
+      .by = c(station, lat, lon),
+      labs = paste(mesh_size_um, collapse = ", ")
+    ) %>%
+    mutate(
+      labs = str_replace(labs, " /", ","),
+      labs = str_replace(labs, "64$", "64 (only)")
+    )
+}
 
 # NOAA locations
 all_loc <- 
@@ -152,11 +184,6 @@ all_loc <-
             .name_repair = janitor::make_clean_names) %>%
   filter(!(station %in% loca$station))
 
-# zooplankton locations
-zoo_loc <- 
-  loc_file %>%
-  readxl::read_xlsx(sheet = 3, 
-            .name_repair = janitor::make_clean_names) 
 ```
 
 ## Match NOAA and IMaRS Locations
