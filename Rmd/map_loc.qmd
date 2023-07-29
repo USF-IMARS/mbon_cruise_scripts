@@ -50,6 +50,8 @@ WB = WeatherBird II
 SV = Savannah
 H = Hogarth
 ```{r cruide-id-info}
+source(here(".Rprofile"))
+
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
