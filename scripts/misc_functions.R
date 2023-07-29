@@ -312,12 +312,20 @@ read_logsheets <-  function(
              .before = 1)
     } else {.}}  %>%
     
-    mutate(
+    
+    { if (all(class(temp$sample_collection_time_gmt) != "POSIXct")) {
+      mutate(.,
     sample_collection_time_gmt = sample_collection_time_gmt*86400,
     sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
     date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
     .after = sample_collection_time_gmt
-    ) %>%
+    )
+      } else {
+        mutate(.,
+               sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+               date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
+               .after = sample_collection_time_gmt)
+      }} %>%
     
     # remover extract column if exists
     select(-any_of("time_filtered_24_00"))  %>% 
