@@ -42,6 +42,8 @@ conflicts_prefer(
 ## ---- Edit: Info ----
 This info is from the NASA intake form, sent in previously
 ```{r grant-info}
+source(here(".Rprofile"))
+
 grant_info <-
   list(
   info = rbind(
@@ -58,7 +60,7 @@ grant_info <-
   ),
   
   # your last name
-  last_nm = "Digeronimo"
+  last_nm = "Muller-Karger"
   
   )
 ```
@@ -97,7 +99,8 @@ metadata <-
 
 # select cruise IDs for submission
 cruise_id <- 
-metadata %$% unique(cruise_id) %>%
+  metadata %$% 
+  unique(cruise_id) %>%
   str_subset(str_c("(W[SB]|H)2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
   str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
 
@@ -325,7 +328,7 @@ base_map_plot(map_obj$coast_topo, .bathy = NULL,
 rm(deg)
 ```
 
-```{r map-data-names, fig.height=15, fig.width=20}
+```{r map-data-names, fig.height=15, fig.width=15}
 meta_format %>%
   nest(.by = name.of.water.body) %>%
   mutate(
@@ -495,10 +498,10 @@ hplc_check <-
   list_rbind() 
 
 hplc_miss <- 
-  filter(hplc_check, str_detect(absent, "X"))
+  filter(hplc_check, str_detect(absent, "(?i)X"))
 
 hplc_check <-
-  filter(hplc_check, str_detect(present, "X"))
+  filter(hplc_check, str_detect(present, "(?i)X"))
 
 # filter out samples that are absent from the freezer
 meta_format <-
@@ -591,6 +594,9 @@ count(meta_format, station,
 # Save Workbook
 ```{r save-wb}
 sv <- TRUE
+
+dir_loc <- here("data", "metadata", "hplc_info")
+
 if (TRUE) {
   wb <- loadWorkbook(template)
 
@@ -622,8 +628,11 @@ if (TRUE) {
     )
     readline("")
   
-  
+    
+    dir_create(dir_loc)
+    
     cli::cli_alert_info("Saving File!")
+    cli::cli_alert_info("Location: {dir_loc}")
     # save
     saveWorkbook(
       wb = wb,
@@ -643,11 +652,10 @@ if (TRUE) {
 
 
 if (FALSE) {
-  here("data", "metadata") %>%
-  dir_ls(regexp = "Diger") %>%
+  dir_loc %>%
+  dir_ls(regexp = grant_info$last_nm) %>%
   str_subset("~\\$", negate = TRUE) %>%
-  sort(decreasing = TRUE) %>%
-  first() %>%
+  last_mod() %>%
   file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"),
             overwrite = TRUE)
 }
