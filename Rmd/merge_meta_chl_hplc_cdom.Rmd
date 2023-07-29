@@ -195,7 +195,7 @@ og_data_chr <-
             cols        = 1:.l,
             startRow    = .z,
             na.strings  = na_skip,
-            detectDates = TRUE
+            detectDates = FALSE
           ) %>%
             janitor::clean_names() %>%
             mutate(across(everything(), \(x) as.character(x))) %>%
@@ -224,6 +224,7 @@ og_data_chr <-
     # then hms::as_hms(41700) = 11:35:00
     type_convert() %>%
     mutate(
+      date_mm_dd_yy = janitor::excel_numeric_to_date(date_mm_dd_yy),
       sample_collection_time_gmt =
         hms::as_hms(sample_collection_time_gmt * 24 * 60 * 60)
     )
@@ -456,14 +457,15 @@ if (sv) {
       overwrite = TRUE
     )
 }
-
+last_mod()
 # save to cloud
 if (FALSE) {
   here("data", "metadata", "inventory") %>%
   dir_ls(regexp = "imars_inventory") %>%
   str_subset("~\\$", negate = TRUE) %>%
-  sort(decreasing = TRUE) %>%
-  first() %>%
+  last_mod() %>%
+  # sort(decreasing = TRUE) %>%
+  # first() %>%
   file_copy(new_path = inventory,
             overwrite = TRUE)
 }
