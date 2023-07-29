@@ -84,9 +84,9 @@ files_filt <-
   filter(
          year > 2017 &
          year != 2019
-  #       ) %>%
-  # filter(
-  #   str_detect(cruise_id, "WS23061|H23138")
+        ) %>%
+  filter(
+    str_detect(cruise_id, "WS23203")
   ) %T>% 
   print()
 ```
@@ -115,7 +115,8 @@ files <-
       ),
     data_row =  map_int(data, \(x) nrow(x))
     ) %>%
-  filter(data_row > 0)
+  filter(data_row > 0) %>%
+  select(-data_row)
 ```
 # ---- Check Mismatched Column Types or Names ----
 This will show the column that have a different type than what it should be. The
@@ -239,6 +240,7 @@ save_csv(
   save_location  = here("data", "metadata", "edna_meta"),
   save_name      = "edna_metadata",
   overwrite      = FALSE,
+  # overwrite      = TRUE,
   verbose        = TRUE,
   time_stamp_fmt = "%Y-%m-%d"
 )
@@ -248,6 +250,7 @@ save_csv(
   save_location  = here("data", "metadata", "edna_meta"),
   save_name      = "edna_summary",
   overwrite      = FALSE,
+  # overwrite      = TRUE,
   verbose        = TRUE,
   time_stamp_fmt = "%Y-%m-%d"
 )
@@ -286,7 +289,8 @@ finals <-
     "sample_id"   = "sample",
     "long"        = "lon",
     "lat"         = "lat",
-    "depth"       = "depth_m",
+    "depth"       = "depth_level",
+    "depth_m"       = "depth_m",
     "Replicate"   = "replicate",
     "filter type" = "filter_type"
   ) 
