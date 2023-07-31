@@ -29,7 +29,7 @@ source(here("scripts", "misc_functions.R"))
 source(here(".Rprofile"))
 
 # `NA` values to skip when reading `.xlsx.
-na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
+na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
              "*", stringi::stri_dup("-", 1:20))
 
 # where to pull data from
@@ -160,7 +160,10 @@ files <- switch(
   "local" = files_local
 )
 
-inventory <- dir_ls(cloud_dir, regexp = "imars_inventory")
+# path to file with all inventory information
+inventory <- 
+  dir_ls(cloud_dir, regexp = "imars_inventory") %>%
+  str_subset("~", negate = TRUE)
 
 prev_cruise_id <- 
   inventory %>%
@@ -172,6 +175,7 @@ prev_cruise_id <-
 files <- 
   files %>%
   filter(!cruise_id %in% prev_cruise_id)
+  # filter(str_detect(cruise_id, "WS21093"))
 
 files <- get_sheet_info(files)
 
@@ -244,7 +248,8 @@ files <-
   mutate(
     data = pmap(
       list(file_path, sht_num, row, last_c), 
-      read_logsheets
+      read_logsheets,
+      na_skip = na_skip
       )
     ) 
 
@@ -303,7 +308,9 @@ meta_list$sample_meta_data <-
       & is.na(vol_ml))
     
     # filter where sample_type (chl|hplc|cdom) has no vol and no date/time
-    & !(is.na(date_time) & is.na(vol_ml))) %>%
+    & !(is.na(date_time) & is.na(vol_ml))
+    & !is.na(vol_ml)
+    ) %>%
   mutate(
      .by = cruise_id,
      cruise_start = min(date_mm_dd_yy, na.rm = TRUE)
