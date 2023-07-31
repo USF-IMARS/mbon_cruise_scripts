@@ -72,7 +72,7 @@ crs_log_exst <-
 meta_all <- 
   dir_ls(here(cloud_dir), 
          regexp = "imars_inventory_chl_hplc_cdom") %>%
-  read.xlsx(sheet = "sample_meta_data") %>%
+  openxlsx::read.xlsx(sheet = "sample_meta_data") %>%
   # remove cruises fully completed pre-COVID
   filter(
     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
@@ -182,6 +182,50 @@ for (i in seq(nrow(save_meta))) {
   
 }
 
+```
+
+# Add HPLC sample IDs
+```{r}
+ meta_all %>% 
+  nest(.by = cruise_id) %>%
+  # filter(cruise_id == "WS23203") %>%
+  left_join(crs_log_exst) %>%
+  filter(!is.na(files)) %>%
+  mutate(
+    sheets = pmap(
+      list(data, cruise_id, files),
+      function(.x, .y, .z) {
+        tryCatch({
+        cli_alert_info(c("-----\n Cruise ID: ", .y))
+        update_metadata(.meta = .x, cruise = .y, prev_log = .z)
+      }, error = function(e) {
+        cli_alert_danger("Cruise has issue unnesting!")
+        cli_alert_danger(sprintf("Error in %s: %s",
+                                 deparse(e[["call"]]),
+                                 e[["message"]])
+                              )
+        NULL
+      })
+        }
+      )
+    ) %>%
+  with(., (walk2(files, sheets,
+       (\(.x, .y) 
+          if (!file_exists(arg$file_name) | TRUE) {
+     cli_alert_info("Trying to create file {.file {basename(arg$file_name)}}")
+     try(
+       saveWorkbook(.y,
+                    .x,
+                    overwrite   = TRUE,
+                    returnValue = TRUE), 
+       silent = FALSE)
+   } else {
+     cli_alert_info("Ignoring file {.file {basename(arg$file_name)}}")
+   }
+         )
+       )
+  )
+  )
 ```
 
 # ---- Don't Need to Go Beyond ----
