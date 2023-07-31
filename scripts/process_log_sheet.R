@@ -95,7 +95,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ---- Format 1st Sheet Info ----
   meta <-
     .meta %>%
-    filter(!str_detect(sample_type, "HPLC")) %>%
+    # filter(!str_detect(sample_type, "HPLC")) %>%
     select(
       date_mm_dd_yy,                                
       sample_collection_time_gmt,
@@ -113,11 +113,18 @@ process_log_sheet <- function(.meta, cal, cruise,
       values_fn    = list,
       names_repair = make_clean_names
     ) %>%
-    unnest(c(chl_a, cdom)) %>%
-    group_by(station, depth_m) %>%
-    mutate(cdom = replace(cdom, duplicated(cdom), NA)) %>%
-    ungroup() %>%
-    transmute(
+    unnest(c(chl_a, cdom, hplc)) %>%
+    mutate(
+      .by   = c(station, depth_m),
+      cdom  = replace(cdom, duplicated(cdom), NA),
+      hplc  = replace(hplc, duplicated(hplc), NA),
+      ranks = str_remove(chl_a, ".*-"),
+      ranks = str_remove_all(ranks, "[:alpha:]"),
+      ranks = as.numeric(ranks)
+      ) %>%
+    arrange(ranks) %>%
+    mutate(
+      .keep = "none",
       "Date (UTC)"         = date_mm_dd_yy,                                
       "Time (UTC)"         = sample_collection_time_gmt,
       "Latitude (deg. N)"  = lat,
@@ -127,7 +134,8 @@ process_log_sheet <- function(.meta, cal, cruise,
       "Station ID"         = station,
       "Instrument"         = inst_nm,
       "Sample ID"          = chl_a,
-      "CDOM Sample ID"     = cdom
+      "CDOM Sample ID"     = cdom,
+      "HPLC Sample ID"     = hplc,
     ) %>%
     mutate(
       "ap,d(λ) process date"                       = NA_Date_,
@@ -144,7 +152,9 @@ process_log_sheet <- function(.meta, cal, cruise,
     relocate("ap,d(λ) process date", 
              .before = Instrument) %>%
     relocate("CDOM Sample ID", 
-             .after = "Instrument ")
+             .after = "Instrument ")  %>%
+    relocate( "HPLC Sample ID", 
+              .before = "CDOM process date")
   
   # ---- Format 2nd Sheet Info ----
   chl_a <-
@@ -154,14 +164,14 @@ process_log_sheet <- function(.meta, cal, cruise,
       date_mm_dd_yy, sample_collection_time_gmt, lat, lon, max_depth, depth_m, 
       station, identifier, vol_ml)  %>%
     transmute(
-      "Date (UTC)"         = date_mm_dd_yy,                                
-      "Time (UTC)"         = sample_collection_time_gmt,
-      "Latitude (deg. N)"  = lat,
-      "Longitude (deg. W)" = lon,
-      "Bottom Depth (m)"   = max_depth,
-      "Sample Depth (m)"   = depth_m,
-      "Station ID"         = station,
-      "Sample ID"          = identifier,
+      "Date (UTC)"           = date_mm_dd_yy,                                
+      "Time (UTC)"           = sample_collection_time_gmt,
+      "Latitude (deg. N)"    = lat,
+      "Longitude (deg. W)"   = lon,
+      "Bottom Depth (m)"     = max_depth,
+      "Sample Depth (m)"     = depth_m,
+      "Station ID"           = station,
+      "Sample ID"            = identifier,
       "Volume seawater (ml)" = vol_ml
     ) %>%
     mutate(
@@ -205,7 +215,10 @@ process_log_sheet <- function(.meta, cal, cruise,
                                   halign         = "center"),
       styl_col4     = createStyle(fgFill = "#DDD9C4",
                                   halign = "center"),
+      styl_col5     = createStyle(fgFill = "#F2DCDB"),
       styl_border   = createStyle(border      = "Right", 
+                                  borderStyle = "thin"),
+      styl_border_l   = createStyle(border      = "Left", 
                                   borderStyle = "thin"),
       styl_brd_bot  = createStyle(border      = "bottom", 
                                   borderStyle = "thin"),
@@ -300,21 +313,68 @@ process_log_sheet <- function(.meta, cal, cruise,
   # ---- Add Info
   addWorksheet(wb, sheetName = sht_nm[1])
   
+  # add black line to bottom of headers
   writeData(wb, sheet = sht_nm[1], startCol = 1, startRow = 1, 
             x = meta, headerStyle = sstyles$styl_brd_head)
   
-  writeData(wb, sheet = sht_nm[1], startCol = "H", startRow = 1, 
-            x = meta[,8:12], headerStyle = sstyles$styl_col1)
+  # format filter pad columns
+  pad_cols <- seq(
+    which(str_detect(names(meta), "ap.*process date")),
+    max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
+    )
   
-  writeData(wb, sheet = sht_nm[1], startCol = "M", startRow = 1, 
-            x = meta[,13:18], headerStyle = sstyles$styl_col2)
+  writeData(wb, sheet = sht_nm[1], 
+            # startCol = "H", 
+            startCol = LETTERS[pad_cols[1]],
+            startRow = 1, 
+            x = meta[, pad_cols], headerStyle = sstyles$styl_col1)
   
-  writeData(wb, sheet = sht_nm[1], startCol = "S", startRow = 1, 
-            x = meta[, 19], headerStyle = sstyles$styl_brd_head)
+  # format HPLC
+  hplc_cols <- which(str_detect(names(meta), "(?i)hplc sample id"))
+  
+  writeData(wb, sheet = sht_nm[1], 
+            startCol = LETTERS[hplc_cols[1]], 
+            startRow = 1,
+            x = meta[,hplc_cols], headerStyle = sstyles$styl_col5)                     
+                     
+  # format cdom
+  cdom_cols <- seq(
+    which(str_detect(names(meta), "(?i)cdom.*process date")),
+    max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
+  )
+  
+  writeData(wb, sheet = sht_nm[1], 
+            # startCol = "M", 
+            startCol = LETTERS[cdom_cols[1]], 
+            startRow = 1,
+            x = meta[,cdom_cols], headerStyle = sstyles$styl_col2)
+  
+  # add black lines 
+  writeData(wb, sheet = sht_nm[1],
+            # startCol = "S",
+            # startCol = LETTERS[cdom_cols[1]],
+            startCol = LETTERS[cdom_cols[length(cdom_cols)] + 1],
+            startRow = 1,
+            x = meta[, cdom_cols[length(cdom_cols)] + 1], 
+            headerStyle = sstyles$styl_brd_head)
   
   # ---- Specify Width and Heights
   setRowHeights(wb, sheet = sht_nm[1], rows = 1, heights = 73.2)
-  setColWidths(wb, sheet = sht_nm[1], cols = "S", widths = 39.56)
+  setColWidths(wb, sheet = sht_nm[1], 
+               # cols = "S", 
+               cols = LETTERS[cdom_cols[length(cdom_cols)] + 1], 
+               widths = 39.56)
+  
+  setColWidths(wb, sheet = sht_nm[1], 
+               cols = LETTERS[hplc_cols], 
+               widths = 15.67)
+  setColWidths(wb, sheet = sht_nm[1], 
+               cols = 
+                 LETTERS[c(which(str_detect(names(meta), "(?i)^sample id")),
+                           which(str_detect(names(meta), "(?i)^cdom sample id"))
+                           )], 
+               widths = 12.89)
+  
   
   # ---- Add Styles
   options(openxlsx.dateFormat = "mm/dd/yy")
@@ -339,26 +399,44 @@ process_log_sheet <- function(.meta, cal, cruise,
            gridExpand = TRUE,
            stack      = TRUE)
   
+  # color filter pads
   addStyle(wb, 
            sheet      = sht_nm[1], 
            style      = sstyles$styl_col1,
-           cols       = 8:12,
+           # cols       = 8:12,
+           cols       = pad_cols,
            rows       = 1:nrow(meta) + 1,
            gridExpand = TRUE,
            stack      = TRUE)
   
+  # color hplc
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           style      = sstyles$styl_col5,
+           cols       = hplc_cols,
+           rows       = 1:nrow(meta) + 1,
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  # color cdom 
   addStyle(wb, 
            sheet      = sht_nm[1], 
            style      = sstyles$styl_col2,
-           cols       = 13:18,
+           cols       = cdom_cols,
            rows       = 1:nrow(meta) + 1,
            gridExpand = TRUE,
            stack      = TRUE)
   
+  # add thin borders between sections
   addStyle(wb, 
            sheet      = sht_nm[1], 
-           style      = sstyles$styl_border,
-           cols       = c("G", "L", "S", "R"),
+           # style      = sstyles$styl_border,
+           # cols       = c("G", "L", "S", "R"),
+           style      = sstyles$styl_border_l,
+           cols       = c(
+             pad_cols[1], hplc_cols, cdom_cols[1], cdom_cols[length(cdom_cols)] + 1,
+             cdom_cols[length(cdom_cols)] + 2
+           ),
            rows       = 1:(nrow(meta) + 1),
            gridExpand = TRUE, 
            stack      = TRUE)
@@ -366,7 +444,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   addStyle(wb, 
            sheet      = sht_nm[1], 
            style      = sstyles$styl_brd_bot,
-           cols       = 1:19,
+           cols       = seq(ncol(meta)),
            rows       = nrow(meta) + 1,
            gridExpand = TRUE, 
            stack      = TRUE)
@@ -378,6 +456,14 @@ process_log_sheet <- function(.meta, cal, cruise,
            rows       = 1:nrow(meta) + 1,
            gridExpand = TRUE, 
            stack      = TRUE)
+  
+  addStyle(wb, sht_nm[1], 
+           style      = sstyles$styl_brd_dash, 
+           rows       = 1:(nrow(meta) + 1), 
+           cols       = c(which(str_detect(names(meta), "(?i)^sample id")),
+                          which(str_detect(names(meta), "(?i)^cdom sample id"))), 
+           stack      = TRUE,
+           gridExpand = TRUE)
   
   # ========================================================================== #
   # ---- Create 2nd Sheet ----
@@ -508,6 +594,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   worksheetOrder(wb) <- c(2, 1)
   
   return(wb)
+  
   # ---- end of function ----
   }
 
@@ -619,3 +706,374 @@ update_proc_log <- function(files, cal) {
   return(wb)
 }
 
+
+
+
+
+update_metadata <- function(
+    .meta, 
+    cruise,
+    prev_log,
+    prev_sht = "metadata",
+    old_sht_rn  = "old_meta" #,
+    # creator = "Sebastian Di Geronimo"
+    ) {
+  
+  
+  # ========================================================================== #
+  # ---- Load Libraries ----
+  # ========================================================================== #  
+  library("librarian")
+  shelf(
+    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    forcats, lubridate, glue, fs, magrittr, here,
+    
+    # additional
+    openxlsx, hms, janitor, cli
+  )
+  # ========================================================================== #
+  # ---- Filter Data ----
+  # ========================================================================== #  
+  cli_alert_info("Filtering Data")
+  old_log <- 
+    prev_log %>%
+    read.xlsx(sheet = prev_sht, sep.names = " ", detectDates = TRUE) %>%
+    rename("Instrument " = which(str_detect(names(.), 
+                                            "(?i)cdom sample id")) - 1) %>%
+    select(matches("ap.*process date"):last_col()) %>%
+    select(-matches("(?i)hplc sample")) 
+  
+
+  meta <- 
+  .meta %>%
+    select(
+      date_mm_dd_yy,                                
+      sample_collection_time_gmt,
+      lat,
+      lon,
+      max_depth,
+      depth_m,
+      station,
+      identifier,
+      sample_type) %>%
+    
+    pivot_wider(
+      names_from   = sample_type, 
+      values_from  = identifier,
+      values_fn    = list,
+      names_repair = make_clean_names
+    ) %>%
+    unnest(c(chl_a, cdom, hplc)) %>%
+    mutate(
+      .by   = c(station, depth_m),
+      cdom  = replace(cdom, duplicated(cdom), NA),
+      hplc  = replace(hplc, duplicated(hplc), NA),
+      ranks = str_remove(chl_a, ".*-"),
+      ranks = str_remove_all(ranks, "[:alpha:]"),
+      ranks = as.numeric(ranks),
+      sample_collection_time_gmt = as_hms(sample_collection_time_gmt)
+    ) %>%
+    arrange(ranks) %>%
+    select(-ranks, -cdom) %>%
+    mutate(
+      .keep = "unused",
+      "Date (UTC)"         = date_mm_dd_yy,                                
+      "Time (UTC)"         = sample_collection_time_gmt,
+      "Latitude (deg. N)"  = lat,
+      "Longitude (deg. W)" = lon,
+      "Bottom Depth (m)"   = max_depth,
+      "Sample Depth (m)"   = depth_m,
+      "Station ID"         = station,
+      "Sample ID"          = chl_a,
+      "HPLC Sample ID"     = hplc,
+    )  
+  hdr_name <- names(meta)
+  
+  meta <- 
+    meta %>%
+  
+    left_join(old_log, ., 
+               by = "Sample ID")  %>%
+    select(hdr_name, everything()) %>%
+    mutate(
+      ranks = str_remove(`Sample ID`, ".*-"),
+      ranks = str_remove_all(ranks, "[:alpha:]"),
+      ranks = as.numeric(ranks)
+    ) %>%
+    arrange(ranks) %>%
+    select(-ranks) %>%
+    relocate("ap,d(λ) process date", 
+             .before = Instrument) %>%
+    relocate("Sample ID", 
+             .after = Instrument) %>%
+    relocate("CDOM Sample ID", 
+             .after = "Instrument ")  %>%
+    relocate( "HPLC Sample ID", 
+              .before = "CDOM process date") %>%
+    mutate(across(matches("(?i)date$"), (\(x) as_date(x)  %>%
+    format("%m/%d/%Y"))))
+  
+  
+  # ========================================================================== #
+  # ---- Setup ----
+  # ========================================================================== #  
+  cli_alert_info("Setup")
+  # ---- Styles for formatting ----
+  sstyles <-
+    list(
+      styl_date     = createStyle(numFmt = "DATE"),
+      styl_time     = createStyle(numFmt = "hh:mm"),
+      styl_num      = createStyle(numFmt = "0.00"),
+      styl_col1     = createStyle(fgFill = "#FDE9D9"),
+      styl_col2     = createStyle(fgFill = "#DCE6F1"),
+      styl_col3     = createStyle(fontName       = "Arial",
+                                  fontSize       = 22,
+                                  fontColour     = "white",
+                                  textDecoration = "bold",
+                                  border         = "TopBottomLeftRight",
+                                  fgFill         = "#948A54",
+                                  halign         = "center"),
+      styl_col4     = createStyle(fgFill = "#DDD9C4",
+                                  halign = "center"),
+      styl_col5     = createStyle(fgFill = "#F2DCDB"),
+      styl_border   = createStyle(border      = "Right", 
+                                  borderStyle = "thin"),
+      styl_border_l   = createStyle(border      = "Left", 
+                                    borderStyle = "thin"),
+      styl_brd_bot  = createStyle(border      = "bottom", 
+                                  borderStyle = "thin"),
+      styl_brd_head = createStyle(border         = "bottom", 
+                                  borderStyle    = "thin",
+                                  textDecoration = "bold",
+                                  halign         = "center",
+                                  wrapText       = TRUE),
+      styl_align    = createStyle(halign = "center"),
+      styl_brd_dash = createStyle(border      = "right", 
+                                  borderStyle = "dotted")
+    ) 
+  
+  # ========================================================================== #
+  # ---- Create 1st Sheet ----
+  # ========================================================================== #  
+  cli_alert_info("Creating sheet: {.var {sht_nm[1]}}")
+  
+  sht_nm <- prev_sht
+  old_sht_rn <- paste0(old_sht_rn, "_update_on", Sys.Date())
+  
+  # ---- Create Worksheet
+  wb <- loadWorkbook(prev_log)
+  
+  renameWorksheet(wb, sheet = prev_sht, newName = old_sht_rn)
+  
+  # ---- Add Info
+  addWorksheet(wb, sheetName = sht_nm[1])
+  
+  worksheetOrder(wb) <- c(1, 3, 2)
+  activeSheet(wb) <- 3
+  
+  # add black line to bottom of headers
+  writeData(wb, sheet = sht_nm[1], startCol = 1, startRow = 1, 
+            x = meta, headerStyle = sstyles$styl_brd_head)
+ 
+  # format filter pad columns
+  pad_cols <- seq(
+    which(str_detect(names(meta), "ap.*process date")),
+    max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
+  )
+  
+  writeData(wb, sheet = sht_nm[1],
+            startCol = LETTERS[pad_cols[1]],
+            startRow = 1, 
+            x = meta[, pad_cols], 
+            headerStyle = sstyles$styl_col1)
+  
+  # format HPLC
+  hplc_cols <- which(str_detect(names(meta), "(?i)hplc sample id"))
+  
+  writeData(
+    wb, 
+    sheet       = sht_nm[1], 
+    startCol    = LETTERS[hplc_cols[1]], 
+    startRow    = 1,
+    x           = meta[, hplc_cols, drop = FALSE], 
+    headerStyle = sstyles$styl_col5)                     
+  
+  # format cdom
+  cdom_cols <- seq(
+    which(str_detect(names(meta), "(?i)cdom.*process date")),
+    max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
+  )
+  
+  writeData(wb, sheet = sht_nm[1], 
+            # startCol = "M", 
+            startCol = LETTERS[cdom_cols[1]], 
+            startRow = 1,
+            x = meta[, cdom_cols], headerStyle = sstyles$styl_col2)
+  # add black lines 
+  writeData(wb, sheet = sht_nm[1],
+            # startCol = "S",
+            # startCol = LETTERS[cdom_cols[1]],
+            startCol = LETTERS[cdom_cols[length(cdom_cols)] + 1],
+            startRow = 1,
+            x = meta[, cdom_cols[length(cdom_cols)] + 1, drop = FALSE], 
+            headerStyle = sstyles$styl_brd_head)
+ # return(wb)
+  
+  # ---- Specify Width and Heights
+  setRowHeights(wb, sheet = sht_nm[1], rows = 1, heights = 73.2)
+  setColWidths(wb, sheet = sht_nm[1], 
+               # cols = "S", 
+               cols = LETTERS[cdom_cols[length(cdom_cols)] + 1], 
+               widths = 39.56)
+  
+  setColWidths(wb, sheet = sht_nm[1], 
+               cols = LETTERS[hplc_cols], 
+               widths = 15.67)
+  
+  setColWidths(wb, sheet = sht_nm[1], 
+               cols = 
+                 LETTERS[c(which(str_detect(names(meta), "(?i)^sample id")),
+                           which(str_detect(names(meta), "(?i)^cdom sample id"))
+                 )], 
+               widths = 12.89)
+  
+  
+  # ---- Add Styles
+  options(openxlsx.dateFormat = "mm/dd/yyyy")
+  addStyle(wb, sht_nm[1],
+           style      = sstyles$styl_date,
+           rows       = 1:(nrow(meta) + 1),
+           cols       = c(1, pad_cols[1], cdom_cols[1]),
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  addStyle(wb, sht_nm[1],
+           style      = sstyles$styl_time,
+           rows       = 1:nrow(meta) + 1,
+           cols       = 2,
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  addStyle(wb, sht_nm[1],
+           style      = sstyles$styl_num,
+           rows       = 1:nrow(meta) + 1,
+           cols       = 5:6,
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  # color filter pads
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           style      = sstyles$styl_col1,
+           # cols       = 8:12,
+           cols       = pad_cols,
+           rows       = 1:nrow(meta) + 1,
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  # color hplc
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           style      = sstyles$styl_col5,
+           cols       = hplc_cols,
+           rows       = 1:nrow(meta) + 1,
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  # color cdom 
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           style      = sstyles$styl_col2,
+           cols       = cdom_cols,
+           rows       = 1:nrow(meta) + 1,
+           gridExpand = TRUE,
+           stack      = TRUE)
+  
+  # add thin borders between sections
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           # style      = sstyles$styl_border,
+           # cols       = c("G", "L", "S", "R"),
+           style      = sstyles$styl_border_l,
+           cols       = c(
+             pad_cols[1], hplc_cols, cdom_cols[1], cdom_cols[length(cdom_cols)] + 1,
+             cdom_cols[length(cdom_cols)] + 2
+           ),
+           rows       = 1:(nrow(meta) + 1),
+           gridExpand = TRUE, 
+           stack      = TRUE)
+  
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           style      = sstyles$styl_brd_bot,
+           cols       = seq(ncol(meta)),
+           rows       = nrow(meta) + 1,
+           gridExpand = TRUE, 
+           stack      = TRUE)
+  
+  addStyle(wb, 
+           sheet      = sht_nm[1], 
+           style      = sstyles$styl_align,
+           cols       = 1:ncol(meta),
+           rows       = 1:nrow(meta) + 1,
+           gridExpand = TRUE, 
+           stack      = TRUE)
+  
+  addStyle(wb, sht_nm[1], 
+           style      = sstyles$styl_brd_dash, 
+           rows       = 1:(nrow(meta) + 1), 
+           cols       = c(which(str_detect(names(meta), "(?i)^sample id")),
+                          which(str_detect(names(meta), "(?i)^cdom sample id"))), 
+           stack      = TRUE,
+           gridExpand = TRUE)
+  
+  
+  return(wb)
+  
+  # ---- end of function ----
+}
+
+
+
+# {
+#   # testwb <- meta_all %>%
+#   #   nest(.by = cruise_id) %>%
+#   #   
+#   #   filter(str_detect(cruise_id, "WS23203")) %>%
+#   #   mutate(
+#   #     sheets = map2(data, cruise_id,
+#   #                   ~ tryCatch({
+#   #                     cli_alert_info(c("-----\n Cruise ID: ", .y))
+#   #                     process_log_sheet(.meta = .x, cal = cal, cruise = .y)
+#   #                   }, error = function(e) {
+#   #                     cli_alert_danger("Cruise has issue unnesting!")
+#   #                     cli_alert_danger(sprintf("Error in %s: %s",
+#   #                                              deparse(e[["call"]]),
+#   #                                              e[["message"]])
+#   #                     )
+#   #                     NULL
+#   #                   })
+#   #     )
+#   #   )
+#   # 
+#   # openXL(testwb$sheets[[1]])
+#   # message("make sure to delete this section")
+# 
+#   crs_log_exst <- 
+#     here(cloud_dir, "process_logs") %>%
+#     dir_ls() %>%
+#     tibble(files = .) %>%
+#     mutate(cruise_id = str_extract(files, "[A-Z]{1,3}\\d{4,5}")) 
+#   
+#   idks <- meta_all %>%
+#   filter(cruise_id == "WS21338") %>%
+#   update_metadata(
+#     .meta = ., 
+#     cruise = "WS21338",
+#     prev_log = crs_log_exst,
+#     prev_sht = "metadata",
+#     sht_nm  = "metadata2") 
+#   
+#   try(openXL(idks), silent = TRUE)
+# }
+# 
