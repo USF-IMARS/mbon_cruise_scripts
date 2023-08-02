@@ -711,46 +711,7 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
 # 3.0 Read SeaBass HPLC Files and Check for Issues
 All columns are read as characters to check for any issues with the data
 ```{r read-seabass}
-# function to read seasbass hplc files and sort through head, and data
-read_sb_files <- function(x, type = NULL, add_na = NULL) {
-
-  na_val <- unique(c("", "NA", add_na))
-  
-  if (is.null(type)) {
-    type <- cols(.default = col_guess())
-  } else {
-    type <- cols(.default = type)
-  }
-
-  skips <-
-    read_lines(x) %>% str_detect("end_header") %>%
-    which()
-  
-  head <-
-    read_lines(x) %>% str_detect("fields") %>%
-    which()
-  
-  col_names <-
-    read_csv(
-      x,
-      skip = head - 1,
-      n_max = 1,
-      col_names = FALSE,
-      show_col_types = FALSE
-    ) %>%
-    mutate(X1 = str_remove(X1, "/fields=")) %>%
-    as.character()
-  
-  read_csv(
-    x,
-    skip           = skips,
-    col_names      = col_names,
-    show_col_types = FALSE,
-    col_types      = type,
-    na             = na_val
-  )
-}
-
+source(here("scripts", "check_data.R"))
 # get most recent directory created for seabass files
 ind_f_dir <- 
   here("data", "processed", "hplc") %>%
@@ -764,10 +725,10 @@ sb_data <-
   first() %>%
   dir_ls() %>%
   tibble(file = .) %>%
-  # slice(1) %>%
-  mutate(data = map(file, 
-                    read_sb_files, 
-                    type = "c")) %>%
+  mutate(data = map(
+    file, 
+    read_sb_files, # function to read seasbass hplc files and extract data
+    type = "c")) %>%
   unnest(data)
 
 message(glue("The dimensions are: {dim_desc(sb_data)}"))
@@ -799,96 +760,18 @@ SFMBON_WS16263_pigment_20160919_R1.sb: 1 error (1 unique) and 5 warnings (1 uniq
 ```{r fcheck}
 # ---- Toggle if want to see fcheck out put or look just for errors
 verb <- FALSE
-# verb <- TRUE
-
-# check if Perl is installed and errors if not
-tryCatch({
-  system2("perl", "-v", stdout = TRUE)
-  invisible()
-  }, error = function(e) {
-    stop(glue("The programming language \"Perl\" does not seem to be ", 
-              "downloaded to your computer.\n", 
-              "\"Perl\" is used to run the `fcheck4.pl` script to check issues ", 
-              "with SeaBASS files (.sb).\n",
-              "----\n",
-              "To continue checking .sb files:\n",
-              "Download perl at: ",
-              "<https://www.perl.org/get.html>\n",
-              "----\n"))
-    
-      })
-
-# this will download fcheck if it doens't exists in the project directory
-# <https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
-if (!dir_exists(here("fcheck")) | !file_exists(here("fcheck", "fcheck4.pl"))) {
-  (function() {
-  
-  url  <- "https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar"
-  
-   message(
-    glue_col(
-      "The directory `fcheck` does not exists in your project repo.\n",
-      "If you type <ENTER> in consol, this will create the repo in ",
-      "{blue {here()}}\n",
-      "and download `fcheck` from {blue {url}}\n",
-      "<ESC> will cancel."))
-  
-   x <- menu(c("No, stop download", "Yes, continue download"))
-   
-   if (x != 2) return(message("Not downloading `fcheck`"))
-   
- 
-  message("Creating `fcheck` folder and downloading `fcheck.pl`")
-    
-  dir_create(here("fcheck"))
-  file <- here("fcheck", basename(url))
-  
-  # download
-  message(glue_col("Downloading to {blue {here(\"fcheck\")}}"))
-  download.file(
-    url      = url,
-    destfile = file,
-    method   = "curl")
-
-  # unzip
-  message(glue_col("Unzipping to {blue {here(\"fcheck\")}}"))
-  untar(
-    tarfile = file,
-    exdir   = here("fcheck"))
-         
-  message("Finished downloading and unzipping!")
-  })()
-  }
+# # verb <- TRUE
 
 
-# ---- run fcheck
 fcheck_results <- 
-  dir_ls(ind_f_dir[1]) %>%
+ dir_ls(ind_f_dir[1]) %>%
   tibble(files = .) %>%
-  mutate(
-    fcheck2 = map(files, 
-                 \(x) paste(here("fcheck", "fcheck4.pl"), x) %>%
-                   system2("perl", ., stdout = TRUE))
-  ) %T>%
-  {if (verb) {
-    pull(., fcheck2) %>%
-    print()
-  } else {.}}
+  sb_fcheck(.,
+          col_name = "files",
+          loc_fcheck = here("f2"), 
+          verb = verb)
 
-# print file and summary of errors/warnings
-for (i in seq(nrow(fcheck_results))) {
-  print(
-    with(
-      fcheck_results,
-      glue(basename(files[[i]]),
-           fcheck2[[i]][which(str_detect(fcheck2[[i]], 
-                                         "\\d+.*error"))],
-           .sep = ": ")
-      )
-    )
-}
-
-rm(verb, i, ind_f_dir)
+# rm(verb, i, ind_f_dir)
 ```
 
 ## Get Date Range of Each Cruise
@@ -950,7 +833,7 @@ If you want to copy files from local to cloud directory, you may run this
 chunk. 
 
 By default, it will skip. 
-```{r coy-to-box}
+```{r copy-to-box}
 shelf(cli)
 source(here(".Rprofile"))
 # set arguments in a list
@@ -961,8 +844,10 @@ arg_ls <-
     # cloud_loc = here("data", "test"), # for testing of experimental change
     
     # select if want to write data to cloud and overwrite cloud directory data 
-    wrt_cld = TRUE, # write data to cloud
-    ovrwrt  = TRUE # overwrite if data exists
+    wrt_cld = FALSE, # write data to cloud
+    # wrt_cld = TRUE, # write data to cloud
+    ovrwrt  = FALSE # overwrite if data exists
+    # ovrwrt  = TRUE # overwrite if data exists
   )
 
 if (!arg_ls$wrt_cld) {
@@ -1085,7 +970,7 @@ rm(arg_ls)
 ```
 
 ## Save Consolidated Info and Select Variables
-If want to save a the consolidated HPLC data with the selected variables as a 
+If want to save a consolidated HPLC data file with the selected variables as a 
 `.csv` file.
 ```{r sv-consolidated}
 arg_ls <- 
