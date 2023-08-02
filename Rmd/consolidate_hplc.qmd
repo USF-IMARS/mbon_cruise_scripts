@@ -49,6 +49,7 @@ file_pig <-
            # included ^[^~]* to not match ~, means that a file is opened
            regexp = "^[^~]*\\.xlsx$") %>% 
     str_sort() %>%
+    str_subset("M-K 10-11 part1 report.xlsx", negate = TRUE) %>%
     tibble(file = ., base = basename(.)) %>%
   mutate(
     sheets = map(file, 
