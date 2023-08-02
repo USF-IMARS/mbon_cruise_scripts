@@ -125,8 +125,9 @@ dir_ls(here("data", "processed", "hplc"),
   first() |>
   load() 
 
-hplc_data %<>%
-  filter(str_detect(cruise_id, "WS18285|WS21032"))
+# hplc_data <- 
+#   hplc_data %>%
+#   filter(str_detect(cruise_id, "WS18285|WS21032"))
 
 # location to save files
 loc <- 
@@ -422,7 +423,7 @@ hd_def$type     <- "pigment"
 hd_def$status   <- "final" # final - not intending to revisit
 hd_def$wtr_dpth <- hd_def$stn <- "na"
 
-hd_def$suffix <- "R1"
+hd_def$suffix <- "R2"
 hd_def$fields_extr <- 
   tibble(
     field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
@@ -1139,7 +1140,6 @@ if (arg_ls$local | arg_ls$cloud | arg_ls$run) {
     write_csv(hplc_filt,
               here(cloud_dir, "hplc",
                    glue("hplc_consolidate_select_vars_",
-                        "{Sys.Date()}",
                         ".csv")))
     }
   }
