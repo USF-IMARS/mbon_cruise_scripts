@@ -173,7 +173,11 @@ hplc_data <-
                         & station == "V8", -82.95946,lon),
           lat = if_else(lat < 0, -1 * lat, lat),
           lon = if_else(lon > 0, -1 * lon, lon)
-          ))) %>%
+          )  %>%
+          
+        # convert vol filtered from mL to L
+        mutate(volfilt = volfilt / 1000)
+      )) %>%
   unnest(data) %>%
   
   # add cruise ID
@@ -506,6 +510,7 @@ base_plt       <- base_map_plot(map_obj$coast_topo, map_obj$bathy, extnt_all)
 hplc_inset_map <- map_inset(map_obj$coast_topo, map_obj$state, extnt_all)
 
 # create final maps
+# TODO: would be useful to parallelize here
 hplc_gps <-
   hplc_gps %>%
   mutate(
