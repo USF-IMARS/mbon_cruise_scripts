@@ -439,7 +439,8 @@ base_map_plot <- function(
         x = x, 
         y = y, 
         z = -Altitude,
-        label = ..level..
+        # label = ..level..
+        label = after_stat(level)
       ), 
       method = list(
         "bottom.pieces",
@@ -581,9 +582,9 @@ map_plot <- function(
   
   if (!is.null(.inset)) {
    plt <- 
-     ggdraw() +
-     draw_plot(plt) +
-     draw_plot(.inset, 
+     cowplot::ggdraw() +
+     cowplot::draw_plot(plt) +
+     cowplot::draw_plot(.inset, 
                x = 0.85, 
                y = 0.755, 
                width  = 0.1, 
