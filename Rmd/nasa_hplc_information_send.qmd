@@ -165,7 +165,7 @@ water_body <- list(
     glue("{30:68}"),
     glue("57.{1:3}"), "KW1", "KW2", "KW4"
   ),
-  "West Florda Shelf" = c(
+  "West Florida Shelf" = c(
     "Z04-068", "CBH", "NBH", "EB1",
     as.vector(outer(
       c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG"),
