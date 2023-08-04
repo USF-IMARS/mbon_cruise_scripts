@@ -37,6 +37,8 @@ conflicts_prefer(
   dplyr::filter(), 
   dplyr::select()
   )
+
+source(here("scripts", "misc_functions.R"))
 ```
 
 ## ---- Edit: Info ----
@@ -84,6 +86,7 @@ template <-
 metadata <-
   here(cloud_dir) %>%
   dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
+  str_subset("~", negate = TRUE) %>%
   read.xlsx(sheet = "sample_meta_data",
             detectDates = FALSE
             # rows = 1:1700
