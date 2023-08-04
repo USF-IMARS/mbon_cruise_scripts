@@ -55,10 +55,11 @@ source(here(".Rprofile"))
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "WS",           # Here, ship acronym
-    start_dates = "July 22 2023", # Here, month day year
-    end_dates   = "July 28 2023"  # Here, month day year
-  ) %>%
+    ship        = "WS",           # HERE, ship acronym
+    start_dates = "July 22 2023", # HERE, month day year
+    end_dates   = "July 28 2023", # HERE, month day year
+    volunteer   = FALSE           # HERE, if need volunteer paperwork
+    ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
     cruise_id = str_c(ship, format(cruise_id, "%y"), yday(cruise_id)),
@@ -100,7 +101,7 @@ cruise_setup(
   cruise_id       = cruise_id$cruise_id,
   cruise_date     = cruise_id$start_dates,
   blank_location  = here(cloud_dir, "blank_sheets", "pre_cruise_blank_sheets"),
-  volunteer       = TRUE,
+  volunteer       = cruise_id$volunteer,
   return_path     = TRUE
   ) %>%
   here("metadata") %>%
