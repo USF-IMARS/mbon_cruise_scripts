@@ -463,26 +463,6 @@ hd_def$fields_extr <-
 # needs: checklist, cruises report?
 hd_def$docs     <- "__TODO__"
 
-
-# hd_def$comments <-
-#   glue(.sep = "\n",
-#        .na = "",
-#        "!",
-#        "! COMMENTS",
-#        "! Prepared by: {prepared_by$name}",
-#        "! Email: {prepared_by$email}",
-#        "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
-#        hd_def$add_comment,
-#        "!",
-#        "! Samples were processed at NASA GSFC by Crystal Thomas",
-#        "!",
-#        "! Values of -9999 represent missing information;",
-#        "!",
-#        "! Values of -8888 represent measurements below detection limits (LOD),",
-#        "! this represents pigments not detected or pigments present with", 
-#        "! concentrations less than 0.0005 mg/m^3."
-#        ) 
-
 # add comments to each file
 hplc_data <-
   hplc_data %>%
@@ -606,7 +586,6 @@ header_skeleton <-
     # optional
     "/original_file_name={fbase}", 
     
-    # "{hd_def$comments}",
     "{comments}",
     "{pc_com}",
     "{acknowledge}",
