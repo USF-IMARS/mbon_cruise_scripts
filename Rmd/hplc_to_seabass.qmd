@@ -125,7 +125,7 @@ dir_ls(here("data", "processed", "hplc"),
   first() |>
   load() 
 
-# hplc_data <- 
+# hplc_data <-
 #   hplc_data %>%
 #   filter(str_detect(cruise_id, "WS18285|WS21032"))
 
@@ -172,6 +172,35 @@ acknowledge <-
     collapse = "\n"
   ) %>%
   str_c(., "\n!")
+
+hd_def <- list()
+
+# version
+hd_def$suffix <- "R2"
+
+## version notes:
+## if verion is R2 or above, add version notes if need to resubmit
+## general application:
+## add to all submissions or add specific info to cruise ids
+  # glue("\n! <date of change> version RX")
+if (!str_detect(hd_def$suffix, "R1")) {
+  # add to the end of this
+  hd_def$add_comment <-
+    list(
+      all = glue(
+        "\n!",
+        "\n! August 14, 2023 version R2 corrects volfilt ",
+        "errors from mL to L",
+      ),
+      WS20278 = glue(
+        "\n! August 14, 2023 version R2 pigment concentrations for sample ",
+        "WS20278-32, original volume used was 190 mL, actual volume 1900 mL"
+      )
+    )
+} else {
+  hd_def$add_comment$all <- NA
+}
+
 ```
 
 ## 2.3 All SeaBass Standard Fields 
@@ -211,7 +240,8 @@ hplc_data <- hplc_data2 <-
                                                             "t_acc", "tacc"),
                 .default = low_name)
               ) %>%
-              left_join(sb_field, by = c("low_name")))),
+              left_join(.env$sb_field, by = c("low_name")))
+      ),
     
     # calc duplicate info ----
     data_reps = map2(
@@ -404,7 +434,6 @@ TODO: change how list is created?
         y = <more info>
         )
 ```{r default-info}
-hd_def <- list()
 hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
 hd_def$affil    <- str_c(contacts$affil, collapse = ",")
@@ -423,7 +452,7 @@ hd_def$type     <- "pigment"
 hd_def$status   <- "final" # final - not intending to revisit
 hd_def$wtr_dpth <- hd_def$stn <- "na"
 
-hd_def$suffix <- "R2"
+
 hd_def$fields_extr <- 
   tibble(
     field_extr = c("hplc_gsfc_id", "sample", "date","time", "station",
@@ -435,61 +464,100 @@ hd_def$fields_extr <-
 hd_def$docs     <- "__TODO__"
 
 
-hd_def$comments <-
-  glue(.sep = "\n",
-       "!",
-       "! COMMENTS",
-       "! Prepared by: {prepared_by$name}",
-       "! Email: {prepared_by$email}",
-       "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
-       "!",
-       "! Samples were processed at NASA GSFC by Crystal Thomas",
-       "!",
-       "! Values of -9999 represent missing information;",
-       "!",
-       "! Values of -8888 represent measurements below detection limits (LOD),",
-       "! this represents pigments not detected or pigments present with", 
-       "! concentrations less than 0.0005 mg/m^3."
-       ) 
+# hd_def$comments <-
+#   glue(.sep = "\n",
+#        .na = "",
+#        "!",
+#        "! COMMENTS",
+#        "! Prepared by: {prepared_by$name}",
+#        "! Email: {prepared_by$email}",
+#        "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
+#        hd_def$add_comment,
+#        "!",
+#        "! Samples were processed at NASA GSFC by Crystal Thomas",
+#        "!",
+#        "! Values of -9999 represent missing information;",
+#        "!",
+#        "! Values of -8888 represent measurements below detection limits (LOD),",
+#        "! this represents pigments not detected or pigments present with", 
+#        "! concentrations less than 0.0005 mg/m^3."
+#        ) 
 
 # add comments to each file
-hplc_data <- 
+hplc_data <-
   hplc_data %>%
   mutate(
+    comments = map_chr(
+      cruise_id,
+      (\(.x) {
+        if (!str_detect(hd_def$suffix, "R1$") &&
+          .x %in% names(hd_def$add_comment)) {
+          comms <- str_c(
+            hd_def$add_comment$all,
+            hd_def$add_comment[[.x]],
+            sep = "\n"
+          )
+        } else {
+          comms <- hd_def$add_comment$all
+        }
+        glue(
+          .sep = "\n",
+          .na = "",
+          "!",
+          "! COMMENTS",
+          "! Prepared by: {prepared_by$name}",
+          "! Email: {prepared_by$email}",
+          "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
+          # hd_def$add_comment,
+          comms,
+          "!",
+          "! Samples were processed at NASA GSFC by Crystal Thomas",
+          "!",
+          "! Values of -9999 represent missing information;",
+          "!",
+          "! Values of -8888 represent measurements below detection limits (LOD),",
+          "! this represents pigments not detected or pigments present with",
+          "! concentrations less than 0.0005 mg/m^3."
+        )
+      })
+    ),
     precise_comm = map_chr(
       precision,
-      (\(xl) 
-       if (any(str_detect(as.matrix(xl), "replicate"), na.rm = TRUE)) {
-         glue("!")
-         } else if (nrow(xl) > 1) {
-         glue(
-           "!",
-           "\n! Coefficient of variation (CV) per report (replicate filter ",
-           "precision)",
-           "\n! TChl a = {str_c(xl$t_chl_a, collapse = \",\")};",
-           "\n! Ppig   = {str_c(xl$ppig, collapse = \",\")}",
-           "\n! Note: This cruise may not have replicate filters, but CV is",
-           "\n! included beacuse the full report contains cruises with",
-           "\n! replicate filters.",
-           "\n!") 
-         } else {
+      (\(xl)
+      if (any(str_detect(as.matrix(xl), "replicate"), na.rm = TRUE)) {
+        glue("!")
+      } else if (nrow(xl) > 1) {
         glue(
-           "!",
-           "\n! Coefficient of variation (CV) per report (replicate filter ",
-           "precision)",
-           "\n! TChl a = {xl$t_chl_a};",
-           "\n! Ppig   = {xl$ppig}",
-           "\n! Note: This cruise may not have replicate filters, but CV is",
-           "\n! included beacuse the full report contains cruises with",
-           "\n! replicate filters.",
-           "\n!")
-        }
-       )),
+          "!",
+          "\n! Coefficient of variation (CV) per report (replicate filter ",
+          "precision)",
+          "\n! TChl a = {str_c(xl$t_chl_a, collapse = \",\")};",
+          "\n! Ppig   = {str_c(xl$ppig, collapse = \",\")}",
+          "\n! Note: This cruise may not have replicate filters, but CV is",
+          "\n! included beacuse the full report contains cruises with",
+          "\n! replicate filters.",
+          "\n!"
+        )
+      } else {
+        glue(
+          "!",
+          "\n! Coefficient of variation (CV) per report (replicate filter ",
+          "precision)",
+          "\n! TChl a = {xl$t_chl_a};",
+          "\n! Ppig   = {xl$ppig}",
+          "\n! Note: This cruise may not have replicate filters, but CV is",
+          "\n! included beacuse the full report contains cruises with",
+          "\n! replicate filters.",
+          "\n!"
+        )
+      })
+    ),
     cal_file = map_chr(data, \(x) x$cal_files[[1]])
-    )
+  )
 
 rm(contacts, sb_field, prepared_by)
 ```
+
 
 
 ```{r header-skeleton}
@@ -538,7 +606,8 @@ header_skeleton <-
     # optional
     "/original_file_name={fbase}", 
     
-    "{hd_def$comments}",
+    # "{hd_def$comments}",
+    "{comments}",
     "{pc_com}",
     "{acknowledge}",
     "/fields={fields}", # fields of data 
@@ -601,11 +670,11 @@ hplc_final <-
   mutate(
      heads = pmap(
       .progress = TRUE,
-      .l = list(data, header_info, cruise_id, sb_name, precise_comm, cal_file,
-                doc, map_file),
+      .l = list(data, header_info, cruise_id, sb_name, comments, precise_comm, 
+                cal_file, doc, map_file),
       verb = verb,
       
-      function(y, x, cruise_id, sb_name, pc_com, cal_file, doc, 
+      function(y, x, cruise_id, sb_name, comments, pc_com, cal_file, doc,
                map_file, verb) {
         # remove spaces in original base name 
         fbase <- 
@@ -668,7 +737,9 @@ rm(verb)
 dir_create(loc) # create dir for each day running
 
 # save files
-pwalk(list(hplc_final$cols, hplc_final$heads),
+hplc_final %$%
+  pwalk(list(cols, heads),
+  # pwalk(list(hplc_final$cols, hplc_final$heads),
       function(x, y) {
         # write header
         # this method doesn't include `CR` which gives a warning when running
@@ -679,8 +750,6 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
             sep  = "",
             file = f)
         close(f)
-        
-        
         
         x %>%
           # convert all to characters
@@ -712,7 +781,9 @@ pwalk(list(hplc_final$cols, hplc_final$heads),
 All columns are read as characters to check for any issues with the data
 ```{r read-seabass}
 source(here("scripts", "check_data.R"))
+source(here("scripts", "misc_functions.R"))
 # get most recent directory created for seabass files
+# 
 ind_f_dir <- 
   here("data", "processed", "hplc") %>%
   dir_ls(type   = "directory", 
@@ -722,7 +793,8 @@ ind_f_dir <-
 # read seabass hplc files
 sb_data <-
   ind_f_dir  %>%
-  first() %>%
+  last_mod() %>%
+  # first() %>%
   dir_ls() %>%
   tibble(file = .) %>%
   mutate(data = map(
@@ -732,7 +804,7 @@ sb_data <-
   unnest(data)
 
 message(glue("The dimensions are: {dim_desc(sb_data)}"))
-slice_head(sb_data, n = 10)
+slice_sample(sb_data, n = 10)
 
 sb_data %>%
   filter(if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
@@ -764,12 +836,15 @@ verb <- FALSE
 
 
 fcheck_results <- 
- dir_ls(ind_f_dir[1]) %>%
-  tibble(files = .) %>%
-  sb_fcheck(.,
-          col_name = "files",
-          loc_fcheck = here("f2"), 
-          verb = verb)
+ ind_f_dir %>%
+ last_mod() %>%
+ dir_ls() %>%
+ tibble(files = .) %>%
+ sb_fcheck(
+   .,
+   col_name   = "files",
+   loc_fcheck = here(), 
+   verb       = verb)
 
 # rm(verb, i, ind_f_dir)
 ```
