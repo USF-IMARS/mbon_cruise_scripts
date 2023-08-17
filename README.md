@@ -1,6 +1,10 @@
 # MBON Cruise Scripts
-on return from cruise:
+Checklists and scripts for the SE-US MBON Research Cruise in FL Keys.
 
+Rmd documents here are used to outline the data processing and cruise preparation protocols.
+Once each step is completed, the corresponding row in the research cruise checklist should be filled out with the current datetime and your name.
+
+## on return from cruise:
 * upload cruise logs to location in box.com
 * get the files from box.com onto your local in the right location
 * run `merge_meta_chl_hplc_cdom.Rmd`
@@ -8,8 +12,8 @@ on return from cruise:
   * this will append rows to the inventory file
 * manually check the added rows, then ensure the updated inventory file is in box.com
 
-
-# NASA SeaBass Links for Data Submission:
+# additional links
+## NASA SeaBass Links for Data Submission:
 1. [Submission Instructions](https://seabass.gsfc.nasa.gov/wiki/Data_Submission#Setting%20up%20SFTP%20Access)
 2. [Metadata Headers](https://seabass.gsfc.nasa.gov/wiki/metadataheaders)
 3. [Documentation Guidelines](https://seabass.gsfc.nasa.gov/wiki/User_Resources)
