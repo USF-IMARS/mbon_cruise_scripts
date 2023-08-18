@@ -315,21 +315,24 @@ meta_list$sample_meta_data <-
      .by = cruise_id,
      cruise_start = min(date_mm_dd_yy, na.rm = TRUE)
    ) %>%
-   arrange(cruise_start) %>%
+  arrange(cruise_start) %>%
   select(-cruise_start) %>%
-  group_by(cruise_id, station, depth_m) %>%
+  group_by(cruise_id, station, depth_m) %>% # keep, theres a reason
   filter(
-    # .by = c(cruise_id, station, depth_m),
+
     !(
-    !is.na(notes) 
-    & str_detect(notes, "skipped b/c low on amber vials")) 
-    & if_any(vol_ml, ~ !any(
-        str_detect(sample_type, "(?i)chl|hplc") 
-        & (is.na(.x) | .x == 0))) 
+      !is.na(notes) 
+      & str_detect(notes, "skipped b/c low on amber vials")
+     ) 
+    & if_any(
+        vol_ml, 
+        ~ !any(str_detect(sample_type, "(?i)chl|hplc") 
+               & (is.na(.x) | .x == 0))
+        ) 
     & !(!is.na(notes) 
         & str_detect(
           notes, 
-          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost"))) #%>%
+          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost")))
    
 
 meta_list$sample_meta_data %$% unique(station)
@@ -342,8 +345,8 @@ meta_list$station_summary <-
   meta_list$sample_meta_data %>%
   mutate(vol_ml = if_else(is.na(vol_ml) | vol_ml == 0, -9999, vol_ml)
   ) %>%
-    select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
-    pivot_wider(
+  select(-identifier, -sample_number, -notes, -c(1:base), -collector) %>%
+  pivot_wider(
     data         = .,
     names_from   = c(sample_type), # category column(s) to pivot wide
     values_from  = c(vol_ml), # value column(s) that hold data for each category column
@@ -351,7 +354,7 @@ meta_list$station_summary <-
     names_repair = janitor::make_clean_names,
     values_fn    = list(vol_ml = length)
     ) %>%
-      ungroup() %T>%
+  ungroup() %T>%
   print()
 ```
 
@@ -379,7 +382,8 @@ meta_list$cruise_summary <-
 meta_list$temp <- 
   meta_list$sample_meta_data %>%
   ungroup() %>%
-  transmute(
+  mutate(
+    .keep = "none",
     cruise_id,
     station,
     identifier, 
@@ -387,17 +391,17 @@ meta_list$temp <-
     present_missing   = NA,
     collection_date   = date_time, 
     collected_by      = collector,
-         ) %>%
-    nest(.by = sample_type) %>% 
+    ) %>%
+  nest(.by = sample_type) %>% 
   mutate(
     name_list = case_match(
       sample_type,
       "Chl-a" ~ "chl_progress",
-  "HPLC" ~ "hplc_progress",
-  "CDOM" ~ "cdom_progress" 
+      "HPLC"  ~ "hplc_progress",
+      "CDOM"  ~ "cdom_progress" 
     )
   ) %>%
-    pull(data, name = name_list) %T>% 
+  pull(data, name = name_list) %T>% 
   print()
 ```
 
@@ -405,7 +409,7 @@ meta_list$temp <-
 ```{r add-new-data}
 meta_list <- list_flatten(meta_list, name_spec = "{inner}")
 
-wb <- loadWorkbook(inventory)
+wb        <- loadWorkbook(inventory)
 
 getSheetNames(inventory)
 
@@ -416,19 +420,15 @@ for (i in getSheetNames(inventory)) {
   meta_list[[i]] <- 
     select(
       meta_list[[i]],
-      any_of(names(readWorkbook(wb, i))))
+      any_of(names(readWorkbook(wb, i)))
+      )
 
   writeData(
     wb       = wb,
     sheet    = i,
     x        = meta_list[[i]],
     colNames = FALSE,
-    startRow = nrow(
-      readWorkbook(
-        xlsxFile =  wb,
-        sheet    = i
-      )
-    ) + 2
+    startRow = nrow(readWorkbook(xlsxFile =  wb, sheet = i)) + 2
   )
 }
 openXL(wb)
@@ -436,7 +436,18 @@ openXL(wb)
 
 ## --- 7.1 Save to Local and Cloud ---
 ```{r save-local}
-sv <- TRUE
+# choose to save or not
+# sv <- FALSE
+# sv <- TRUE
+sv <- NULL
+
+if (is.null(sv) & interactive()) {
+  sv <- menu(c("Save", "DO NOT SAVE"))
+  sv <- ifelse(sv == 1, TRUE, FALSE)
+} else if (is.null(sv) & !interactive()) {
+  sv <- FALSE
+}
+
 # save local
 if (sv) {
     cli::cli_alert_warning(
@@ -464,22 +475,21 @@ if (sv) {
       overwrite = TRUE
     )
 }
-last_mod()
+
 # save to cloud
 if (FALSE) {
   here("data", "metadata", "inventory") %>%
   dir_ls(regexp = "imars_inventory") %>%
   str_subset("~\\$", negate = TRUE) %>%
   last_mod() %>%
-  # sort(decreasing = TRUE) %>%
-  # first() %>%
+
   file_copy(new_path = inventory,
             overwrite = TRUE)
 }
 ```
 
-# delete
-```{r}
+# ---- DELETE ----
+```{r delete}
 # wb <-
 #   inventory %>%
 #   openxlsx::getSheetNames() %>%
