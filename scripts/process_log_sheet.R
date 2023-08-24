@@ -62,7 +62,7 @@
 #' 
 process_log_sheet <- function(.meta, cal, cruise,
                               sht_nm = c("metadata", "Chl-a"), 
-                              inst_nm = "PElam850+",
+                              inst_nm = "PElam850+ (2)",
                               creator = "Sebastian Di Geronimo") {
 
 
@@ -139,11 +139,10 @@ process_log_sheet <- function(.meta, cal, cruise,
     ) %>%
     mutate(
       "ap,d(λ) process date"                       = NA_Date_,
-      "Instrument"                                 =  "PElam850+",
       "ap(λ) filename (*.Sample.Raw*)"             = NA_character_,
       "ad(λ) filename (*.Sample.Raw*)"             = NA_character_,
       "CDOM process date"                          = NA_Date_,
-      "Instrument "                                =  "PElam850+",
+      "Instrument "                                = inst_nm,
       "aCDOM(λ) filename, Rep. #1 (*.Sample.Raw*)" = NA_character_,
       "aCDOM(λ) filename, Rep. #2 (*.Sample.Raw*)" = NA_character_,
       "aCDOM(λ) filename, Rep. #3 (*.Sample.Raw*)" = NA_character_,
@@ -164,7 +163,8 @@ process_log_sheet <- function(.meta, cal, cruise,
       date_mm_dd_yy, sample_collection_time_gmt, 
       lat, lon, max_depth, depth_m, 
       station, identifier, vol_ml)  %>%
-    transmute(
+    mutate(
+      .keep = "none",
       "Date (UTC)"           = date_mm_dd_yy,                                
       "Time (UTC)"           = sample_collection_time_gmt,
       "Latitude (deg. N)"    = lat,
@@ -201,38 +201,7 @@ process_log_sheet <- function(.meta, cal, cruise,
   cli_alert_info("Setup")
   
   # ---- Styles for formatting ----
-  sstyles <-
-    list(
-      styl_date     = createStyle(numFmt = "DATE"),
-      styl_time     = createStyle(numFmt = "hh:mm"),
-      styl_num      = createStyle(numFmt = "0.00"),
-      styl_col1     = createStyle(fgFill = "#FDE9D9"),
-      styl_col2     = createStyle(fgFill = "#DCE6F1"),
-      styl_col3     = createStyle(fontName       = "Arial",
-                                  fontSize       = 22,
-                                  fontColour     = "white",
-                                  textDecoration = "bold",
-                                  border         = "TopBottomLeftRight",
-                                  fgFill         = "#948A54",
-                                  halign         = "center"),
-      styl_col4     = createStyle(fgFill = "#DDD9C4",
-                                  halign = "center"),
-      styl_col5     = createStyle(fgFill = "#F2DCDB"),
-      styl_border   = createStyle(border      = "Right", 
-                                  borderStyle = "thin"),
-      styl_border_l = createStyle(border      = "Left", 
-                                  borderStyle = "thin"),
-      styl_brd_bot  = createStyle(border      = "bottom", 
-                                  borderStyle = "thin"),
-      styl_brd_head = createStyle(border         = "bottom", 
-                                  borderStyle    = "thin",
-                                  textDecoration = "bold",
-                                  halign         = "center",
-                                  wrapText       = TRUE),
-      styl_align    = createStyle(halign = "center"),
-      styl_brd_dash = createStyle(border      = "right", 
-                                  borderStyle = "dotted")
-    ) 
+  sstyles <- style_formatting()
   
   # ---- Comments for Chlor-a Sheet ----
   comm <- 
@@ -313,203 +282,254 @@ process_log_sheet <- function(.meta, cal, cruise,
     creator = creator, 
     title = glue("{cruise} Process Log"))
   
+  # # ---- Add Info
+  # addWorksheet(wb, sheetName = sht_nm[1])
+  # 
+  # # add black line to bottom of headers
+  # writeData(
+  #   wb, 
+  #   x           = meta, 
+  #   sheet       = sht_nm[1], 
+  #   startCol    = 1, 
+  #   startRow    = 1,      
+  #   headerStyle = sstyles$styl_brd_head
+  #   )
+  # 
+  # # format filter pad columns
+  # pad_cols <- seq(
+  #   which(str_detect(names(meta), "ap.*process date")),
+  #   max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
+  #   )
+  # 
+  # # format HPLC
+  # hplc_cols <- which(str_detect(names(meta), "(?i)hplc sample id"))
+  # 
+  # # format cdom
+  # cdom_cols <- seq(
+  #   which(str_detect(names(meta), "(?i)cdom.*process date")),
+  #   max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
+  # )
+  
   # ---- Add Info
   addWorksheet(wb, sheetName = sht_nm[1])
+  
+  activeSheet(wb)    <- which(names(wb) == sht_nm)
+  
+  # num_sheets <- length(names(wb))
+  
+  # worksheetOrder(wb) <- c(1, num_sheets, 2:(num_sheets - 1))
   
   # add black line to bottom of headers
   writeData(
     wb, 
-    x           = meta, 
-    sheet       = sht_nm[1], 
-    startCol    = 1, 
-    startRow    = 1,      
+    x        = meta, 
+    sheet    = sht_nm[1], 
+    startCol = 1, 
+    startRow = 1,
     headerStyle = sstyles$styl_brd_head
-    )
+  )
+  
   
   # format filter pad columns
   pad_cols <- seq(
     which(str_detect(names(meta), "ap.*process date")),
     max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
-    )
-  
-  writeData(
-    wb, 
-    sheet       = sht_nm[1], 
-    # startCol    = "H",
-    startCol    = LETTERS[pad_cols[1]],
-    startRow    = 1, 
-    x           = meta[, pad_cols], 
-    headerStyle = sstyles$styl_col1)
+  )
   
   # format HPLC
   hplc_cols <- which(str_detect(names(meta), "(?i)hplc sample id"))
   
-  writeData(
-    wb, 
-    x           = meta[,hplc_cols], 
-    sheet       = sht_nm[1], 
-    startCol    = LETTERS[hplc_cols[1]], 
-    startRow    = 1,
-    headerStyle = sstyles$styl_col5)                     
-                     
   # format cdom
   cdom_cols <- seq(
     which(str_detect(names(meta), "(?i)cdom.*process date")),
     max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
   )
   
-  writeData(
-    wb, 
-    x           = meta[,cdom_cols], 
-    sheet       = sht_nm[1], 
-    # startCol    = "M",
-    startCol    = LETTERS[cdom_cols[1]], 
-    startRow    = 1,
-    headerStyle = sstyles$styl_col2)
-  
-  # add black lines 
-  writeData(
-    wb, 
-    sheet       = sht_nm[1],
-    # startCol    = "S",
-    # startCol    = LETTERS[cdom_cols[1]],
-    startCol    = LETTERS[cdom_cols[length(cdom_cols)] + 1],
-    startRow    = 1,
-    x           = meta[, cdom_cols[length(cdom_cols)] + 1], 
-    headerStyle = sstyles$styl_brd_head)
-  
   # ---- Specify Width and Heights
-  setRowHeights(
-    wb, 
-    sheet   = sht_nm[1], 
-    rows    = 1, 
-    heights = 73.2)
-  
-  setColWidths(
-    wb, 
-    sheet  = sht_nm[1], 
-    # cols   = "S",
-    cols   = LETTERS[cdom_cols[length(cdom_cols)] + 1], 
-    widths = 39.56)
-  
-  setColWidths(
-    wb, 
-    sheet  = sht_nm[1], 
-    cols   = LETTERS[hplc_cols], 
-    widths = 15.67)
-  
-  setColWidths(
-    wb, 
-    sheet  = sht_nm[1], 
-    cols   = 
-      LETTERS[c(which(str_detect(names(meta), "(?i)^sample id")),
-                which(str_detect(names(meta), "(?i)^cdom sample id"))
-                )], 
-    widths = 12.89)
-  
+  col_hw_meta(wb, sht_nm, cdom_cols, hplc_cols, names(meta))
   
   # ---- Add Styles
-  options(openxlsx.dateFormat = "mm/dd/yy")
-  addStyle(
-    wb, 
-    sht_nm[1],
-    style      = sstyles$styl_date,
-    rows       = 1:(nrow(meta) + 1),
-    cols       = 1,
-    gridExpand = TRUE,
-    stack      = TRUE)
+  add_styles_to_sheet(
+    wb,
+    sht_nm = sht_nm,
+    names_meta = names(meta),
+    dim_meta = dim(meta),
+    pad_cols = pad_cols,
+    hplc_cols = hplc_cols,
+    cdom_cols = cdom_cols,
+    sstyles = sstyles
+  )
+
+  # writeData(
+  #   wb, 
+  #   sheet       = sht_nm[1], 
+  #   # startCol    = "H",
+  #   startCol    = pad_cols[1],
+  #   startRow    = 1, 
+  #   x           = meta[, pad_cols], 
+  #   headerStyle = sstyles$styl_col1)
+  # 
+  # 
+  # writeData(
+  #   wb, 
+  #   x           = meta[, hplc_cols], 
+  #   sheet       = sht_nm[1], 
+  #   startCol    = hplc_cols[1], 
+  #   startRow    = 1,
+  #   headerStyle = sstyles$styl_col5)                     
+  #                    
+  # 
+  # writeData(
+  #   wb, 
+  #   x           = meta[, cdom_cols], 
+  #   sheet       = sht_nm[1], 
+  #   # startCol    = "M",
+  #   startCol    = cdom_cols[1], 
+  #   startRow    = 1,
+  #   headerStyle = sstyles$styl_col2)
+  # 
+  # # add black lines 
+  # writeData(
+  #   wb, 
+  #   sheet       = sht_nm[1],
+  #   # startCol    = "S",
+  #   startCol    = cdom_cols[length(cdom_cols)] + 1,
+  #   startRow    = 1,
+  #   x           = meta[, cdom_cols[length(cdom_cols)] + 1], 
+  #   headerStyle = sstyles$styl_brd_head)
   
-  addStyle(
-    wb, 
-    sht_nm[1],
-    style      = sstyles$styl_time,
-    rows       = 1:nrow(meta) + 1,
-    cols       = 2,
-    gridExpand = TRUE,
-    stack      = TRUE)
+  # ---- Specify Width and Heights
+  # setRowHeights(
+  #   wb, 
+  #   sheet   = sht_nm[1], 
+  #   rows    = 1, 
+  #   heights = 73.2)
+  # 
+  # setColWidths(
+  #   wb, 
+  #   sheet  = sht_nm[1], 
+  #   # cols   = "S",
+  #   cols   = LETTERS[cdom_cols[length(cdom_cols)] + 1], 
+  #   widths = 39.56)
+  # 
+  # setColWidths(
+  #   wb, 
+  #   sheet  = sht_nm[1], 
+  #   cols   = LETTERS[hplc_cols], 
+  #   widths = 15.67)
+  # 
+  # setColWidths(
+  #   wb, 
+  #   sheet  = sht_nm[1], 
+  #   cols   = 
+  #     LETTERS[c(which(str_detect(names(meta), "(?i)^sample id")),
+  #               which(str_detect(names(meta), "(?i)^cdom sample id"))
+  #               )], 
+  #   widths = 12.89)
   
-  addStyle(
-    wb, 
-    sht_nm[1],
-    style      = sstyles$styl_num,
-    rows       = 1:nrow(meta) + 1,
-    cols       = 5:6,
-    gridExpand = TRUE,
-    stack      = TRUE)
   
-  # color filter pads
-  addStyle(
-    wb, 
-    sheet      = sht_nm[1], 
-    style      = sstyles$styl_col1,
-    # cols       = 8:12,
-    cols       = pad_cols,
-    rows       = 1:nrow(meta) + 1,
-    gridExpand = TRUE,
-    stack      = TRUE)
-  
-  # color hplc
-  addStyle(
-    wb, 
-    sheet      = sht_nm[1], 
-    style      = sstyles$styl_col5,
-    cols       = hplc_cols,
-    rows       = 1:nrow(meta) + 1,
-    gridExpand = TRUE,
-    stack      = TRUE)
-  
-  # color cdom 
-  addStyle(
-    wb, 
-    sheet      = sht_nm[1], 
-    style      = sstyles$styl_col2,
-    cols       = cdom_cols,
-    rows       = 1:nrow(meta) + 1,
-    gridExpand = TRUE,
-    stack      = TRUE)
-  
-  # add thin borders between sections
-  addStyle(
-    wb, 
-    sheet      = sht_nm[1], 
-    # style      = sstyles$styl_border,
-    # cols       = c("G", "L", "S", "R"),
-    style      = sstyles$styl_border_l,
-    cols       = c(
-     pad_cols[1], hplc_cols, cdom_cols[1], cdom_cols[length(cdom_cols)] + 1,
-     cdom_cols[length(cdom_cols)] + 2
-    ),
-    rows       = 1:(nrow(meta) + 1),
-    gridExpand = TRUE, 
-    stack      = TRUE)
-  
-  addStyle(
-    wb, 
-    sheet      = sht_nm[1], 
-    style      = sstyles$styl_brd_bot,
-    cols       = seq(ncol(meta)),
-    rows       = nrow(meta) + 1,
-    gridExpand = TRUE, 
-    stack      = TRUE)
-  
-  addStyle(
-    wb, 
-    sheet      = sht_nm[1], 
-    style      = sstyles$styl_align,
-    cols       = 1:19,
-    rows       = 1:nrow(meta) + 1,
-    gridExpand = TRUE, 
-    stack      = TRUE)
-  
-  addStyle(
-    wb, 
-    sht_nm[1], 
-    style      = sstyles$styl_brd_dash, 
-    rows       = 1:(nrow(meta) + 1), 
-    cols       = c(which(str_detect(names(meta), "(?i)^sample id")),
-                  which(str_detect(names(meta), "(?i)^cdom sample id"))), 
-    stack      = TRUE,
-    gridExpand = TRUE)
+  # # ---- Add Styles
+  # options(openxlsx.dateFormat = "mm/dd/yy")
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1],
+  #   style      = sstyles$styl_date,
+  #   rows       = 1:(nrow(meta) + 1),
+  #   cols       = 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1],
+  #   style      = sstyles$styl_time,
+  #   rows       = 1:nrow(meta) + 1,
+  #   cols       = 2,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1],
+  #   style      = sstyles$styl_num,
+  #   rows       = 1:nrow(meta) + 1,
+  #   cols       = 5:6,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # color filter pads
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_col1,
+  #   # cols       = 8:12,
+  #   cols       = pad_cols,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # color hplc
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_col5,
+  #   cols       = hplc_cols,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # color cdom 
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_col2,
+  #   cols       = cdom_cols,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # add thin borders between sections
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   # style      = sstyles$styl_border,
+  #   # cols       = c("G", "L", "S", "R"),
+  #   style      = sstyles$styl_border_l,
+  #   cols       = c(
+  #    pad_cols[1], hplc_cols, cdom_cols[1], cdom_cols[length(cdom_cols)] + 1,
+  #    cdom_cols[length(cdom_cols)] + 2
+  #   ),
+  #   rows       = 1:(nrow(meta) + 1),
+  #   gridExpand = TRUE, 
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_brd_bot,
+  #   cols       = seq(ncol(meta)),
+  #   rows       = nrow(meta) + 1,
+  #   gridExpand = TRUE, 
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_align,
+  #   cols       = 1:19,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE, 
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1], 
+  #   style      = sstyles$styl_brd_dash, 
+  #   rows       = 1:(nrow(meta) + 1), 
+  #   cols       = c(which(str_detect(names(meta), "(?i)^sample id")),
+  #                 which(str_detect(names(meta), "(?i)^cdom sample id"))), 
+  #   stack      = TRUE,
+  #   gridExpand = TRUE)
   
   # ========================================================================== #
   # ---- Create 2nd Sheet ----
@@ -754,9 +774,7 @@ update_proc_log <- function(files, cal) {
     ) %>%
     unnest(data)
 
-  wb <- 
-    files %>% 
-    loadWorkbook()
+  wb <- loadWorkbook(files)
   
   # `Fluorometer Calibration date`
   writeData(
@@ -824,7 +842,7 @@ update_proc_log <- function(files, cal) {
 #'
 #' @param .meta Metadata 
 #' @param cruise Cruise ID
-#' @param prev_log Previous log file
+#' @param prev_log Previous log file path
 #' @param prev_sht New sheet name (if want to change)
 #' @param old_sht_rn Old sheet name
 #' @param .keep_wksht optional: `TRUE/FALSE`, keep old worksheet
@@ -847,16 +865,18 @@ update_metadata <- function(
   # ========================================================================== #  
   library("librarian")
   shelf(
-    librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+    librarian, tibble, tidyr, readr, purrr, dplyr, stringr,
     forcats, lubridate, glue, fs, magrittr, here,
     
     # additional
     openxlsx, hms, janitor, cli
   )
+  
   # ========================================================================== #
   # ---- Filter Data ----
   # ========================================================================== #  
   cli_alert_info("Filtering Data")
+  
   old_log <- 
     prev_log %>%
     read.xlsx(
@@ -872,7 +892,7 @@ update_metadata <- function(
   
 
   meta <- 
-  .meta %>%
+    .meta %>%
     select(
       date_mm_dd_yy,                                
       sample_collection_time_gmt,
@@ -914,7 +934,10 @@ update_metadata <- function(
       "Sample ID"          = chl_a,
       "HPLC Sample ID"     = hplc,
     )  
+  
   hdr_name <- names(meta)
+  
+  recreate_sheet <- nrow(meta) > nrow(old_log)
   
   meta <- 
     meta %>%
@@ -936,160 +959,467 @@ update_metadata <- function(
     relocate("CDOM Sample ID", 
              .after = "Instrument ")  %>%
     relocate( "HPLC Sample ID", 
-              .before = "CDOM process date") %>%
-    mutate(across(matches("(?i)date$"), (\(x) as_date(x)  %>%
-    format("%m/%d/%Y"))))
-  
+              .before = "CDOM process date")
   
   # ========================================================================== #
   # ---- Setup ----
   # ========================================================================== #  
   cli_alert_info("Setup")
+  
   # ---- Styles for formatting ----
-  sstyles <-
-    list(
-      styl_date     = createStyle(numFmt = "DATE"),
-      styl_time     = createStyle(numFmt = "hh:mm"),
-      styl_num      = createStyle(numFmt = "0.00"),
-      styl_col1     = createStyle(fgFill = "#FDE9D9"),
-      styl_col2     = createStyle(fgFill = "#DCE6F1"),
-      styl_col3     = createStyle(fontName       = "Arial",
-                                  fontSize       = 22,
-                                  fontColour     = "white",
-                                  textDecoration = "bold",
-                                  border         = "TopBottomLeftRight",
-                                  fgFill         = "#948A54",
-                                  halign         = "center"),
-      styl_col4     = createStyle(fgFill = "#DDD9C4",
-                                  halign = "center"),
-      styl_col5     = createStyle(fgFill = "#F2DCDB"),
-      styl_border   = createStyle(border      = "Right", 
-                                  borderStyle = "thin"),
-      styl_border_l = createStyle(border      = "Left", 
-                                  borderStyle = "thin"),
-      styl_brd_bot  = createStyle(border      = "bottom", 
-                                  borderStyle = "thin"),
-      styl_brd_head = createStyle(border         = "bottom", 
-                                  borderStyle    = "thin",
-                                  textDecoration = "bold",
-                                  halign         = "center",
-                                  wrapText       = TRUE),
-      styl_align    = createStyle(halign = "center"),
-      styl_brd_dash = createStyle(border      = "right", 
-                                  borderStyle = "dotted")
-    ) 
+  sstyles <- style_formatting()
   
   # ========================================================================== #
   # ---- Create 1st Sheet ----
   # ========================================================================== #  
   cli_alert_info("Creating sheet: {.var {sht_nm[1]}}")
   
-  sht_nm <- prev_sht
+  sht_nm     <- prev_sht
   old_sht_rn <- paste0(old_sht_rn, "_update_on", Sys.Date())
   
   # ---- Create Worksheet
   wb <- loadWorkbook(prev_log)
   
+ 
+  # if (!recreate_sheet) {
+  if (FALSE) {
+    # replacing data only if same number of rows in prev and current
+    cloneWorksheet(wb, clonedSheet = prev_sht, sheetName = old_sht_rn)
+    
+    activeSheet(wb)    <- which(names(wb) == sht_nm)
+    
+    # add data
+    writeData(
+      wb, 
+      x        = meta, 
+      sheet    = sht_nm[1], 
+      startCol = 1, 
+      startRow = 2,
+      colNames = FALSE
+      )
+    
+    if (!.keep_wksht) {
+      cli_alert_info("Removing old sheet: {col_red(old_sht_rn)}")
+      removeWorksheet(wb, sheet = old_sht_rn)
+    }
+    
+    return(wb)
+  }
+  
+  # ========================================================================== #
+  # ---- When needing to add rows, recreate sheet entirely ----
+  # ========================================================================== #  
   renameWorksheet(wb, sheet = prev_sht, newName = old_sht_rn)
   
   # ---- Add Info
   addWorksheet(wb, sheetName = sht_nm[1])
   
-  worksheetOrder(wb) <- c(1, 3, 2)
-  activeSheet(wb) <- 3
+  activeSheet(wb)    <- which(names(wb) == sht_nm)
+  
+  num_sheets <- length(names(wb))
+  
+  worksheetOrder(wb) <- c(1, num_sheets, 2:(num_sheets - 1))
   
   # add black line to bottom of headers
-  writeData(wb, sheet = sht_nm[1], startCol = 1, startRow = 1, 
-            x = meta, headerStyle = sstyles$styl_brd_head)
- 
+  writeData(
+    wb, 
+    x        = meta, 
+    sheet    = sht_nm[1], 
+    startCol = 1, 
+    startRow = 1,
+    headerStyle = sstyles$styl_brd_head
+  )
+  
+  
   # format filter pad columns
   pad_cols <- seq(
     which(str_detect(names(meta), "ap.*process date")),
     max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
   )
   
-  writeData(wb, sheet = sht_nm[1],
-            startCol = LETTERS[pad_cols[1]],
-            startRow = 1, 
-            x = meta[, pad_cols], 
-            headerStyle = sstyles$styl_col1)
-  
   # format HPLC
   hplc_cols <- which(str_detect(names(meta), "(?i)hplc sample id"))
-  
-  writeData(
-    wb, 
-    sheet       = sht_nm[1], 
-    startCol    = LETTERS[hplc_cols[1]], 
-    startRow    = 1,
-    x           = meta[, hplc_cols, drop = FALSE], 
-    headerStyle = sstyles$styl_col5)                     
   
   # format cdom
   cdom_cols <- seq(
     which(str_detect(names(meta), "(?i)cdom.*process date")),
     max(which(str_detect(names(meta), "(?i)acdom.*#.*Sample.Raw")))
   )
-  
-  writeData(wb, sheet = sht_nm[1], 
-            # startCol = "M", 
-            startCol = LETTERS[cdom_cols[1]], 
-            startRow = 1,
-            x = meta[, cdom_cols], headerStyle = sstyles$styl_col2)
-  # add black lines 
-  writeData(wb, sheet = sht_nm[1],
-            # startCol = "S",
-            # startCol = LETTERS[cdom_cols[1]],
-            startCol = LETTERS[cdom_cols[length(cdom_cols)] + 1],
-            startRow = 1,
-            x = meta[, cdom_cols[length(cdom_cols)] + 1, drop = FALSE], 
-            headerStyle = sstyles$styl_brd_head)
- # return(wb)
-  
+ 
   # ---- Specify Width and Heights
-  setRowHeights(wb, sheet = sht_nm[1], rows = 1, heights = 73.2)
-  setColWidths(wb, sheet = sht_nm[1], 
-               # cols = "S", 
-               cols = LETTERS[cdom_cols[length(cdom_cols)] + 1], 
-               widths = 39.56)
-  
-  setColWidths(wb, sheet = sht_nm[1], 
-               cols = LETTERS[hplc_cols], 
-               widths = 15.67)
-  
-  setColWidths(wb, sheet = sht_nm[1], 
-               cols = 
-                 LETTERS[c(which(str_detect(names(meta), "(?i)^sample id")),
-                           which(str_detect(names(meta), "(?i)^cdom sample id"))
-                 )], 
-               widths = 12.89)
-  
+  col_hw_meta(wb, sht_nm, cdom_cols, hplc_cols, names(meta))
   
   # ---- Add Styles
-  options(openxlsx.dateFormat = "mm/dd/yyyy")
+  add_styles_to_sheet(
+    wb,
+    sht_nm = sht_nm,
+    names_meta = names(meta),
+    dim_meta = dim(meta),
+    pad_cols = pad_cols,
+    hplc_cols = hplc_cols,
+    cdom_cols = cdom_cols,
+    sstyles = sstyles
+  )
+  
+  if (!.keep_wksht) {
+    cli_alert_info("Removing old sheet: {col_red(old_sht_rn)}")
+    removeWorksheet(wb, sheet = old_sht_rn)
+  }
+  
+  return(wb)
+  
+  # filter pads
+  # writeData(
+  #   wb,
+  #   sheet       = sht_nm[1],
+  #   x           = meta[, pad_cols],
+  #   startCol    = LETTERS[pad_cols[1]],
+  #   startRow    = 1#,
+  #   # headerStyle = sstyles$styl_col1
+  #   )
+ 
+  
+  # hplc
+  # writeData(
+  #   wb, 
+  #   sheet       = sht_nm[1], 
+  #   startCol    = LETTERS[hplc_cols[1]], 
+  #   startRow    = 1,
+  #   x           = meta[, hplc_cols, drop = FALSE], 
+  #   headerStyle = sstyles$styl_col5)                     
+  
+  
+  # cdom
+  # writeData(wb, sheet = sht_nm[1], 
+  #           # startCol = "M", 
+  #           startCol = LETTERS[cdom_cols[1]], 
+  #           startRow = 1,
+  #           x = meta[, cdom_cols], headerStyle = sstyles$styl_col2)
+
+  # add black lines 
+  # writeData(
+  #   wb, 
+  #   sheet       = sht_nm[1],
+  #   x           = meta[, cdom_cols[length(cdom_cols)] + 1, drop = FALSE], 
+  #   # startCol = "S",
+  #   startCol    = LETTERS[cdom_cols[length(cdom_cols)] + 1],
+  #   startRow    = 1,
+  #   headerStyle = sstyles$styl_brd_head)
+  
+  
+
+  
+  # setRowHeights(
+  #   wb, 
+  #   sheet = sht_nm[1], 
+  #   rows = 1, 
+  #   heights = 73.2)
+  # setColWidths(wb, sheet = sht_nm[1], 
+  #              # cols = "S", 
+  #              cols = LETTERS[cdom_cols[length(cdom_cols)] + 1], 
+  #              widths = 39.56)
+  # 
+  # setColWidths(wb, sheet = sht_nm[1], 
+  #              cols = LETTERS[hplc_cols], 
+  #              widths = 15.67)
+  # 
+  # setColWidths(wb, sheet = sht_nm[1], 
+  #              cols = 
+  #                LETTERS[c(which(str_detect(names(meta), "(?i)^sample id")),
+  #                          which(str_detect(names(meta), "(?i)^cdom sample id"))
+  #                )], 
+  #              widths = 12.89)
+  # 
+  
+
+  
+  # options(openxlsx.dateFormat = "mm/dd/yyyy")
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1],
+  #   style      = sstyles$styl_date,
+  #   rows       = 1:(nrow(meta) + 1),
+  #   cols       = c(1, pad_cols[1], cdom_cols[1]),
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1],
+  #   style      = sstyles$styl_time,
+  #   rows       = 1:nrow(meta) + 1,
+  #   cols       = 2,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1],
+  #   style      = sstyles$styl_num,
+  #   rows       = 1:nrow(meta) + 1,
+  #   cols       = 5:6,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # color filter pads
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_col1,
+  #   # cols       = 8:12,
+  #   cols       = pad_cols,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # color hplc
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_col5,
+  #   cols       = hplc_cols,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # color cdom 
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_col2,
+  #   cols       = cdom_cols,
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE,
+  #   stack      = TRUE)
+  # 
+  # # add thin borders between sections
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   # style      = sstyles$styl_border,
+  #   # cols       = c("G", "L", "S", "R"),
+  #   style      = sstyles$styl_border_l,
+  #   cols       = c(
+  #     pad_cols[1], hplc_cols, cdom_cols[1], cdom_cols[length(cdom_cols)] + 1,
+  #     cdom_cols[length(cdom_cols)] + 2
+  #   ),
+  #   rows       = 1:(nrow(meta) + 1),
+  #   gridExpand = TRUE, 
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_brd_bot,
+  #   cols       = seq(ncol(meta)),
+  #   rows       = nrow(meta) + 1,
+  #   gridExpand = TRUE, 
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sheet      = sht_nm[1], 
+  #   style      = sstyles$styl_align,
+  #   cols       = 1:ncol(meta),
+  #   rows       = 1:nrow(meta) + 1,
+  #   gridExpand = TRUE, 
+  #   stack      = TRUE)
+  # 
+  # addStyle(
+  #   wb, 
+  #   sht_nm[1], 
+  #   style      = sstyles$styl_brd_dash, 
+  #   rows       = 1:(nrow(meta) + 1), 
+  #   cols       = c(which(str_detect(names(meta), "(?i)^sample id")),
+  #                  which(str_detect(names(meta), "(?i)^cdom sample id"))), 
+  #   stack      = TRUE,
+  #   gridExpand = TRUE)
+  
+
+  
+  # ---- end of function update_proc_log
+}
+
+
+##%######################################################%##
+#                                                          #
+####   Styles for Excel When Formatting Process Log     ####
+#                                                          #
+##%######################################################%##
+#' Styles for Excel When Formatting Process Log 
+#'
+#' Standard styling for process logs.
+#'
+#' @param  NA
+#'
+#' @return RETURN_DESCRIPTION
+#'
+#' @author Sebastian Di Geronimo (August 23, 2023)
+#'
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+style_formatting <- function() {
+  list(
+    styl_date     = createStyle(numFmt = "DATE"),
+    styl_time     = createStyle(numFmt = "hh:mm"),
+    styl_num      = createStyle(numFmt = "0.00"),
+    styl_col1     = createStyle(fgFill = "#FDE9D9"),
+    styl_col2     = createStyle(fgFill = "#DCE6F1"),
+    styl_col3     = createStyle(fontName       = "Arial",
+                                fontSize       = 22,
+                                fontColour     = "white",
+                                textDecoration = "bold",
+                                border         = "TopBottomLeftRight",
+                                fgFill         = "#948A54",
+                                halign         = "center"),
+    styl_col4     = createStyle(fgFill = "#DDD9C4",
+                                halign = "center"),
+    styl_col5     = createStyle(fgFill = "#F2DCDB"),
+    styl_border   = createStyle(border      = "Right", 
+                                borderStyle = "thin"),
+    styl_border_l = createStyle(border      = "Left", 
+                                borderStyle = "thin"),
+    styl_brd_bot  = createStyle(border      = "bottom", 
+                                borderStyle = "thin"),
+    styl_brd_head = createStyle(border         = "bottom", 
+                                borderStyle    = "thin",
+                                textDecoration = "bold",
+                                halign         = "center",
+                                wrapText       = TRUE),
+    styl_align    = createStyle(halign = "center"),
+    styl_brd_dash = createStyle(border      = "right", 
+                                borderStyle = "dotted")
+  ) 
+  
+    # ---- end of function style_formatting
+}
+
+
+##%######################################################%##
+#                                                          #
+####   Set Column Height and Width for Metadata Sheet   ####
+#                                                          #
+##%######################################################%##
+#' Set Column Height and Width for Metadata Sheet
+#'
+#' This sets the column height and width for the metadata sheet
+#'
+#' @param wb Workbook to modify
+#' @param sht_nm Sheet name to modify
+#' @param cdom_cols Columns for cdom
+#' @param hplc_cols Columns for HPLC
+#' @param meta_names Column names for metadata
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+col_hw_meta <- function(wb, sht_nm, cdom_cols, hplc_cols, meta_names) {
+  
+  # ----  Width and Heights
+  setRowHeights(
+    wb, 
+    sheet   = sht_nm[1], 
+    rows    = 1, 
+    heights = 73.2)
+  
+  setColWidths(
+    wb, 
+    sheet  = sht_nm[1], 
+    cols   = cdom_cols[length(cdom_cols)] + 1, 
+    widths = 39.56)
+  
+  setColWidths(
+    wb, 
+    sheet  = sht_nm[1], 
+    cols   = hplc_cols, 
+    widths = 15.67)
+  
+  setColWidths(
+    wb, 
+    sheet  = sht_nm[1], 
+    cols   = 
+      c(which(str_detect(meta_names, "(?i)^sample id")),
+        which(str_detect(meta_names, "(?i)^cdom sample id"))
+      ), 
+    widths = 12.89)
+
+  setColWidths(
+    wb, 
+    sheet  = sht_nm[1], 
+    cols   = 
+      c(which(str_detect(meta_names, "(?i)instrument")),
+        which(str_detect(meta_names, "(?i)^instrument "))
+      ), 
+    widths = 12.22)
+  
+  # ---- end of function col_heigh_width
+}
+
+##%######################################################%##
+#                                                          #
+####                Add Styles to Sheets                ####
+#                                                          #
+##%######################################################%##
+#' Add Styles to Sheets
+#'
+#' FUNCTION_DESCRIPTION
+#'
+#' @param wb Worksheet
+#' @param sht_nm Sheet name
+#' @param names_meta Column names from metadta
+#' @param dim_meta Dimenstion of metadata (vector of 2 values)
+#' @param pad_cols Columns for filter pads
+#' @param hplc_cols Columns for HPLC
+#' @param cdom_cols Columns for CDOM
+#' @param sstyles Format styles as a `list()`
+#'
+#' @author Sebastian Di Geronimo (August 23, 2023)
+#'
+#' @return RETURN_DESCRIPTION
+#' @examples
+#' # ADD_EXAMPLES_HERE
+#' 
+add_styles_to_sheet <- function(
+    wb, 
+    sht_nm, names_meta, dim_meta,
+    pad_cols,
+    hplc_cols,
+    cdom_cols,
+    sstyles) {
+  
+  options(openxlsx.dateFormat = "mm/dd/yy")
+  
+  nrow_meta <- dim_meta[1]
+  ncol_meta <- dim_meta[2]
+  
+  # ---- Add Styles
+  # date
   addStyle(
     wb, 
     sht_nm[1],
     style      = sstyles$styl_date,
-    rows       = 1:(nrow(meta) + 1),
-    cols       = c(1, pad_cols[1], cdom_cols[1]),
+    rows       = 1:(nrow_meta + 1),
+    cols       = 1,
     gridExpand = TRUE,
     stack      = TRUE)
   
+  # time
   addStyle(
     wb, 
     sht_nm[1],
     style      = sstyles$styl_time,
-    rows       = 1:nrow(meta) + 1,
+    rows       = 1:nrow_meta + 1,
     cols       = 2,
     gridExpand = TRUE,
     stack      = TRUE)
   
+  # depth
   addStyle(
     wb, 
     sht_nm[1],
     style      = sstyles$styl_num,
-    rows       = 1:nrow(meta) + 1,
+    rows       = 1:nrow_meta + 1,
     cols       = 5:6,
     gridExpand = TRUE,
     stack      = TRUE)
@@ -1099,9 +1429,8 @@ update_metadata <- function(
     wb, 
     sheet      = sht_nm[1], 
     style      = sstyles$styl_col1,
-    # cols       = 8:12,
     cols       = pad_cols,
-    rows       = 1:nrow(meta) + 1,
+    rows       = 1:(nrow_meta + 1),
     gridExpand = TRUE,
     stack      = TRUE)
   
@@ -1111,7 +1440,7 @@ update_metadata <- function(
     sheet      = sht_nm[1], 
     style      = sstyles$styl_col5,
     cols       = hplc_cols,
-    rows       = 1:nrow(meta) + 1,
+    rows       = 1:(nrow_meta + 1),
     gridExpand = TRUE,
     stack      = TRUE)
   
@@ -1121,7 +1450,7 @@ update_metadata <- function(
     sheet      = sht_nm[1], 
     style      = sstyles$styl_col2,
     cols       = cdom_cols,
-    rows       = 1:nrow(meta) + 1,
+    rows       = 1:(nrow_meta + 1),
     gridExpand = TRUE,
     stack      = TRUE)
   
@@ -1129,23 +1458,31 @@ update_metadata <- function(
   addStyle(
     wb, 
     sheet      = sht_nm[1], 
-    # style      = sstyles$styl_border,
-    # cols       = c("G", "L", "S", "R"),
     style      = sstyles$styl_border_l,
     cols       = c(
-      pad_cols[1], hplc_cols, cdom_cols[1], cdom_cols[length(cdom_cols)] + 1,
-      cdom_cols[length(cdom_cols)] + 2
-    ),
-    rows       = 1:(nrow(meta) + 1),
+      pad_cols[1], hplc_cols, 
+      cdom_cols[1],
+      ncol_meta, ncol_meta + 1
+      ),
+    rows       = 1:(nrow_meta + 1),
     gridExpand = TRUE, 
     stack      = TRUE)
+  
+  # add black line to end
+  addStyle(
+    wb, 
+    sheet = sht_nm[1],
+    cols  = ncol_meta,
+    rows  = 1,
+    style = sstyles$styl_brd_head,
+    stack = TRUE)
   
   addStyle(
     wb, 
     sheet      = sht_nm[1], 
     style      = sstyles$styl_brd_bot,
-    cols       = seq(ncol(meta)),
-    rows       = nrow(meta) + 1,
+    cols       = seq(ncol_meta),
+    rows       = nrow_meta + 1,
     gridExpand = TRUE, 
     stack      = TRUE)
   
@@ -1153,8 +1490,8 @@ update_metadata <- function(
     wb, 
     sheet      = sht_nm[1], 
     style      = sstyles$styl_align,
-    cols       = 1:ncol(meta),
-    rows       = 1:nrow(meta) + 1,
+    cols       = 1:19,
+    rows       = 1:nrow_meta + 1,
     gridExpand = TRUE, 
     stack      = TRUE)
   
@@ -1162,19 +1499,12 @@ update_metadata <- function(
     wb, 
     sht_nm[1], 
     style      = sstyles$styl_brd_dash, 
-    rows       = 1:(nrow(meta) + 1), 
-    cols       = c(which(str_detect(names(meta), "(?i)^sample id")),
-                   which(str_detect(names(meta), "(?i)^cdom sample id"))), 
+    rows       = 1:(nrow_meta + 1), 
+    cols       = c(which(str_detect(names_meta, "(?i)^sample id")),
+                   which(str_detect(names_meta, "(?i)^cdom sample id"))), 
     stack      = TRUE,
     gridExpand = TRUE)
   
-  if (!.keep_wksht) {
-    cli_alert_info("Removing old sheet: {col_red(old_sht_rn)}")
-    removeWorksheet(wb, sheet = old_sht_rn)
-  }
-  
-  return(wb)
-  
-  # ---- end of function update_proc_log
+  # ---- end of function add_styles_to_sheet
 }
 
