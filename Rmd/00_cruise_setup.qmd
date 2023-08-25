@@ -12,6 +12,23 @@ in the **.Rprofile** so that each *reset* of Rstudio will set the **cloud_dir**
 as a variable itself.
 
 ```{r}
+librarian::shelf(
+  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  
+  # broom # optional
+  
+  # added
+  ggrepel, ggtext, readxl, ggnewscale, cli,
+  
+  # idk if needed
+  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot, anytime, 
+  parzer, openxlsx2, ggthemes, 
+)
+```
+
+
+```{r}
 source(here::here("scripts", "create_dir.R"))
 
 cloud_dir <- rstudioapi::selectDirectory()
