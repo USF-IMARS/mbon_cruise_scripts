@@ -1,0 +1,22 @@
+---
+title: "Cruise Setup"
+author: "Sebastian Di Geronimo"
+format: html
+editor: source
+---
+
+## Setup
+
+This files is used to setup the file structure and set the cloud directory path 
+in the **.Rprofile** so that each *reset* of Rstudio will set the **cloud_dir** 
+as a variable itself.
+
+```{r}
+source(here::here("scripts", "create_dir.R"))
+
+cloud_dir <- rstudioapi::selectDirectory()
+
+cat(glue::glue("cloud_dir <- \"{cloud_dir}\""), 
+    file = here::here(".Rprofile"))
+
+```
