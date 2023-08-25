@@ -16,8 +16,6 @@ librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   
-  # broom # optional
-  
   # added
   ggrepel, ggtext, readxl, ggnewscale, cli,
   
@@ -40,7 +38,9 @@ source(here("scripts", "misc_functions.R"), local = proj_functions)
 attach(proj_functions)
 rm(proj_functions)
 
-# functions available in `proj_functions` envrionment
+# functions available in `proj_functions` environment
+cli_alert(c("These are custom functions avaiable for this project!\n",
+            "Documentations is location in {.path {here(\"scripts\")}}"))
 ls("proj_functions")
 
 # fixes issue with reading raster file using decimal degrees
@@ -56,13 +56,20 @@ H = Hogarth
 ```{r cruide-id-info}
 source(here(".Rprofile"))
 
+# ---- cruise folder path
+# EDIT location if want to put elsewhere. This will put it in the year of the
+# start date. Folders will be created if they don't exists.
+
+# cruise_folder_path <- here(cloud_dir, "years")
+cruise_folder_path <- here("data", "years")
+
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "WS",           # HERE, ship acronym
-    start_dates = "September 16 2023", # HERE, month day year
-    end_dates   = "September 22 2023", # HERE, month day year
-    volunteer   = FALSE           # HERE, if need volunteer paperwork
+    ship        = "WS",                                     # HERE, ship acronym
+    start_dates = "September 16 2023",         # START DATE HERE, month day year
+    end_dates   = "September 22 2023",           # END DATE HERE, month day year
+    volunteer   = FALSE                      # HERE, if need volunteer paperwork
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
@@ -84,7 +91,7 @@ cli::cli_alert_warning(
 invisible(readline())
 ```
 # Create Cloud Directory for Cruise and Copy Files
-Function to create the cruise directory within the `cruise_location`.
+Function to create the cruise directory within the `cruise_folder_path`.
 Sub-directories created: 
   - "metadata" for logsheets 
   - "forms" for paperwork
@@ -99,10 +106,9 @@ This function will copy blank files of:
                          needed)
   - map file if exists locally
 ```{r cruise-directory}
-loc_file2 <-
+dir_path <-
   cruise_setup(
-    # cruise_location = here(cloud_dir, "years"),
-    cruise_location = here("data", "test", "years"),
+    cruise_location = cruise_folder_path,
     cruise_id       = cruise_id$cruise_id,
     cruise_date     = cruise_id$start_dates,
     blank_location  = here(cloud_dir, 
@@ -116,84 +122,66 @@ loc_file2 <-
     str_subset("~", negate = TRUE)
 ```
 
-```{r paths}
-# paths to data location files
-loc_file <- 
-  here("data", "metadata") %>%
-  fs::dir_ls(regexp = "^[^~]*locations.*xlsx")
-
-# path to base map files
-map_loc <- here("data", "map_shp")
-
-# spatial extent
-exnt <- c(xmin = -84, # West
-          xmax = -80, # East
-          ymin = 24,  # South
-          ymax = 28.5 # North 
-        )
-```
-
 ## Load Data Locations (Lat/Lon)
 ```{r load-locations}
-if (is_empty(loc_file2)) {
-  cli_alert_info("Cruise Path was not found. Using old file.")
-  # sample locations
-  loca <-
-    loc_file %>%
-    readxl::read_xlsx(
-      sheet = 5,
-      .name_repair = janitor::make_clean_names,
-    ) %>%
-    filter(!is.na(depth_level))
+cli_alert_info("Cruise path: {dirname(dirname(dir_path))}")
 
-  # zooplankton locations
-  zoo_loc <-
-    loc_file %>%
-    readxl::read_xlsx(
-      sheet = 3,
-      .name_repair = janitor::make_clean_names
-    )
-} else {
-  cli_alert_info("Cruise path was found. Using logsheet.")
-  # sample locations
-  loca <-
-    readxl::read_excel(
-      loc_file2,
-      sheet = "lat_lon",
-      range = cellranger::cell_cols("A:I")
-    ) %>%
-    filter(!is.na(depth_level))
+# sample locations
+loca <-
+  readxl::read_excel(
+    dir_path,
+    sheet = "lat_lon",
+    .name_repair= janitor::make_clean_names
+  ) %>% 
+  select(1:contains("edna")) %>% 
+  filter(is.na(other))
 
-  # zooplankton locations
-  zoo_loc <-
-    readxl::read_excel(
-      loc_file2,
-      sheet = "zooplankton",
-      range = cellranger::cell_rows(c(13, 13 + 8)),
-      .name_repair = janitor::make_clean_names
-    ) %>%
-    select(station,
-      "lat" = lat_in,
-      "lon" = lon_in,
-      mesh_size_um
-    ) %>%
-    summarise(
-      .by = c(station, lat, lon),
-      labs = paste(mesh_size_um, collapse = ", ")
-    ) %>%
-    mutate(
-      labs = str_replace(labs, " /", ","),
-      labs = str_replace(labs, "64$", "64 (only)")
-    )
-}
+# zooplankton locations
+zoo_loc <-
+  readxl::read_excel(
+    dir_path,
+    sheet = "zooplankton",
+    range = cellranger::cell_rows(c(13, 13 + 8)),
+    .name_repair = janitor::make_clean_names
+  ) %>%
+  select(station,
+    "lat" = lat_in,
+    "lon" = lon_in,
+    mesh_size_um
+  ) %>%
+  summarise(
+    .by = c(station, lat, lon),
+    labs = paste(mesh_size_um, collapse = ", ")
+  ) %>%
+  mutate(
+    labs = str_replace(labs, " /", ","),
+    labs = str_replace(labs, "64$", "64 (only)")
+  )
 
 # NOAA locations
-all_loc <- 
-  loc_file %>%
-  readxl::read_xlsx(sheet = 2, 
-            .name_repair = janitor::make_clean_names) %>%
-  filter(!(station %in% loca$station))
+noaa_loc <-
+  dir_path %>%
+  readxl::read_xlsx(sheet = "noaa_stations", 
+            .name_repair = janitor::make_clean_names)  %>%
+  rename("station" = waypoint) %>%
+  filter(!str_detect(station, "(?i)rsmas|channel|bridge")) %>% 
+  unite(col = "lon", 8:10, sep = " ") %>%
+  unite(col = "lat", 5:7, sep = " ") %>%
+  mutate(
+    station = case_when(
+      str_detect(station, "MR") ~ "MR",
+      str_detect(station, "21/ LK") ~ "LK",
+      str_detect(station, "WS") ~ "WS",
+      .default = station
+      ),
+    lon = parzer::parse_lon(lon),
+    lat = parzer::parse_lat(lat), 
+    .before = 2
+    )
 
+# stations not being samples by IMaRS
+cli_alert("Stations not sampled by IMaRS")
+filter(noaa_loc, !(station %in% loca$station)) %$% station
 ```
 
 ## Match NOAA and IMaRS Locations
@@ -226,31 +214,6 @@ loca <-
 
 ```
 
-## Additional noaa locations starting Feb 2023
-```{r noaa-loc}
-noaa_loc <-
-  loc_file %>%
-  read_xlsx(sheet = 4, 
-            .name_repair = janitor::make_clean_names)  %>%
-  rename("station" = waypoint) %>%
-  unite(col = "lat", 2:4, sep = " ") %>%
-  unite(col = "lon", 3:5, sep = " ") %>%
-  mutate(
-    station = case_when(
-      str_detect(station, "MR") ~ "MR",
-      str_detect(station, "21/ LK") ~ "LK",
-      str_detect(station, "WS") ~ "WS",
-      .default = station
-      ),
-    lon = parzer::parse_lon(lon),
-    lat = parzer::parse_lat(lat), 
-    .before = 2
-    )
-
-# stations not being samples by IMaRS
-filter(noaa_loc, !(station %in% loca$station)) %$% station
-```
-
 # ---- Base Map Data ----
 
 Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
@@ -263,7 +226,17 @@ if (exists("base_plt")) {
   cli::cli_alert_info("{.var base_plot} is already loaded!")
   
 } else {
-  
+  # path to base map files
+  map_loc <- here("data", "map_shp")
+
+  # spatial extent
+  exnt <- 
+    c(
+      xmin = -84, # West
+      xmax = -80, # East
+      ymin = 24,  # South
+      ymax = 28.5 # North 
+      )
   ## ---- download topography (.nc) and coastline (.shp)
   world_download(
     path_land  = map_loc,
@@ -328,13 +301,16 @@ imars_map <-
     color = "gray",
     size  = 1
   ) +
-  # I may want to add labels for all none sampled locations
-  # geom_text_repel(data = all_loc, aes(x = lon, y = lat, label = station),
-  #                size = 2,
-  #                # hjust = -1,
-  #                color = "gray"
-  #                # vjust = 1
-  #                ) +
+  # # add labels for all none sampled locations
+  # geom_text_repel(
+  #   data = filter(noaa_loc, !(station %in% loca$station)), 
+  #   aes(x = lon, y = lat, label = station),
+  #   size = 2,
+  #   # hjust = -1,
+  #   color = "gray"
+  #   # vjust = 1
+  #   ) +
+  
   # ---- Sample Locations
   geom_point(
     data = loca,
@@ -410,10 +386,10 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   cli::cli_alert_info("Map already exists, not overwriting!")
 }
 
-if (!file_exists(here(dirname(loc_file2), basename(sv_arg$file_name)))) {
+if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name)))) {
   file_copy(
         sv_arg$file_name,
-        here(dirname(loc_file2)),
+        here(dirname(dir_path)),
         overwrite = TRUE
       )
 } else {
@@ -432,6 +408,7 @@ loca_edna <-
   mutate(labl = glue("{edna} {depth_level}"))
 
 # stations not sampling eDNA
+cli_alert("Stations not sampling for eDNA")
 filter(noaa_loc, !(station %in% loca_edna$station)) %$% station
 ```
 
@@ -486,13 +463,16 @@ edna_map <-
     color = "gray",
     size  = 1
   ) +
-  # I may want to add labels for all none sampled locations
-  # geom_text_repel(data = all_loc, aes(x = lon, y = lat, label = station),
-  #                size = 2,
-  #                # hjust = -1,
-  #                color = "gray"
-  #                # vjust = 1
-  #                ) +
+  # # add labels for all none sampled locations
+  # geom_text_repel(
+  #   data = filter(noaa_loc, !(station %in% loca$station)), 
+  #   aes(x = lon, y = lat, label = station),
+  #   size = 2,
+  #   # hjust = -1,
+  #   color = "gray"
+  #   # vjust = 1
+  #   ) +
+  
   # ---- Sample Locations
   geom_point(
     data = loca_edna,
