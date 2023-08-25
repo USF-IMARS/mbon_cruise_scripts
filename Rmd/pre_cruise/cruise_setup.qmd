@@ -22,7 +22,8 @@ librarian::shelf(
   ggrepel, ggtext, readxl, ggnewscale, cli,
   
   # idk if needed
-  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot,
+  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot, anytime, 
+  parzer
 )
 
 library("conflicted")
@@ -59,8 +60,8 @@ source(here(".Rprofile"))
 cruise_id <-
   tibble(
     ship        = "WS",           # HERE, ship acronym
-    start_dates = "July 22 2023", # HERE, month day year
-    end_dates   = "July 28 2023", # HERE, month day year
+    start_dates = "September 16 2023", # HERE, month day year
+    end_dates   = "September 22 2023", # HERE, month day year
     volunteer   = FALSE           # HERE, if need volunteer paperwork
     ) %>%
   mutate(
@@ -99,17 +100,20 @@ This function will copy blank files of:
   - map file if exists locally
 ```{r cruise-directory}
 loc_file2 <-
-cruise_setup(
-  cruise_location = here(cloud_dir, "years"),
-  cruise_id       = cruise_id$cruise_id,
-  cruise_date     = cruise_id$start_dates,
-  blank_location  = here(cloud_dir, "blank_sheets", "pre_cruise_blank_sheets"),
-  volunteer       = cruise_id$volunteer,
-  return_path     = TRUE
-  ) %>%
-  here("metadata") %>%
-  dir_ls(regexp = "fknms") %>%
-  str_subset("~", negate = TRUE)
+  cruise_setup(
+    # cruise_location = here(cloud_dir, "years"),
+    cruise_location = here("data", "test", "years"),
+    cruise_id       = cruise_id$cruise_id,
+    cruise_date     = cruise_id$start_dates,
+    blank_location  = here(cloud_dir, 
+                           "blank_sheets",
+                           "pre_cruise_blank_sheets"),
+    volunteer       = cruise_id$volunteer,
+    return_path     = TRUE
+    ) %>%
+    here("metadata") %>%
+    dir_ls(regexp = "fknms") %>%
+    str_subset("~", negate = TRUE)
 ```
 
 ```{r paths}
