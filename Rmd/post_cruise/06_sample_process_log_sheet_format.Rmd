@@ -89,7 +89,7 @@ if (update_log) {
   cli_alert_warning(c("You've set update_log = {update_log}. You will be ", 
                       "updating the log!"))
 } else {
-  stopifnot("No files need creating" = nrow(meta_all) > 1 )
+  stopifnot("No files need creating!" = nrow(meta_all) > 1 )
 }
 
 ```
@@ -184,48 +184,129 @@ for (i in seq(nrow(save_meta))) {
 
 ```
 
-# Add HPLC sample IDs
+# Update HPLC sample IDs
 ```{r}
- meta_all %>% 
-  nest(.by = cruise_id) %>%
-  # filter(cruise_id == "WS23203") %>%
-  left_join(crs_log_exst) %>%
-  filter(!is.na(files)) %>%
-  mutate(
-    sheets = pmap(
-      list(data, cruise_id, files),
-      function(.x, .y, .z) {
-        tryCatch({
-        cli_alert_info(c("-----\n Cruise ID: ", .y))
-        update_metadata(.meta = .x, cruise = .y, prev_log = .z)
-      }, error = function(e) {
-        cli_alert_danger("Cruise has issue unnesting!")
-        cli_alert_danger(sprintf("Error in %s: %s",
-                                 deparse(e[["call"]]),
-                                 e[["message"]])
-                              )
-        NULL
-      })
+cruise_to_update <- c("")
+
+if (any(str_length(cruise_to_update) > 0)) {
+  temp <- 
+    meta_all %>%
+    nest(.by = cruise_id) %>%
+    filter(str_detect(cruise_id, str_c(cruise_to_update, collapse = "|"))) %>%
+    left_join(crs_log_exst) %>%
+    filter(!is.na(files)) %>%
+    mutate(
+      sheets = pmap(
+        list(data, cruise_id, files),
+        function(.x, .y, .z) {
+          tryCatch(
+            {
+              update_proc_log(x = .x, cruise = .y, prev_log = .z, 
+                              type = "meta")
+            },
+            error = function(e) {
+              cli_alert_danger("Cruise has issue unnesting!")
+              cli_alert_danger(sprintf(
+                "Error in %s: %s",
+                deparse(e[["call"]]),
+                e[["message"]]
+              ))
+              NULL
+            }
+          )
         }
       )
-    ) %>%
-  with(., (walk2(files, sheets,
-       (\(.x, .y) 
-          if (!file_exists(arg$file_name) | TRUE) {
-     cli_alert_info("Trying to create file {.file {basename(arg$file_name)}}")
-     try(
-       saveWorkbook(.y,
-                    .x,
-                    overwrite   = TRUE,
-                    returnValue = TRUE), 
-       silent = FALSE)
-   } else {
-     cli_alert_info("Ignoring file {.file {basename(arg$file_name)}}")
-   }
-         )
-       )
-  )
-  )
+    ) 
+  
+  if (menu(c("Yes", "No"), title = "Do you want to open before saving?") == 1) {
+   map(temp$sheets, \(x) openXL(x))
+  }
+  
+  temp %>%
+    with(., (walk2(
+      files, sheets,
+      (\(.x, .y) {
+        cli_alert_info("Updating file {.file {basename(.x)}}")
+        shell.exec(dirname(.x))
+        try(
+          saveWorkbook(.y,
+            .x,
+            overwrite   = TRUE,
+            returnValue = TRUE
+          ),
+          silent = FALSE
+        )
+      })
+    )
+    ))
+}
+```
+
+
+```{r}
+# cruise_to_update <- c("WS21277")
+# meta_all <- 
+#   dir_ls(here(cloud_dir), 
+#          regexp = "imars_inventory_chl_hplc_cdom") %>%
+#   openxlsx::read.xlsx(sheet = "sample_meta_data") %>%
+#   # remove cruises fully completed pre-COVID
+#   filter(
+#     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
+#     # & !(cruise_id %in% crs_log_exst$cruise_id)
+#     ) %>%
+#     mutate(
+#       date_time = janitor::convert_to_datetime(date_time, tz = "UTC"),
+#       date_time = as.POSIXct(date_time, tz = "UTC"),
+#       date_mm_dd_yy = janitor::convert_to_date(date_mm_dd_yy, tz = "UTC"),
+#       
+#     ) 
+# 
+# meta_all %>%
+#     nest(.by = cruise_id) %>%
+#     filter(str_detect(cruise_id, str_c(cruise_to_update, collapse = "|"))) %>%
+#     mutate(files = dir_ls(here(), regexp = "WS212")) %>%
+#     
+#   # left_join(crs_log_exst) %>%
+#     filter(!is.na(files)) %>%
+#     mutate(
+#       sheets = pmap(
+#         list(data, cruise_id, files),
+#         function(.x, .y, .z) {
+#           tryCatch(
+#           {
+#               
+#               update_proc_log(x = .x, cruise = .y, prev_log = .z, 
+#                               type = "meta")
+#               
+#           },
+#           error = function(e) {
+#             cli_alert_danger("Cruise has issue unnesting!")
+#             cli_alert_danger(sprintf(
+#               "Error in %s: %s",
+#               deparse(e[["call"]]),
+#               e[["message"]]
+#             ))
+#             NULL
+#           }
+#           )
+#         }
+#       )
+#     )
+# # .Last.value$sheets[[1]]
+# 
+# openXL(.Last.value$sheets[[1]])
+# 
+# meta_all %>%
+#     nest(.by = cruise_id) %>%
+#     filter(str_detect(cruise_id, str_c(cruise_to_update, collapse = "|"))) %>%
+#     mutate(files = dir_ls(here(), regexp = "WS212")) %$% 
+# map2(
+#   data, cruise_id,
+#   (\(x, y) process_log_sheet(
+#   .meta = x, cal = cal, cruise = y) %>%
+#    openXL()
+#   )
+# ) 
 ```
 
 # ---- Don't Need to Go Beyond ----
