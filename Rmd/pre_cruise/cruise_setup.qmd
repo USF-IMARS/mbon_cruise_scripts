@@ -7,7 +7,7 @@ editor: source
 ---
 
 # pre_cruise_tasks_docx
-Complete the steps outlined in `mbon_imars_cruises/blank_sheets/pre_cruise_tasks.docx`.
+Complete the steps outlined in [pre_cruise_tasks.docx](mbon_imars_cruises/blank_sheets/pre_cruise_tasks.docx).
 
 # ---- Load Libraries ----
 ## Load Libraries
