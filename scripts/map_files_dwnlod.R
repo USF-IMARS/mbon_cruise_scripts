@@ -58,6 +58,9 @@ world_download <- function(
   library("rlang")
   library("magrittr")
   
+  pre_timeout <- getOption('timeout')
+  on.exit(options(timeout=pre_timeout))
+  options(timeout=300)
   # ========================================================================== #
   # ---- Download Topography to the Specified Path
   # ========================================================================== #
@@ -397,6 +400,7 @@ base_map_plot <- function(
   # ---- libraries
   library("ggplot2")
   library("metR")
+  librarian::shelf(directlabels)
   
   # ---- plot 
   plt <- 
