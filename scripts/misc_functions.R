@@ -811,8 +811,6 @@ plot_cruise_dates <- function(cruise_title, data, .cruise_event) {
 ##%######################################################%##
 #' Setup Cruise Directory and Blank Files
 #'
-#' FUNCTION_DESCRIPTION
-#'
 #' @param cruise_location Location to create cruise directory and
 #'                        sub-directories
 #' @param cruise_id Cruise ID
@@ -830,6 +828,7 @@ plot_cruise_dates <- function(cruise_title, data, .cruise_event) {
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
+#' 
 cruise_setup <- function(
     cruise_location,
     cruise_id,
