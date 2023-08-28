@@ -756,77 +756,7 @@ hplc_final %$%
       )
 ```
 
-# 3.0 Read SeaBass HPLC Files and Check for Issues
-All columns are read as characters to check for any issues with the data
-```{r read-seabass}
-source(here("scripts", "check_data.R"))
-source(here("scripts", "misc_functions.R"))
-# get most recent directory created for seabass files
-# 
-ind_f_dir <- 
-  here("data", "processed", "hplc") %>%
-  dir_ls(type   = "directory", 
-         regexp = "ind_file") %>%
-  sort(decreasing = TRUE)
 
-# read seabass hplc files
-sb_data <-
-  ind_f_dir  %>%
-  last_mod() %>%
-  # first() %>%
-  dir_ls() %>%
-  tibble(file = .) %>%
-  mutate(data = map(
-    file, 
-    read_sb_files, # function to read seasbass hplc files and extract data
-    type = "c")) %>%
-  unnest(data)
-
-message(glue("The dimensions are: {dim_desc(sb_data)}"))
-slice_sample(sb_data, n = 10)
-
-sb_data %>%
-  filter(if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
-
-# rm(read_sb_files)
-```
-
-## FCHECK: Checking `.sb` Files Locally for Issues
-This is used by NASA to pre-check the .sb files before official submission 
-process. This requires the use of "Perl" <https://www.perl.org/get.html>.
-A quick download and it should work.
-
-Then a download of FCHECK from NASA:
-<https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
-
-Cruises not ready
-- WS16074
-- WS16130
-- WS16263
-
-SFMBON_WS16074_pigment_20160314_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
-SFMBON_WS16130_pigment_20160509_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
-SFMBON_WS16263_pigment_20160919_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
-
-```{r fcheck}
-# ---- Toggle if want to see fcheck out put or look just for errors
-verb <- FALSE
-# # verb <- TRUE
-
-
-fcheck_results <- 
- ind_f_dir %>%
- last_mod() %>%
- dir_ls() %>%
- tibble(files = .) %>%
- sb_fcheck(
-   .,
-   col_name   = "files",
-   loc_fcheck = here(), 
-   verb       = verb)
-
-# rm(verb, i, ind_f_dir)
-```
 
 ## Get Date Range of Each Cruise
 Was useful for an email.
