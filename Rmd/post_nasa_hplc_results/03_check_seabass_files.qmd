@@ -1,0 +1,178 @@
+---
+title: "Check SeaBASS Files Before Submission"
+author: "Sebastian DiGeronimo"
+date: "2022-08-25"
+output: html_document
+---
+
+
+# Load Libraries ----
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
+librarian::shelf(
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
+  
+  # additional
+  cli,
+  quiet = TRUE
+)
+
+# shelf(conflicted) # may be needed if won't allow loading of certain packages
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+
+e <- new.env()
+source(here(".Rprofile"))
+source(here("scripts", "check_data.R"), local = e)
+source(here("scripts", "misc_functions.R"), local = e)
+attach(e, name = "fcheck_func")
+rm(e)
+```
+
+
+# Read SeaBass HPLC Files and Check for Issues
+All columns are read as characters to check for any issues with the data
+```{r read-seabass-hplc}
+# get most recent directory created for seabass files
+ind_f_dir <- 
+  here("data", "processed", "hplc") %>%
+  dir_ls(type   = "directory", 
+         regexp = "ind_file") %>%
+  sort(decreasing = TRUE)
+
+# read seabass hplc files
+sb_data <-
+  ind_f_dir  %>%
+  last_mod() %>%
+  dir_ls(regexp = "\\.sb") %>%
+  tibble(file = .) %>%
+  mutate(data = map(
+    file, 
+    # function to read seasbass hplc files and extract data
+    \(x) read_sb_files(x, col_type = "c", sample_type = "hplc")
+    )) %>%
+  unnest(data)
+
+message(glue("The dimensions are: {dim_desc(sb_data)}"))
+slice_sample(sb_data, n = 10)
+
+filter(sb_data, if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
+```
+
+## FCHECK: Checking `.sb` Files Locally for Issues
+This is used by NASA to pre-check the .sb files before official submission 
+process. This requires the use of "Perl" <https://www.perl.org/get.html>.
+A quick download and it should work.
+
+Then a download of FCHECK from NASA:
+<https://seabass.gsfc.nasa.gov/wiki/FCHECK/fcheck4.tar>
+
+Cruises not ready
+- WS16074
+- WS16130
+- WS16263
+
+SFMBON_WS16074_pigment_20160314_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
+SFMBON_WS16130_pigment_20160509_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
+SFMBON_WS16263_pigment_20160919_R1.sb: 1 error (1 unique) and 5 warnings (1 unique) were found.
+
+```{r fcheck-hplc}
+# ---- Toggle if want to see fcheck out put or look just for errors
+verb <- FALSE
+# verb <- TRUE
+
+fcheck_results <- 
+ ind_f_dir %>%
+ last_mod() %>%
+ dir_ls() %>%
+ tibble(files = .) %>%
+ sb_fcheck(
+   .,
+   col_name   = "files",
+   loc_fcheck = here(), 
+   verb       = verb)
+
+# rm(verb, i, ind_f_dir)
+```
+
+
+# Check Particulate absorption, CDOM absorption and [Chlorophyll-a] Files
+```{r read-seabass-filt-cdom-chl}
+cruise_dir <- 
+  here(cloud_dir, "seabass", "testing") %>%
+  dir_ls() %T>% print()
+
+cruise_dat <-
+  cruise_dir %>%
+  dir_ls(regexp = "\\.sb", recurse = 1) %>%
+  tibble(file = .) %>%
+  mutate(type = str_extract(file, "ag|ap|chl")) %>%
+  slice_head(n = 6, by = type)  %>%
+  
+   mutate(
+     data = map(
+      file,
+      # function to read seasbass hplc files and extract data
+      \(x) read_sb_files(x, col_types = "c", sample_type = "default")
+      )
+    ) %>%
+  nest(.by = type) %>%
+  mutate(
+    data2 = map(
+      data, 
+      \(x) unnest(x, cols = data)
+      )
+  )
+
+ag  <- cruise_dat$data2[[1]]
+ap  <- cruise_dat$data2[[2]]
+chl <- cruise_dat$data2[[3]]
+```
+# Notes to fix 
+
+chl 
+- /calibration_data to /calibration_date
+- extra comma: 
+  - /units=yyyy,mo,dd,hh,mn,ss,degrees,degrees,none,none,m,,m,L,mg/m^3
+  - /units=yyyy,mo,dd,hh,mn,ss,degrees,degrees,none,none,m,m,L,mg/m^3
+- 1)  Required header label \"/water_depth\" not provided."
+  - add /water_depth = na
+```{r fcehck-seabass-filt-cdom-chl}
+# ---- Toggle if want to see fcheck out put or look just for errors
+verb <- FALSE
+# verb <- TRUE
+
+
+fcheck_results <-
+  cruise_dir[1] %>%
+  map(
+    .,
+    \(x) {
+      dir_ls(x, regexp = "\\.sb") %>%
+        tibble(files = .) %>%
+        sb_fcheck(
+          .,
+          col_name   = "files",
+          loc_fcheck = here(),
+          verb       = verb
+        )
+    }
+  )
+
+fcheck_results %>%
+  list_c() %$%
+  list_c(fcheck2) %>%
+  unique() %>%
+  str_subset("C:/Users/spd19/Box/mbon_imars_cruises/seabass/testing.*", 
+             negate = TRUE) %>%
+  cat(sep = "\n") 
+```
+
