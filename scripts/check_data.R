@@ -1,5 +1,9 @@
 # ============================================================================ #
-# ---- header ----
+# 
+# 
+# ---- Check SeaBASS Data ----
+# 
+# 
 # ============================================================================ #  
 
 ##%######################################################%##
@@ -12,22 +16,36 @@
 #' FUNCTION_DESCRIPTION
 #'
 #' @param x Tibble of file paths.
-#' @param type The format to read each column
+#' @param sample_type default: ag, ap, chl, or HPLC
+#' @param col_types The format to read each column
 #'             - `c` for character
 #' @param add_na Other NAs that may exists in the file.
 #'               - default: c("", "NA")
 #'
+#' @author Sebastian Di Geronimo (August 25, 2023)
+#'
+#' @rdname read_sb_files
+#'
+#' @export
+#' 
 #' @return RETURN_DESCRIPTION
 #' @examples
 #' # ADD_EXAMPLES_HERE
-read_sb_files <- function(x, type = NULL, add_na = NULL) {
+#' 
+read_sb_files <- function(
+    x, 
+    sample_type = c("default", "hplc"), 
+    col_types   = NULL, 
+    add_na      = NULL,
+    show_col_types = FALSE,
+    ...) {
   
   na_val <- unique(c("", "NA", add_na))
   
-  if (is.null(type)) {
-    type <- cols(.default = col_guess())
+  if (is.null(col_types)) {
+    col_types <- cols(.default = col_guess())
   } else {
-    type <- cols(.default = type)
+    col_types <- cols(.default = col_types)
   }
   
   skips <-
@@ -50,19 +68,63 @@ read_sb_files <- function(x, type = NULL, add_na = NULL) {
     ) %>%
     mutate(X1 = str_remove(X1, "/fields=")) %>%
     as.character()
+
+  sep_pattern <- rep(c("\\S+", "\\s+"), length(col_names))
+  names(sep_pattern) <-  
+    map(col_names, \(x) c(x, NA)) %>%
+    list_c()
   
-  read_csv(
-    x,
-    skip           = skips,
+  x2 <- list(
+    file           = x,
+    skips          = skips,
     col_names      = col_names,
-    show_col_types = FALSE,
-    col_types      = type,
-    na             = na_val
+    show_col_types = show_col_types,
+    col_types      = col_types,
+    na_val         = na_val,
+    sep_pattern    = sep_pattern
   )
+  
+  class(x2) <- sample_type
+
+  UseMethod("read_sb_files", x2)
   
   # ---- end of function read_sb_files
 }
 
+#' @rdname read_sb_files
+read_sb_files.hplc <- function(...) {
+  x <-
+  read_csv(
+    file           = x2$file,
+    skip           = x2$skips,
+    col_names      = x2$col_names,
+    col_types      = x2$col_types,
+    na             = x2$na_val,
+    show_col_types = x2$show_col_types
+  )
+  
+  return(x)
+  
+  # ---- end of function read_sb_files.hplc
+}
+
+#' @rdname read_sb_files
+read_sb_files.default <- function(...) {
+  x <- 
+    read_lines(
+    file = x2$file,
+    skip = x2$skips,
+    na   = x2$na_val
+  ) %>%
+  tibble(data = .) %>%
+  separate_wider_regex(
+    cols = data,
+    patterns = x2$sep_pattern,
+    too_few = "align_start")
+  
+  return(x)
+  # ---- end of function read_sb_files.default
+}
 
 ##%######################################################%##
 #                                                          #
@@ -101,12 +163,14 @@ sb_fcheck <- function(
 
   # capture number of rows before pausing
   row_check <- ifelse(is.null(row_check) | is.na(row_check), NA, row_check)
-  row_check <- ifelse(!is.null(row_check) &&
-    is.character(row_check) &&
-    row_check == "end",
-  nrow(sb_files),
-  row_check
-  )
+  row_check <- 
+    ifelse(
+      !is.null(row_check)
+      && is.character(row_check) 
+      && row_check == "end",
+      nrow(sb_files),
+      row_check
+      )
 
   row_check <- ifelse(is.na(row_check), nrow(sb_files) + 1, row_check)
   row_check <- as.integer(row_check)
@@ -180,6 +244,7 @@ sb_fcheck <- function(
   }
 
   message("Starting FCHECK")
+  print("\n\n---------\n\n")
 
   fcheck_results <-
     sb_files %>%
@@ -190,7 +255,7 @@ sb_fcheck <- function(
           rows <- .env$row_check
 
           print(glue::glue(
-            "Number: {y} of {nrow(.env$sb_files)}\n",
+            "File Number: {y} of {nrow(.env$sb_files)}\n",
             "File: {basename(x)}",
             "\n\n---------\n\n"
           ))
@@ -243,3 +308,4 @@ sb_fcheck <- function(
 
   # ---- end of function sb_fcheck
 }
+
