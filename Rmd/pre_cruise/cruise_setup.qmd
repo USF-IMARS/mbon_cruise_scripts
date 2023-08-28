@@ -84,11 +84,23 @@ cruise_id <-
   ) %T>%
   print()
 
+{
+cat(
+  "Check Cruise Info:",
+  sprintf("Ship:       %s", cruise_id$ship[[1]]),
+  sprintf("Cruise ID:  %s", cruise_id$cruise_id[[1]]),
+  sprintf("Start Date: %s", format(cruise_id$start_dates[[1]], "%B %d, %Y")),
+  sprintf("End Date:   %s", format(cruise_id$end_dates[[1]], "%B %d, %Y")),
+  "\n",
+  sep = "\n"
+)
+
 cli::cli_alert_warning(
-  c("Did you make sure to update cruise info?\n\n",
+  c("Make sure the above cruise info is correct before proceeding!\n\n",
   "---- Press the [Enter] key to continue! ----\n",
   "\t or go back to fix it!"))
 invisible(readline())
+}
 ```
 # Create Cloud Directory for Cruise and Copy Files
 Function to create the cruise directory within the `cruise_folder_path`.
@@ -131,7 +143,7 @@ loca <-
   readxl::read_excel(
     dir_path,
     sheet = "lat_lon",
-    .name_repair= janitor::make_clean_names
+    .name_repair = janitor::make_clean_names
   ) %>% 
   select(1:contains("edna")) %>% 
   filter(is.na(other))
@@ -535,6 +547,16 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
    base_height = 11
   )
 } 
+
+if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name)))) {
+  file_copy(
+        sv_arg$file_name,
+        here(dirname(dir_path)),
+        overwrite = TRUE
+      )
+} else {
+  cli_alert_info("Map already copied to cruise directory!")
+}
 
 rm(sv_arg)
 ```
