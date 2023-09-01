@@ -105,11 +105,14 @@ fcheck_results <-
 
 
 # Check Particulate absorption, CDOM absorption and [Chlorophyll-a] Files
-```{r read-seabass-filt-cdom-chl}
+```{r directory-seabass-filt-cdom-chl}
 cruise_dir <- 
   here(cloud_dir, "seabass", "testing") %>%
   dir_ls() %T>% print()
+```
 
+
+```{r read-seabass-filt-cdom-chl}
 cruise_dat <-
   cruise_dir %>%
   dir_ls(regexp = "\\.sb", recurse = 1) %>%
@@ -152,7 +155,7 @@ verb <- FALSE
 
 
 fcheck_results <-
-  cruise_dir[1] %>%
+  cruise_dir %>%
   map(
     .,
     \(x) {
@@ -162,11 +165,15 @@ fcheck_results <-
           .,
           col_name   = "files",
           loc_fcheck = here(),
-          verb       = verb
+          verb       = verb,
+          row_check  = "end"
         )
     }
   )
+```
 
+
+```{r fcehck-seabass-filt-cdom-chl}
 fcheck_results %>%
   list_c() %$%
   list_c(fcheck2) %>%
