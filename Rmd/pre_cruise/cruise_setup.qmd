@@ -60,8 +60,8 @@ source(here(".Rprofile"))
 # EDIT location if want to put elsewhere. This will put it in the year of the
 # start date. Folders will be created if they don't exists.
 
-# cruise_folder_path <- here(cloud_dir, "years")
-cruise_folder_path <- here("data", "years")
+cruise_folder_path <- here(cloud_dir, "years")
+# cruise_folder_path <- here("data", "years")
 
 # ---- Edit Cruise Info ----
 cruise_id <-
@@ -110,6 +110,7 @@ Sub-directories created:
   - "CDOM" for CDOM data
   - "apad" for filter pad data
   - "bb3" for BB3 data
+  - maybe "above_water_radiometry"
 
 This function will copy blank files of:
   - logsheet
@@ -560,3 +561,42 @@ if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name)))) {
 
 rm(sv_arg)
 ```
+
+# ---- Copy files from Cloud to Local
+```{r copy-cloud-local}
+if (exists("local_dir")) {
+  cli::cli_text(
+    c(
+      "Check that the path locations are correct:\n\n",
+      "Cloud Location:\n",
+      "{dirname(dirname(dir_path))}\n\n",
+      "Local Location:\n",
+      "{local_dir}"
+    )
+  )
+
+  cont <- menu(c("Correct", "Incorrect"))
+
+  if (cont == 2) {
+    cli_alert_danger("Fix directory paths above in chunk {.var cruide-id-info}!")
+  } else if (cont != 1) {
+    cli_alert_warning("Skipping copying cruise directory.")
+  } else if (cont == 1) {
+    cli_alert_info("Copying cruise directory from cloud path to local path.")
+    dir_copy(
+
+      # cloud path for cruise
+      dirname(dirname(dir_path)),
+
+      # location to copy files
+      local_dir
+    )
+  }
+} else {
+  cli_alert_warning(
+    c("No {.var local_path} set in {.file .Rprofile}!\n",
+      "Skipping cruise copying directory."))
+}
+
+```
+
