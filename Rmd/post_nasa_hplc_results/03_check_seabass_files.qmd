@@ -38,7 +38,7 @@ rm(e)
 ```
 
 
-# Read SeaBass HPLC Files and Check for Issues
+# Read SeaBass **HPLC** Files and Check for Issues
 All columns are read as characters to check for any issues with the data
 ```{r read-seabass-hplc}
 # get most recent directory created for seabass files
@@ -104,7 +104,7 @@ fcheck_results <-
 ```
 
 
-# Check Particulate absorption, CDOM absorption and [Chlorophyll-a] Files
+# Check **Particulate absorption**, **CDOM absorption** and **[Chlorophyll-a]** Files
 ```{r directory-seabass-filt-cdom-chl}
 cruise_dir <- 
   here(cloud_dir, "seabass", "testing") %>%
@@ -178,8 +178,58 @@ fcheck_results %>%
   list_c() %$%
   list_c(fcheck2) %>%
   unique() %>%
-  str_subset("C:/Users/spd19/Box/mbon_imars_cruises/seabass/testing.*", 
+  str_subset(".*testing.*", 
              negate = TRUE) %>%
   cat(sep = "\n") 
+```
+
+
+```{r}
+{
+  cli::cli_text(
+    c(
+      "Check that all SeaBASS files pass the {.emph FCHECK}
+      {col_red(\"before\")} proceeding!"
+    )
+  )
+  
+  cont <- menu(c("Correct", "Incorrect"))
+}
+
+if (cont == 1) {
+
+  cruise_dir[-c(1:7)] %>%
+  str_subset("WS19322", negate = TRUE) %>%
+  walk(
+    .,
+    submit_path = here(cloud_dir, "seabass", "temp"),
+    (\(x, submit_path) {
+      
+      cli::cli_alert_info("Copying files from cruise {basename(x)}")
+      
+      
+      new_loc     <-  here(submit_path, basename(x))
+      new_loc_sup <- here(new_loc, "supplimental_docs")
+        
+      # copy files to new location
+      dir_copy(x, new_loc)
+      
+      # move non-seabass files (not .sb) to supplemental docs
+      dir_create(new_loc_sup)
+      
+      dir_ls(new_loc, type = "file") %>%
+      str_subset("\\.sb$", negate = TRUE) %>%
+      file_move(new_loc_sup)
+    
+      })
+    
+  )
+
+} else {
+  cli_alert_warning("Skipping moving of SeaBASS directory.")
+}
+
+
+
 ```
 
