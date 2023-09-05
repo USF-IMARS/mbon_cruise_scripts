@@ -29,8 +29,8 @@ source(here("scripts", "misc_functions.R"))
 source(here(".Rprofile"))
 
 # `NA` values to skip when reading `.xlsx.
-na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow", 
-             "*", stringi::stri_dup("-", 1:20))
+na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", 
+             "Flow", "*", stringi::stri_dup("-", 1:20))
 
 # where to pull data from
 # "cloud" - cloud path ~/<box-location>/mbon_imars_cruises/
@@ -54,7 +54,7 @@ i.e. copy "cloud_dir <- `<path-to-box>/mbon_imars_cruises`"
 if (!exists("cloud_dir")) cloud_dir <- rstudioapi::selectDirectory()
 
 if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
-  # message(glue("Searching `{cloud_dir}` for metadata!"))
+  # searching cloud
   box_search <- 
    search_meta_folders(
       .dir_path   = here(cloud_dir, "years"),

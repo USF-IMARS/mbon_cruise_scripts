@@ -157,8 +157,9 @@ sb_fcheck <- function(
     loc_fcheck = here(),
     row_check = NULL,
     verb = FALSE) {
+  
   # exxtract location of fcheck files and colname within sb_files
-  dir_loc <- here(loc_fcheck, "fcheck")
+  dir_loc  <- here(loc_fcheck, "fcheck")
   col_name <- rlang::ensym(col_name)
 
   # capture number of rows before pausing
@@ -243,8 +244,8 @@ sb_fcheck <- function(
     message("Finished downloading and unzipping!")
   }
 
-  message("Starting FCHECK")
-  print("\n\n---------\n\n")
+  message("\n\nStarting FCHECK")
+  cat("\n\n---------\n\n")
 
   fcheck_results <-
     sb_files %>%
