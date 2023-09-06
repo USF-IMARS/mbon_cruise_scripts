@@ -118,7 +118,7 @@ cruise_dat <-
   dir_ls(regexp = "\\.sb", recurse = 1) %>%
   tibble(file = .) %>%
   mutate(type = str_extract(file, "ag|ap|chl")) %>%
-  slice_head(n = 6, by = type)  %>%
+  # slice_head(n = 6, by = type)  %>%
   
    mutate(
      data = map(
@@ -156,6 +156,8 @@ verb <- FALSE
 
 fcheck_results <-
   cruise_dir %>%
+  # str_subset("", negate = FALSE) %>%
+  # str_subset("", negate = TRUE) %>%
   map(
     .,
     \(x) {
@@ -180,6 +182,7 @@ fcheck_results %>%
   unique() %>%
   str_subset(".*testing.*", 
              negate = TRUE) %>%
+  sort() %>%
   cat(sep = "\n") 
 ```
 
@@ -198,8 +201,9 @@ fcheck_results %>%
 
 if (cont == 1) {
 
-  cruise_dir[-c(1:7)] %>%
-  str_subset("WS19322", negate = TRUE) %>%
+  cruise_dir %>%
+  # str_subset("", negate = TRUE) %>%
+  # str_subset("", negate = FALSE) %>%
   walk(
     .,
     submit_path = here(cloud_dir, "seabass", "temp"),
