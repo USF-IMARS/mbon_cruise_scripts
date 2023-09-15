@@ -24,14 +24,14 @@ Once you have completed a task you must add a row to the cruise_checklist logshe
 The `cruise_checklist` sheet is located in `/imars_mbon_scruises/{cruiseYear}/{cruise_id}/metadata/fknms_sample_logsheet_{cruise_month}_{cruise_year}_{cruise_id}.xlsx`.
 
 The entries should resemble:
-```csv
-task_name, your_name, datetime, notes
-cdom_schedule, Tylar, 2023-09-01T12:22, 
-merge_meta_edna, Tylar, 2023-09-01T11:43, took a long time to run
-```
+task_name                    | your_name | datetime         | notes
+-----------------------------|-----------|------------------|-------------------------------
+pre_cruise/cruise_setup      | Sebastian | 2023-08-22T14:23 | modified chunk 2 as instructed
+post_cruise/cdom_schedule    | Tylar     | 2023-09-01T12:22 |
+post_cruise/merge_meta_edna  | Tylar     | 2023-09-01T11:43 | took a long time to run
 
-folder | notes
-------|---------
+folder                 | notes
+-----------------------|---------------------------------------------------
 old                    | scripts that are not part of the current protocol, but may be useful in the future
 pre_cruise             |  do this before going on the cruise
 during_cruise          | do this while on the boat
