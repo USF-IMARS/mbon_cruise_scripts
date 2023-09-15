@@ -15,7 +15,7 @@ create_dir <- function(
   
   subDir_deflt <- c(
     here::here(.loc, "data", c("raw", "processed", "plots", "metadata")),
-    here::here(.loc, "Rmd"),
+    here::here(.loc, "protocol_workflow_tasks"),
     here::here(.loc, "scripts")
   )
   
