@@ -45,9 +45,10 @@ cat(
 cat(
 "------------------\n",
 "Welcome to MBON Cruise Prep Project!\n",
-"Navigate to the Rmd folder and select which process you are doing.\n",
+"Navigate to the protocol_workflow_tasks folder and select which process you are doing.\n",
 "The options are:",
-paste0("\t", fs::dir_ls(here::here("Rmd"), type = "directory") |> 
+paste0("\t", fs::dir_ls(here::here("protocol_workflow_tasks"), 
+                        type = "directory") |> 
   stringr::str_subset("old", negate = TRUE) |> 
   basename() |> sort(decreasing = TRUE)),
 "\n------------------\n",
