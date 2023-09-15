@@ -39,4 +39,22 @@ cloud_dir <- rstudioapi::selectDirectory()
 cat(glue::glue("cloud_dir <- \"{cloud_dir}\""), 
     file = here::here(".Rprofile"))
 
+cat(
+'
+
+cat(
+"------------------\n",
+"Welcome to MBON Cruise Prep Project!\n",
+"Navigate to the Rmd folder and select which process you are doing.\n",
+"The options are:",
+paste0("\t", fs::dir_ls(here::here("Rmd"), type = "directory") |> 
+  stringr::str_subset("old", negate = TRUE) |> 
+  basename() |> sort(decreasing = TRUE)),
+"\n------------------\n",
+sep = "\n"
+)',
+file = here::here(".Rprofile"),
+append = TRUE
+)
+
 ```
