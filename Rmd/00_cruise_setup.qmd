@@ -12,6 +12,9 @@ in the **.Rprofile** so that each *reset* of Rstudio will set the **cloud_dir**
 as a variable itself.
 
 ```{r}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
 librarian::shelf(
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
