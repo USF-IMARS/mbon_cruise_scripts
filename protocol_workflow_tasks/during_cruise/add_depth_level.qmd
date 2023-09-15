@@ -1,0 +1,214 @@
+---
+title: "Add Depth Level"
+author: "Sebastian Di Geronimo"
+format: html
+editor: source
+---
+WIP: modify to be more generalized
+```{r setup}
+librarian::shelf(
+  librarian, 
+  tidyverse, here, readxl, fs, magrittr, janitor, glue
+)
+```
+
+```{r}
+# rstudioapi::selectFile()
+
+dat <- 
+  here("C:/Users", "imars_cruise", "Documents",
+       "s_fl_cruise_data", 
+     "old_cruises_for_reference",
+     "imars_inventory_chl_hplc_cdom_update_feb_06_2023.xlsx") %>% 
+  read_xlsx(sheet = 6) %>%
+  arrange(date_mm_dd_yy) 
+
+dat %>% 
+  count(
+    year, cruise_id, station
+  ) %>% 
+  filter(cruise_id != "WS18285") %>% 
+  arrange(desc(n))
+```
+```{r}
+depths <- c("Surface", "Mid", "Bottom")
+
+dat_rank <- dat %>% 
+  distinct(cruise_id, year, date_mm_dd_yy, station, depth_m) %>% 
+  # filter(is.na(depth_m))
+  mutate(
+    .after = depth_m,
+    .by = c(cruise_id, station),
+    depth_m = if_else(is.na(depth_m), 1, depth_m),
+    depth_rank = dense_rank(depth_m),
+    depth_lvl = case_when(
+      n() == 1 & depth_m < 6 ~ depths[1], # surface
+      n() == 1 & depth_m >= 6 ~ depths[3], # bottom
+      n() == 2 & depth_rank == 1 & depth_m < 6 ~ depths[1], # surface
+      n() == 2 & depth_rank == 2 & depth_m >= 5 ~ depths[3], # bottom
+      n() == 2 & depth_rank == 2 & depth_m >= 4.3 & str_detect(station, "MR") ~ depths[3], # bottom
+      n() == 3 & depth_rank == 2 ~ depths[2], # "Mid",
+      n() == 3 & depth_rank == 1 ~ depths[1], # "surf",
+      n() == 3 & depth_rank == 3 ~ depths[3], #"bott",
+      .default = "idk"
+    )
+  ) %T>%
+  print()
+```
+
+
+```{r}
+# check handwritten logs or NOAA log sheet for these cruises and stations
+dat_rank %>% 
+  filter(.by = c(cruise_id, station),
+         any(str_detect(depth_lvl, "idk"))
+         ) %>%
+  View()
+```
+
+Notes:
+SV18067 
+  - check WS, depths are 2 and 4.8 (probably 48?)
+SV18173 
+  - check MR, depths are 1.6 and 4.4 (probably 44?)
+WS18285 
+  - check TB6 depth, one is 2 other is 4, checks out from NOAA log
+WS18351
+  - check 7, depths are 1.9 and 1.5
+WS19210 
+  - check 68, depth are 2 and 2.4,
+  - check dates, they are different too, Jul 30 and Aug 2
+  - check GP1, depths are 1.84 and 3.32 - checks out from NOAA log
+WS21277
+  - check MR, depths are 1 and 4.3, probably bottom was NA and marked as 1
+
+```{r}
+dat %>% 
+  # two samples issues with duplication
+  filter(!str_detect(identifier, "WS23011-180|SV18067-CK")) %>% 
+  # one cruise issues with identifier duplication
+  filter(!str_detect(base, "(?i)aug2015")) %>% 
+  left_join(dat_rank) %>% 
+  janitor::get_dupes(identifier)
+```
+
+
+# Samples Collected for NOAA
+```{r}
+cruise_path <- 
+  here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
+  dir_ls(regexp  = "07_2023_WS23203",
+         recurse = TRUE) %>% 
+  str_subset("~", negate = TRUE) %T>% 
+  print()
+
+if (length(cruise_path) > 1) {
+  cruise_path <- cruise_path[menu(cruise_path)]
+}
+
+# Chla, HPLC, CDOM samples
+sample_collect <- 
+  (readxl::excel_sheets(cruise_path))[1] %>% 
+  read_excel(
+    path  = cruise_path,
+    sheet = .,
+    .name_repair = janitor::make_clean_names
+  ) %>% 
+  filter(!is.na(station)) %>%
+  mutate(temp_depth = if_else(is.na(depth_m), 0, depth_m)) %>%
+  filter(
+    .by = c(station, temp_depth),
+    !any(is.na(date_mm_dd_yy)) 
+    & !any(is.na(sample_collection_time_gmt))
+  ) %>% 
+  mutate(
+    .before   = 1,
+    collected = str_extract(identifier, "\\w{1,2}\\d{4,5}"),
+    collected = glue::glue("{collected}-{station}-{depth_level}"),
+    collected = str_replace(collected, "LK", "LK/21"),
+    x         = "x"
+  ) %>% 
+  mutate(
+    .by = c(station, depth_m, sample_type),
+    x   = glue::glue("{x} ({n()})"),
+    x   = str_remove(x, " \\(1\\)")
+  ) %>% 
+  distinct(collected, x, station, depth_m, sample_type) %>% 
+  pivot_wider(
+    names_from  = sample_type,
+    values_from = x
+  ) %>% 
+  select(collected, last_col(2):last_col()) %T>%
+  print()
+
+
+# eDNA ----
+edna_collect <- 
+  (readxl::excel_sheets(cruise_path))[3] %>% 
+  read_excel(
+    path  = cruise_path,
+    sheet = .,
+    .name_repair = janitor::make_clean_names
+  ) %>% 
+  select(1:contains("note")) %>% 
+  filter(!is.na(station) & !str_detect(station, "0")) %>%
+  mutate(
+    temp_depth  = if_else(is.na(depth_m), 0, depth_m),
+    sample_type = "eDNA"
+  ) %>%
+  filter(
+    .by = c(station, temp_depth),
+    !any(is.na(mm_dd_yy)) 
+    & !any(is.na(time_gmt))
+  ) %>% 
+  mutate(
+    .before     = 1,
+    depth_level = if_else(
+      str_detect(depth_level, "0"),
+      NA,
+      depth_level),
+    collected   = str_extract(sample, "\\w{1,2}\\d{4,5}"),
+    collected   = glue::glue("{collected}-{station}-{depth_level}", .na = ""),
+    collected   = str_replace(collected, "LK", "LK/21"),
+    x = "x"
+  ) %>% 
+  mutate(
+    .by = c(station, depth_m),
+    x   = glue::glue("{x} ({n()})", .na = ""),
+    x   = str_remove(x, " \\(1\\)")
+  ) %>% 
+  distinct(collected, x, station, depth_m, sample_type) %>% 
+  pivot_wider(
+    names_from  = sample_type,
+    values_from = x
+  ) %>% 
+  select(collected, last_col(2):last_col()) %T>%
+  print()
+```
+# Save collected samples
+```{r save-collected}
+cruise_id <-
+  pull(sample_collect, collected)[1] %>% 
+  str_extract("\\w{1,2}\\d{4,5}")
+
+file_name <- 
+  here("C:/Users", "imars_cruise", "Documents",
+       "s_fl_cruise_data", 
+        cruise_id, "metadata", 
+        glue("imars_samples_collected_{cruise_id}.xlsx") )
+
+if (!file_exists(file_name) | FALSE) {
+  full_join(
+    sample_collect,
+    select(edna_collect, collected, eDNA)
+    ) %>% 
+  openxlsx::write.xlsx(file = file_name)
+
+  shell.exec(file_name)
+  
+} else {
+  message("File already exists")
+}
+
+```
+
