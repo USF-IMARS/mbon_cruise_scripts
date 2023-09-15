@@ -3,7 +3,12 @@ Checklists and scripts for the SE-US MBON Research Cruise in FL Keys.
 
 Rmd documents here are used to outline the data processing and cruise preparation protocols.
 Once each step is completed, the corresponding row in the research cruise checklist should be filled out with the current datetime and your name.
+More details are in `protocol_workflow_tasks/README.md`.
 
+# setup
+The IMaRS MBON Cruise laptop should already be set up to run these scripts.
+In order for many of the scripts here to work, you must have a box.com client installed.
+Running the `project_setup.qmd` file will set up the connection to your locally mounted box.com folder and install needed software.
 
 # additional links
 ## NASA SeaBass Links for Data Submission:
