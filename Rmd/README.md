@@ -1,3 +1,19 @@
+# workflow
+Workflows are defined using mermaid-js-powered graphs to show what order tasks in the protocol must follow.
+The over-arching workflow for the cruise is as follows:
+
+```mermaid
+graph TD
+
+start((start)) 
+pre{{pre_cruise}} 
+post1{{post_cruise}} 
+post2{{post_cruise_2}}
+post2 
+post_nasa{{post_nasa_hplc_results}}
+```
+
+
 folder | notes
 ------|---------
 old                    | scripts that are not part of the current protocol, but may be useful in the future
