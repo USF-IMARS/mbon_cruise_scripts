@@ -34,7 +34,10 @@ librarian::shelf(
 ```{r}
 source(here::here("scripts", "create_dir.R"))
 
-cloud_dir <- rstudioapi::selectDirectory()
+cloud_dir <- rstudioapi::selectDirectory(
+  caption = "set your local box.com/imars_mbon_cruises folder mount",
+  label = "this is my box.com/imars_mbon_cruises location"
+)
 
 cat(glue::glue("cloud_dir <- \"{cloud_dir}\""), 
     file = here::here(".Rprofile"))
