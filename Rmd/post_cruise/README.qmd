@@ -1,0 +1,18 @@
+# workflow
+```
+graph TD
+
+merge_meta_chl_hplc{{merge_meta_chl_hplc}}
+merge_meta_edna{{merge_meta_edna}}
+sample_log_print{{sample_log_sheet_print}}
+cdom_schedule{{cdom_schedule}}
+sample_process_log_fmt{{sample_process_log_sheet_format}}
+
+merge_meta_chl_hplc -->
+merge_meta_edna -->
+  sample_log_print 
+merge_meta_edna -->
+  cdom_schedule
+merge_meta_edna -->
+  sample_process_log_fmt 
+```
