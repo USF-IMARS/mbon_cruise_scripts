@@ -26,7 +26,7 @@ conflicts_prefer(
   )
 
 source(here("scripts", "misc_functions.R"))
-source(here(".Rprofile"))
+if (!exists("cloud_dir")) source(here(".Rprofile"))
 
 # `NA` values to skip when reading `.xlsx.
 na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", 
