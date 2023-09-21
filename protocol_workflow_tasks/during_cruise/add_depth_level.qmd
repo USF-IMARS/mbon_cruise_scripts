@@ -13,87 +13,6 @@ librarian::shelf(
 )
 ```
 
-```{r}
-# rstudioapi::selectFile()
-
-dat <- 
-  here("C:/Users", "imars_cruise", "Documents",
-       "s_fl_cruise_data", 
-     "old_cruises_for_reference",
-     "imars_inventory_chl_hplc_cdom_update_feb_06_2023.xlsx") %>% 
-  read_xlsx(sheet = 6) %>%
-  arrange(date_mm_dd_yy) 
-
-dat %>% 
-  count(
-    year, cruise_id, station
-  ) %>% 
-  filter(cruise_id != "WS18285") %>% 
-  arrange(desc(n))
-```
-```{r}
-depths <- c("Surface", "Mid", "Bottom")
-
-dat_rank <- dat %>% 
-  distinct(cruise_id, year, date_mm_dd_yy, station, depth_m) %>% 
-  # filter(is.na(depth_m))
-  mutate(
-    .after = depth_m,
-    .by = c(cruise_id, station),
-    depth_m = if_else(is.na(depth_m), 1, depth_m),
-    depth_rank = dense_rank(depth_m),
-    depth_lvl = case_when(
-      n() == 1 & depth_m < 6 ~ depths[1], # surface
-      n() == 1 & depth_m >= 6 ~ depths[3], # bottom
-      n() == 2 & depth_rank == 1 & depth_m < 6 ~ depths[1], # surface
-      n() == 2 & depth_rank == 2 & depth_m >= 5 ~ depths[3], # bottom
-      n() == 2 & depth_rank == 2 & depth_m >= 4.3 & str_detect(station, "MR") ~ depths[3], # bottom
-      n() == 3 & depth_rank == 2 ~ depths[2], # "Mid",
-      n() == 3 & depth_rank == 1 ~ depths[1], # "surf",
-      n() == 3 & depth_rank == 3 ~ depths[3], #"bott",
-      .default = "idk"
-    )
-  ) %T>%
-  print()
-```
-
-
-```{r}
-# check handwritten logs or NOAA log sheet for these cruises and stations
-dat_rank %>% 
-  filter(.by = c(cruise_id, station),
-         any(str_detect(depth_lvl, "idk"))
-         ) %>%
-  View()
-```
-
-Notes:
-SV18067 
-  - check WS, depths are 2 and 4.8 (probably 48?)
-SV18173 
-  - check MR, depths are 1.6 and 4.4 (probably 44?)
-WS18285 
-  - check TB6 depth, one is 2 other is 4, checks out from NOAA log
-WS18351
-  - check 7, depths are 1.9 and 1.5
-WS19210 
-  - check 68, depth are 2 and 2.4,
-  - check dates, they are different too, Jul 30 and Aug 2
-  - check GP1, depths are 1.84 and 3.32 - checks out from NOAA log
-WS21277
-  - check MR, depths are 1 and 4.3, probably bottom was NA and marked as 1
-
-```{r}
-dat %>% 
-  # two samples issues with duplication
-  filter(!str_detect(identifier, "WS23011-180|SV18067-CK")) %>% 
-  # one cruise issues with identifier duplication
-  filter(!str_detect(base, "(?i)aug2015")) %>% 
-  left_join(dat_rank) %>% 
-  janitor::get_dupes(identifier)
-```
-
-
 # Create a Lists of Samples Collected to Send to NOAA
 They have requested we create a spreadsheet with sample station and qualitative
 depth (surface, mid, bottom) for and combine all sample types collected with an
@@ -267,5 +186,94 @@ if (overwrite == 1) {
   shell.exec(file_name)
 }
 
+```
+## WIP: Add <cruise id>-<station>-<qualitative depth> to Older Files
+
+```{r}
+{
+cli::cli_alert_danger("Proceed if you know what you are doing.")
+stop("\r      ")
+}
+```
+
+
+```{r}
+# rstudioapi::selectFile()
+
+dat <- 
+  here("C:/Users", "imars_cruise", "Documents",
+       "s_fl_cruise_data", 
+     "old_cruises_for_reference",
+     "imars_inventory_chl_hplc_cdom_update_feb_06_2023.xlsx") %>% 
+  read_xlsx(sheet = 6) %>%
+  arrange(date_mm_dd_yy) 
+
+dat %>% 
+  count(
+    year, cruise_id, station
+  ) %>% 
+  filter(cruise_id != "WS18285") %>% 
+  arrange(desc(n))
+```
+```{r}
+depths <- c("Surface", "Mid", "Bottom")
+
+dat_rank <- dat %>% 
+  distinct(cruise_id, year, date_mm_dd_yy, station, depth_m) %>% 
+  # filter(is.na(depth_m))
+  mutate(
+    .after = depth_m,
+    .by = c(cruise_id, station),
+    depth_m = if_else(is.na(depth_m), 1, depth_m),
+    depth_rank = dense_rank(depth_m),
+    depth_lvl = case_when(
+      n() == 1 & depth_m < 6 ~ depths[1], # surface
+      n() == 1 & depth_m >= 6 ~ depths[3], # bottom
+      n() == 2 & depth_rank == 1 & depth_m < 6 ~ depths[1], # surface
+      n() == 2 & depth_rank == 2 & depth_m >= 5 ~ depths[3], # bottom
+      n() == 2 & depth_rank == 2 & depth_m >= 4.3 & str_detect(station, "MR") ~ depths[3], # bottom
+      n() == 3 & depth_rank == 2 ~ depths[2], # "Mid",
+      n() == 3 & depth_rank == 1 ~ depths[1], # "surf",
+      n() == 3 & depth_rank == 3 ~ depths[3], #"bott",
+      .default = "idk"
+    )
+  ) %T>%
+  print()
+```
+
+
+```{r}
+# check handwritten logs or NOAA log sheet for these cruises and stations
+dat_rank %>% 
+  filter(.by = c(cruise_id, station),
+         any(str_detect(depth_lvl, "idk"))
+         ) %>%
+  View()
+```
+
+Notes:
+SV18067 
+  - check WS, depths are 2 and 4.8 (probably 48?)
+SV18173 
+  - check MR, depths are 1.6 and 4.4 (probably 44?)
+WS18285 
+  - check TB6 depth, one is 2 other is 4, checks out from NOAA log
+WS18351
+  - check 7, depths are 1.9 and 1.5
+WS19210 
+  - check 68, depth are 2 and 2.4,
+  - check dates, they are different too, Jul 30 and Aug 2
+  - check GP1, depths are 1.84 and 3.32 - checks out from NOAA log
+WS21277
+  - check MR, depths are 1 and 4.3, probably bottom was NA and marked as 1
+
+```{r}
+dat %>% 
+  # two samples issues with duplication
+  filter(!str_detect(identifier, "WS23011-180|SV18067-CK")) %>% 
+  # one cruise issues with identifier duplication
+  filter(!str_detect(base, "(?i)aug2015")) %>% 
+  left_join(dat_rank) %>% 
+  janitor::get_dupes(identifier)
 ```
 
