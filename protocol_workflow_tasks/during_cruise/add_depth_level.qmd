@@ -4,6 +4,7 @@ author: "Sebastian Di Geronimo"
 format: html
 editor: source
 ---
+
 WIP: modify to be more generalized
 ```{r setup}
 librarian::shelf(
@@ -93,34 +94,54 @@ dat %>%
 ```
 
 
-# Samples Collected for NOAA
+# Create a Lists of Samples Collected to Send to NOAA
+They have requested we create a spreadsheet with sample station and qualitative
+depth (surface, mid, bottom) for and combine all sample types collected with an
+"x". 
+
+We collect chl-a spectra, HPLC, CDOM and eDNA on every cruise so at least these
+many columns are needed. BB3 and Rrs may be included if taken on this cruise.
+
+## Cruise File Path
 ```{r}
 cruise_path <- 
   here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
-  dir_ls(regexp  = "07_2023_WS23203",
-         recurse = TRUE) %>% 
+  dir_ls(regexp  = "fknms",
+         recurse = 2) %>% 
   str_subset("~", negate = TRUE) %T>% 
+  print()
+cruise_path <- 
+  here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
+  rstudioapi::selectFile(path = .) %T>% 
   print()
 
 if (length(cruise_path) > 1) {
-  cruise_path <- cruise_path[menu(cruise_path)]
+  cruise_path <- cruise_path[menu(basename(cruise_path))]
 }
+```
 
-# Chla, HPLC, CDOM samples
-sample_collect <- 
-  (readxl::excel_sheets(cruise_path))[1] %>% 
+
+## Chla, HPLC, CDOM samples
+```{r}
+sample_collect <-
+  (readxl::excel_sheets(cruise_path)) %>% 
+  str_subset("field") %>% 
   read_excel(
     path  = cruise_path,
     sheet = .,
     .name_repair = janitor::make_clean_names
   ) %>% 
-  filter(!is.na(station)) %>%
+  # filter(!is.na(station)) %>%
   mutate(temp_depth = if_else(is.na(depth_m), 0, depth_m)) %>%
-  filter(
-    .by = c(station, temp_depth),
-    !any(is.na(date_mm_dd_yy)) 
-    & !any(is.na(sample_collection_time_gmt))
-  ) %>% 
+  filter(!is.na(vol_ml)) %>% 
+# --- probably not needed
+  # filter(
+    # .by = c(station, temp_depth),
+    # !any(is.na(date_mm_dd_yy))
+    # & !any(is.na(sample_collection_time_gmt))
+  # )
+# ---
+
   mutate(
     .before   = 1,
     collected = str_extract(identifier, "\\w{1,2}\\d{4,5}"),
@@ -128,55 +149,14 @@ sample_collect <-
     collected = str_replace(collected, "LK", "LK/21"),
     x         = "x"
   ) %>% 
-  mutate(
-    .by = c(station, depth_m, sample_type),
-    x   = glue::glue("{x} ({n()})"),
-    x   = str_remove(x, " \\(1\\)")
-  ) %>% 
-  distinct(collected, x, station, depth_m, sample_type) %>% 
-  pivot_wider(
-    names_from  = sample_type,
-    values_from = x
-  ) %>% 
-  select(collected, last_col(2):last_col()) %T>%
-  print()
-
-
-# eDNA ----
-edna_collect <- 
-  (readxl::excel_sheets(cruise_path))[3] %>% 
-  read_excel(
-    path  = cruise_path,
-    sheet = .,
-    .name_repair = janitor::make_clean_names
-  ) %>% 
-  select(1:contains("note")) %>% 
-  filter(!is.na(station) & !str_detect(station, "0")) %>%
-  mutate(
-    temp_depth  = if_else(is.na(depth_m), 0, depth_m),
-    sample_type = "eDNA"
-  ) %>%
-  filter(
-    .by = c(station, temp_depth),
-    !any(is.na(mm_dd_yy)) 
-    & !any(is.na(time_gmt))
-  ) %>% 
-  mutate(
-    .before     = 1,
-    depth_level = if_else(
-      str_detect(depth_level, "0"),
-      NA,
-      depth_level),
-    collected   = str_extract(sample, "\\w{1,2}\\d{4,5}"),
-    collected   = glue::glue("{collected}-{station}-{depth_level}", .na = ""),
-    collected   = str_replace(collected, "LK", "LK/21"),
-    x = "x"
-  ) %>% 
-  mutate(
-    .by = c(station, depth_m),
-    x   = glue::glue("{x} ({n()})", .na = ""),
-    x   = str_remove(x, " \\(1\\)")
-  ) %>% 
+  # --- may remove if don't want number of samples taken per type
+  # i.e. chl-a "x (2)" vs "x"
+  # mutate(
+  #   .by = c(station, depth_m, sample_type),
+  #   x   = glue::glue("{x} ({n()})"),
+  #   x   = str_remove(x, " \\(1\\)")
+  # ) %>%
+  # ---
   distinct(collected, x, station, depth_m, sample_type) %>% 
   pivot_wider(
     names_from  = sample_type,
@@ -185,29 +165,106 @@ edna_collect <-
   select(collected, last_col(2):last_col()) %T>%
   print()
 ```
+
+
+## eDNA
+```{r}
+edna_collect <-
+  (readxl::excel_sheets(cruise_path)) %>% 
+  str_subset("(?i)edna") %>% 
+  read_excel(
+    path  = cruise_path,
+    sheet = .,
+    .name_repair = janitor::make_clean_names
+  ) %>% 
+  select(1:contains("note")) %>% 
+  filter(!is.na(vol_ml)) %>% 
+  mutate(sample_type = "eDNA") %>%
+  # filter(!is.na(station) & !str_detect(station, "0")) %>%
+  # mutate(
+  #   temp_depth  = if_else(is.na(depth_m), 0, depth_m),
+  #   sample_type = "eDNA"
+  # ) %>%
+  # filter(
+  #   .by = c(station, temp_depth),
+  #   !any(is.na(mm_dd_yy)) 
+  #   & !any(is.na(time_gmt))
+  # ) %>% 
+  mutate(
+    .before     = 1,
+    # depth_level = if_else(
+    #   str_detect(depth_level, "0"),
+    #   NA,
+    #   depth_level),
+    collected   = str_extract(sample, "\\w{1,2}\\d{4,5}"),
+    collected   = glue::glue("{collected}-{station}-{depth_level}", .na = ""),
+    collected   = str_replace(collected, "LK", "LK/21"),
+    x = "x"
+  ) %>% 
+  # --- may remove if don't want number of samples taken per type
+  # mutate(
+  #   .by = c(station, depth_m),
+  #   x   = glue::glue("{x} ({n()})", .na = ""),
+  #   x   = str_remove(x, " \\(1\\)")
+  # ) %>% 
+  # ---
+  distinct(collected, x, station, depth_m, sample_type) %>% 
+  pivot_wider(
+    names_from  = sample_type,
+    values_from = x
+  ) %>% 
+  select(collected, last_col()) %T>%
+  print()
+```
+
+## Join Both Sheets
+```{r}
+both_sheets <- 
+  full_join(
+    sample_collect,
+    edna_collect
+    ) %T>%
+  print()
+```
+
+
 # Save collected samples
 ```{r save-collected}
+overwrite <- 0
 cruise_id <-
-  pull(sample_collect, collected)[1] %>% 
+  cruise_path %>% 
   str_extract("\\w{1,2}\\d{4,5}")
 
-file_name <- 
+file_name <-
   here("C:/Users", "imars_cruise", "Documents",
        "s_fl_cruise_data", 
         cruise_id, "metadata", 
         glue("imars_samples_collected_{cruise_id}.xlsx") )
 
-if (!file_exists(file_name) | FALSE) {
-  full_join(
-    sample_collect,
-    select(edna_collect, collected, eDNA)
-    ) %>% 
-  openxlsx::write.xlsx(file = file_name)
+if (!file_exists(file_name)) {
+  openxlsx::write.xlsx(
+    x         = both_sheets, 
+    file      = file_name, 
+    overwrite = FALSE
+    )
 
   shell.exec(file_name)
   
 } else {
-  message("File already exists")
+  message("File already exists.")
+  cli::cli_alert_warning("Do you want to overwrite?\n")
+  overwrite <- 
+    menu(c("Yes", "No"), title = "[Select 1 = Yes or 2 = No in console]")
+}
+
+if (overwrite == 1) {
+  cli::cli_alert_info("Overwriting Previous File!")
+  openxlsx::write.xlsx(
+    x = both_sheets, 
+    file = file_name, 
+    overwrite = TRUE)
+  
+  shell.exec(file_name)
 }
 
 ```
