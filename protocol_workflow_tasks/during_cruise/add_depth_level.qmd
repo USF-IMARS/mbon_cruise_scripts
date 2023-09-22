@@ -6,12 +6,6 @@ editor: source
 ---
 
 WIP: modify to be more generalized
-```{r setup}
-librarian::shelf(
-  librarian, 
-  tidyverse, here, readxl, fs, magrittr, janitor, glue
-)
-```
 
 # Create a Lists of Samples Collected to Send to NOAA
 They have requested we create a spreadsheet with sample station and qualitative
@@ -21,6 +15,14 @@ depth (surface, mid, bottom) for and combine all sample types collected with an
 We collect chl-a spectra, HPLC, CDOM and eDNA on every cruise so at least these
 many columns are needed. BB3 and Rrs may be included if taken on this cruise.
 
+```{r setup}
+librarian::shelf(
+  librarian, 
+  tidyverse, here, readxl, fs, magrittr, janitor, glue
+)
+```
+
+
 ## Cruise File Path
 ```{r}
 cruise_path <- 
@@ -29,6 +31,7 @@ cruise_path <-
          recurse = 2) %>% 
   str_subset("~", negate = TRUE) %T>% 
   print()
+
 cruise_path <- 
   here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
   rstudioapi::selectFile(path = .) %T>% 
