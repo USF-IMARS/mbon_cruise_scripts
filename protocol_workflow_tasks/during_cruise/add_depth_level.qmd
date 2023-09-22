@@ -68,7 +68,7 @@ sample_collect <-
     .before   = 1,
     collected = str_extract(identifier, "\\w{1,2}\\d{4,5}"),
     collected = glue::glue("{collected}-{station}-{depth_level}"),
-    collected = str_replace(collected, "LK", "LK/21"),
+    collected = str_replace(collected, "LK", "21/LK"),
     x         = "x"
   ) %>% 
   # --- may remove if don't want number of samples taken per type
