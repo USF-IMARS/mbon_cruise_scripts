@@ -1386,7 +1386,7 @@ update_proc_log.meta <- function(
     left_join(old_log, .,
               by = "Sample ID"
     ) %>%
-    select(hdr_name, everything()) %>%
+    select(any_of(hdr_name), everything()) %>%
     mutate(
       ranks = str_remove(`Sample ID`, ".*-"),
       ranks = str_remove_all(ranks, "[:alpha:]"),
