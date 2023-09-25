@@ -101,6 +101,12 @@ if (update_cal) {
 function: process_log_sheet(.meta, cal, cruise)
 Uses logsheet info for data and cruise ID
 Uses calibration variable to input into new ones
+
+If a new cruise process log needs to be created, it will be created here.
+If the calibration needs to be updated, `update_cal` needs to be set to `TRUE`
+and it will update all files that already exists with the new calibration if the
+sample has not been run yet.
+
 ```{r workbook}
 if (!update_cal) {
 save_meta <-
@@ -138,7 +144,7 @@ save_meta <-
 
 ```
 
-
+## Save New Worksheet or Updated Calibraiton ---
 
 ```{r save}
 arg <- 
@@ -188,14 +194,24 @@ for (i in seq(nrow(save_meta))) {
 ```
 
 # Update Metadata
+
+To update a process log file, add the cruise ID to `cruise_to_update` in quotes.
+If multiple are needed, separate them with a comma. If need to update all of 
+them, add "all" and this will update all files.
+
 ```{r}
-cruise_to_update <- c("")
+cruise_to_update <- c("all")
 
 if (any(str_length(cruise_to_update) > 0)) {
   temp <- 
     meta_all %>%
     nest(.by = cruise_id) %>%
-    filter(str_detect(cruise_id, str_c(cruise_to_update, collapse = "|"))) %>%
+    
+    { if (!any(str_detect(cruise_to_update, "all"))) {
+    filter(., str_detect(cruise_id, str_c(cruise_to_update, collapse = "|"))) 
+      } else {.}
+    } %>%
+    
     left_join(crs_log_exst) %>%
     filter(!is.na(files)) %>%
     mutate(
