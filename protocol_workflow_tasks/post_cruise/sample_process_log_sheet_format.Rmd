@@ -85,7 +85,7 @@ meta_all <-
   # remove cruises fully completed pre-COVID
   filter(
     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
-    # & !(cruise_id %in% crs_log_exst$cruise_id)
+    & !(cruise_id %in% crs_log_exst$cruise_id)
     )
 
 if (update_cal) {
@@ -187,7 +187,7 @@ for (i in seq(nrow(save_meta))) {
 
 ```
 
-# Update HPLC sample IDs
+# Update Metadata
 ```{r}
 cruise_to_update <- c("")
 
