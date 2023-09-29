@@ -10,17 +10,13 @@ The logsheet can end up with errors in date or time.
 This protocol plots the cruise track so that you can do manual
 checking and editing of the logsheet.
 
-```{r input_variables}
-CRUISE_LOGSHEET <- "~/s_fl_cruise_data/WS23259/metadata/fknms_sample_logsheet_09_2023_WS23259.xlsx"
-```
-
 # Load Libraries
 ```{r setup}
 librarian::shelf(
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   # broom # optional
-  
+
   # additional
   # readxl
   openxlsx, ggarchery, ggtext, ggrepel
@@ -29,17 +25,21 @@ librarian::shelf(
 # shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
-  dplyr::filter(), 
+  dplyr::filter(),
   dplyr::select()
   )
 
 source(here("scripts", "misc_functions.R"))
 source(here("scripts", "map_files_dwnlod.R"))
+source(here("scripts", "load_cruise_globals.R"))
+load_cruise_globals(CRUISE_ID)  # CRUISE_ID from .Rprofile
+
 if (!exists("cloud_dir")) source(here(".Rprofile"))
 
 # `NA` values to skip when reading `.xlsx.
-na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", 
+na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
              "Flow", "*", stringi::stri_dup("-", 1:20))
+
 ```
 
 ```{r}
