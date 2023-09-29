@@ -261,7 +261,7 @@ read_logsheets <-  function(
   }
   
   # fix max_depth to replace `flow through` to 0
-  if ("max_dept" %in% names(temp)
+  if ("max_depth" %in% names(temp)
       && typeof(temp$max_depth) == "character") {
     temp <- mutate(temp,
                    max_depth = str_replace(max_depth, "flo.*", "0")) %>%
