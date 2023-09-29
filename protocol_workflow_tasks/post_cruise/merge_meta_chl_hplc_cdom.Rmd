@@ -42,7 +42,7 @@ check <- 1
 ```
 
 # ---- 2.0 Search files ----
-## --- 2.1 Cloud Directory ---
+## --- 2.1 Cloud Directory
 After the first time, you will get a variable called `cloud_dir`. You should 
 copy this into a `.Rprofile` so when you restart `R`, the path will be set.
 
@@ -92,7 +92,7 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
 }
 ```
 
-## --- 2.2 Local Directory ---
+## --- 2.2 Local Directory
 This is the location within this project that should be created when loading the
 first time. 
 
@@ -122,7 +122,7 @@ if (is.null(box_search) | check == 2 | check == 3) {
     print()
 }
 ```
-## --- 2.3 Compare Local and Cloud ---
+## --- 2.3 Compare Local and Cloud
 Check the differences between the two to see if any discrepancies exists. 
 You should only need to use the `cloud_dir` location
 ```{r compare}
@@ -228,6 +228,13 @@ og_data_chr <-
     # then hms::as_hms(41700) = 11:35:00
     type_convert() %>%
     mutate(
+    #   date_time = date_mm_dd_yy + sample_collection_time_gmt,
+    #   date_time = janitor::excel_numeric_to_date(
+    #   date_time, 
+    #   include_time = TRUE, 
+    #   tz = "GMT"),
+    # date_mm_dd_yy = as_date(date_time),
+    # sample_collection_time_gmt = hms::as_hms(date_time)
       date_mm_dd_yy = janitor::excel_numeric_to_date(date_mm_dd_yy),
       sample_collection_time_gmt =
         hms::as_hms(sample_collection_time_gmt * 24 * 60 * 60)
@@ -255,7 +262,7 @@ files <-
 
 files$data
 ```
-## --- 5.1 Check Mismatched ---
+## --- 5.1 Check Mismatched
 Check which sheets and columns have different types from the rest so you can fix
 using the above code. 
 
@@ -291,7 +298,7 @@ rm(mismatch)
 ```
 
 # ---- 6.0 Summarise Results ----
-# --- 6.1 Unnest Metadata ---
+## --- 6.1 Unnest Metadata
 ```{r unnest-metadata}
 meta_list <- list()
 
@@ -338,7 +345,7 @@ meta_list$sample_meta_data <-
 meta_list$sample_meta_data %$% unique(station)
 ```
 
-## --- 6.2 Station Summary ---
+## --- 6.2 Station Summary
 
 ```{r station-summary}
 meta_list$station_summary <- 
@@ -358,7 +365,7 @@ meta_list$station_summary <-
   print()
 ```
 
-## --- 6.3 Cruise Summary ---
+## --- 6.3 Cruise Summary
 ```{r cruise-summary}
 meta_list$cruise_summary <- 
   meta_list$station_summary %>% 
@@ -376,7 +383,7 @@ meta_list$cruise_summary <-
   print()
 ```
 
-## --- 6.4 Sample Progress ---
+## --- 6.4 Sample Progress
 ```{r sample-progress}
 # sample_progress <-
 meta_list$temp <- 
@@ -434,7 +441,7 @@ for (i in getSheetNames(inventory)) {
 openXL(wb)
 ```
 
-## --- 7.1 Save to Local and Cloud ---
+## --- 7.1 Save to Local and Cloud
 ```{r save-local}
 # choose to save or not
 # sv <- FALSE
