@@ -5,7 +5,7 @@ format: html
 editor: source
 ---
 
-WIP: modify to be more generalized
+# WIP: modify to be more generalized
 
 # Create a Lists of Samples Collected to Send to NOAA
 They have requested we create a spreadsheet with sample station and qualitative
@@ -25,6 +25,7 @@ librarian::shelf(
 
 ## Cruise File Path
 ```{r}
+# hard coded
 cruise_path <- 
   here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
   dir_ls(regexp  = "fknms",
@@ -32,6 +33,7 @@ cruise_path <-
   str_subset("~", negate = TRUE) %T>% 
   print()
 
+# select using FileExplorer
 cruise_path <- 
   here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
   rstudioapi::selectFile(path = .) %T>% 
@@ -145,7 +147,8 @@ both_sheets <-
   full_join(
     sample_collect,
     edna_collect
-    ) %T>%
+    ) %>% 
+  filter(!str_detect(collected, "(?i)blank")) %T>%
   print()
 ```
 
