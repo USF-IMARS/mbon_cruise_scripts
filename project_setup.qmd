@@ -39,11 +39,20 @@ cloud_dir <- rstudioapi::selectDirectory(
   label = "this is my box.com/imars_mbon_cruises location"
 )
 
-cat(glue::glue("cloud_dir <- \"{cloud_dir}\""), 
+local_dir <- rstudioapi::selectDirectory(
+  caption = "set your location for cruise data",
+  label = "this is my local location for cruise data"
+)
+
+
+
+cat(glue::glue("cloud_dir <- \"{cloud_dir}\"\nlocal_dir <- \"{local_dir}\""), 
     file = here::here(".Rprofile"))
+
 
 cat(
 '
+CRUISE_ID=\"\"
 
 cat(
 "------------------\n",
