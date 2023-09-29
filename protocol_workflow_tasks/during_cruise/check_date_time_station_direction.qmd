@@ -6,6 +6,14 @@ format: html
 editor: source
 ---
 
+The logsheet can end up with errors in date or time.
+This protocol plots the cruise track so that you can do manual
+checking and editing of the logsheet.
+
+```{r input_variables}
+CRUISE_LOGSHEET <- "~/s_fl_cruise_data/WS23259/metadata/fknms_sample_logsheet_09_2023_WS23259.xlsx"
+```
+
 # Load Libraries
 ```{r setup}
 librarian::shelf(
@@ -36,7 +44,7 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 
 ```{r}
 meta_file <- 
-here( "~/s_fl_cruise_data/WS23259/metadata/fknms_sample_logsheet_09_2023_WS23259.xlsx") 
+here( CRUISE_LOGSHEET ) 
 
 meta_dat <- 
   meta_file %>% 
