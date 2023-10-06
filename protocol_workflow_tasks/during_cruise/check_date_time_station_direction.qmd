@@ -35,7 +35,7 @@ conflicts_prefer(
 source(here("scripts", "misc_functions.R"))
 source(here("scripts", "map_files_dwnlod.R"))
 source(here("scripts", "load_cruise_globals.R"))
-load_cruise_globals(CRUISE_ID)  # CRUISE_ID from .Rprofile
+# load_cruise_globals(CRUISE_ID)  # CRUISE_ID from .Rprofile
 
 if (!exists("cloud_dir")) source(here(".Rprofile"))
 
@@ -46,8 +46,7 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 ```
 
 ```{r}
-meta_file <- 
-here( CRUISE_LOGSHEET ) 
+meta_file <- here( CRUISE_LOGSHEET ) 
 
 meta_dat <- 
   meta_file %>% 
@@ -85,6 +84,8 @@ map_dat <-
     lat_lag = dplyr::lead(lat),
     ) %T>% print()
 ```
+
+
 # ---- Base Map Data ----
 
 Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
@@ -128,13 +129,15 @@ if (exists("base_plt")) {
     )
 
   ## ---- Plot Base Map
-  base_plt <-
-    base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
+  base_plt <- base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
   base_plt
 }
 ```
 
+
 # ---- Plot Locations ----
+
+
 ```{r add-stations, fig.width=8.5, fig.height=11}
 set.seed(123)
 cruise <- str_extract(meta_file, "(WS|H|WB)\\d{4,5}")
@@ -257,9 +260,10 @@ rm(sv_arg)
 
 
 # Plot Multiple Cruises
-```{r}
+```{r load-prev-meta}
 all_path <- 
-here("C:/Users/imars_cruise/Box/mbon_imars_cruises/imars_inventory_chl_hplc_cdom_update_feb_06_2023.xlsx") 
+  here(cloud_dir) %>%
+  dir_ls(regexp = "imars_inventory_chl_hplc_cdom") 
 
 all_meta <- 
   all_path %>% 
@@ -277,7 +281,7 @@ all_meta <-
         tz = "UTC")
     ) %>% 
   filter(
-    year(date_time) >= 2019
+    date_time <= as_datetime("2019-10-01")
   ) %T>% print()
 
 map_all <- 
@@ -296,87 +300,127 @@ map_all <-
 ```{r add-stations, fig.width=8.5, fig.height=11}
 set.seed(123)
 map_dat <-
-  map_all %>% 
-  filter(str_detect(cruise_id, "23011")) %>% 
-  # slice(1) %>% 
+  map_all %>%
+  filter(str_detect(cruise_id, "23011")) %>%
+  # slice(1) %>%
   mutate(
     plt = map2(
       data,
-      cruise_id, 
+      cruise_id,
       \(x, y) {
-        
-  base_plt +
-  # ---- Sample Locations
-  geom_arrowsegment(
-    data = x,
-    aes(x = lon,
-        xend = lon_lag,
-        y = lat,
-        yend = lat_lag,
-        # color = station
-        color = fct_reorder(format(date_time, "%B %d"), date_time)
-        ),
-    arrow_positions = 0.5,
-    arrows = arrow(length = unit(0.1, "inches")),
-    na.rm = TRUE
-    # show.legend = FALSE
-    ) +
-  geom_point(
-    data = x,
-    aes(x = lon, 
-        y = lat),
-  ) +
-  geom_text_repel(
-    aes(x = lon, 
-        y = lat, 
-        label = station),
-    data   = x,
-    size   = 2.5,
-    hjust  = 0,
-    family = "serif"
-  ) +
-  labs(
-    title = y,
-    color = "Days of Coverage"
-    ) +
-  theme(
-    legend.position = c(0.2, 0.14),
-    legend.text     = element_text(size = 10),
-    legend.title    = element_text(size = 15)
-  )
-      }         
-               )
-    
+        base_plt +
+          # ---- Sample Locations
+          geom_arrowsegment(
+            data = x,
+            aes(
+              x     = lon,
+              xend  = lon_lag,
+              y     = lat,
+              yend  = lat_lag,
+              # color = station
+              color = fct_reorder(format(date_time, "%B %d"), date_time)
+            ),
+            arrow_positions = 0.5,
+            arrows = arrow(length = unit(0.1, "inches")),
+            na.rm  = TRUE
+            # show.legend = FALSE
+          ) +
+          geom_point(
+            data = x,
+            aes(
+              x = lon,
+              y = lat
+            ),
+          ) +
+          geom_text_repel(
+            aes(
+              x = lon,
+              y = lat,
+              label = station
+            ),
+            data = x,
+            size = 2.5,
+            hjust = 0,
+            family = "serif"
+          ) +
+          labs(
+            title = y,
+            color = "Days of Coverage"
+          ) +
+          theme(
+            legend.position = c(0.2, 0.14),
+            legend.text     = element_text(size = 10),
+            legend.title    = element_text(size = 15)
+          )
+      }
+    )
   )
 
-map_dat%$% 
+map_dat %$% 
   plt
   
 
 ```
 
+
+## All the Text Contained in Numeric Columns
+
+This text will be converted to `NA` when read by `openxlsx::read.xlsx`
+
+To see the process of extracting this text, look to the end
+
 ```{r}
-here(
-    "C:/Users", 
-    "imars_cruise", 
-    "Box", 
-    "mbon_imars_cruises", 
-    "WSMasterSampleLog(Updated 2-23-23).xlsx")
+noaa_bad <- c(
+  "NA", "Skip too shallow",
+  "97/98", "109/110",
+  "113/114", "115/116",
+  "117/118", "-",
+  " Aboard R/V Savannah", "Lost ",
+  "Lost", "Do Not Use (Discrete Chl samples not usable)",
+  "Broken Vial", "Missing Vial ",
+  "Missed", "Double labeled",
+  "Missing", "RE-CAST NOT SAMPLED",
+  "Missing ", "NOT COLLECTED",
+  "Broken", "Do Not Use (Discrete Chl samples not usable",
+  "Sensor bad", "Missing Tube ",
+  "Bottles never tripped - recast", "Sensor Drift ",
+  "Gain far too high unusable", "Sensor Cut out",
+  "Excluded", "Data lost from Acetone Spill",
+  "77,78", "79,80",
+  "81,82", "Bad analysis",
+  "Acidified prior to Fo", "173/174",
+  "175/176", "177/178","179/180", "182/183","184/185", "186/187","188/189", 
+  "190/191","192/193", "107/108","112/113", "152/153","155/156", "162/163",
+  "165/166", "193/194","128, 129", "131, 132","163, 164", "165, 166","167, 168",
+  "169, 170","171, 172", "175, 176","158/159", "160/161","164/165", "172/173",
+  "174/175", "178/179","180/181", "189/190","7/8", "43/44","51/52", "85/86",
+  "89/90", "135/136","138/139", "153/154","170/171", "69,70","71,72", 
+  "Unusable", "Spilled"
+)
+```
+
+
+```{r}
+noaa_data <- 
+  here(cloud_dir) %>%
+  dir_ls(regexp = "WSMasterSampleLog") %>%
+  str_subset("~", negate = TRUE)
 
 noaa <-
-   openxlsx::getSheetNames(test) %>% 
+  openxlsx::getSheetNames(noaa_data) %>% 
   str_subset("(?i)all") %>% 
   openxlsx::read.xlsx(
-    test, 
-    sheet = .,
+    noaa_data, 
+    sheet       = .,
     detectDates = TRUE,
-    # na.strings = c("NA", ignore, str_remove(ignore, "/"), "Unusable")
+    na.strings  = noaa_bad
   ) %>% 
-  janitor::clean_names(replace = c( "\u00b5" = "u", "#" = "number")) %T>% print() %>% 
-  filter(year(date_gmt) >= 2019) %>% 
-  rename("lon" = longitude_decimal,
-         "lat" = latitude_decimal) %>%
+  janitor::clean_names(replace = c(janitor:::mu_to_u, "#" = "number")) %>% 
+  rename(
+    "lon" = longitude_decimal,
+    "lat" = latitude_decimal) %>%
   mutate(
+    .after  = date_gmt,
     # .keep = "used",
     time_gmt = as.numeric(time_gmt),
     time_gmt = time_gmt + 1,
@@ -384,13 +428,14 @@ noaa <-
     time_gmt = hms::as_hms(time_gmt),
     date_time = ymd_hms(paste(date_gmt, time_gmt))
   ) %>% 
-  select(cruise, station, date_time, lon, lat) %>%
+  # select(cruise, station, date_time, lon, lat) %>%
   mutate(
     .by = cruise,
+    .after  = time_gmt,
     lon_lag = dplyr::lead(lon),
-    lat_lag = dplyr::lead(lat),
+    lat_lag = dplyr::lead(lat)
     ) %>% 
-  distinct() %>% 
+  distinct()  %T>% print() %>% 
   nest(.by = cruise, .key = "noaa_dat") %T>% print()
 
 # date_time, longitude_decimal, latitude_decimal
@@ -398,15 +443,15 @@ noaa <-
 ```
 
 ## Multi Here
-```{r, fig.width=8.5, fig.height=10}
+```{r, fig.width=15, fig.asp=1.2}
 left_join(
   map_all,
   noaa,
   by = c("cruise_id" = "cruise")
 ) %>% 
-  filter(str_detect(cruise_id, "(WS|H|WB)(19|20|21|22|23)")) %>% 
-  filter(!str_detect(cruise_id, "WS20230|19028")) %>% 
-  # slice(20:23) %>% 
+  # filter(str_detect(cruise_id, "(WS|H|WB)(19|20|21|22|23)")) %>% 
+  # filter(!str_detect(cruise_id, "WS20230|19028")) %>% 
+  # slice(3) %>%
   mutate(
     
     plt = pmap(
@@ -417,12 +462,13 @@ left_join(
   # ---- Sample Locations
   geom_arrowsegment(
     data = x,
-    aes(x = lon,
-        xend = lon_lag,
-        y = lat,
-        yend = lat_lag,
-        # color = station
-        color = fct_reorder(format(date_time, "%B %d"), date_time)
+    aes(
+      x     = lon,
+      xend  = lon_lag,
+      y     = lat,
+      yend  = lat_lag,
+      # color = station
+      color = fct_reorder(format(date_time, "%B %d"), date_time)
         ),
     arrow_positions = 0.5,
     arrows = arrow(length = unit(0.1, "inches")),
@@ -466,6 +512,10 @@ left_join(
     title = y,
     color = "Days of Coverage"
     ) +
+  coord_sf(
+    xlim = range(x$lon) + c(-0.5, 0.5),
+    ylim = range(x$lat) + c(-0.5, 0.5)
+  ) +
   theme(
     legend.position = c(0.2, 0.14),
     legend.text     = element_text(size = 10),
@@ -480,4 +530,110 @@ left_join(
 
 ```
 
+
+
+
+ ------------------------------------------------------------------------------
+ ------------------------------------------------------------------------------
+ ------------------------------------------------------------------------------
+# ---- Find All Text in Columns that Need to be Numeric
+
+Steps:
+1. Load NOAA data
+2. Clean names
+3. Rename lon/lat
+4. Create time and datetime
+5. Replace is possible to be numeric to "" for the columns of interest
+6. Pivot and extract the unique text
+7. Paste as a vector 
+8. Use as vector in `openxlsx::read.xlsx(na.strings = <vector of text>)` to 
+   convert text to `NA`
+
+```{r}
+find_text_where_numeric <-
+  openxlsx::getSheetNames(noaa_data) %>% 
+  str_subset("(?i)all") %>% 
+  openxlsx::read.xlsx(
+    noaa_data, 
+    sheet = .,
+    detectDates = TRUE,
+    # na.strings = noaa_bad
+    # na.strings = c("NA", ignore, str_remove(ignore, "/"), )
+  ) %>% 
+  janitor::clean_names(replace = c(janitor:::mu_to_u, "#" = "number")) %T>% print() %>% 
+  # filter(year(date_gmt) >= 2019) %>% 
+  rename("lon" = longitude_decimal,
+         "lat" = latitude_decimal) %>%
+  mutate(
+    .after  = date_gmt,
+    # .keep = "used",
+    time_gmt = as.numeric(time_gmt),
+    time_gmt = time_gmt + 1,
+    time_gmt = janitor::excel_numeric_to_date(time_gmt, include_time = TRUE),
+    time_gmt = hms::as_hms(time_gmt),
+    date_time = ymd_hms(paste(date_gmt, time_gmt))
+  ) %>%
+  mutate(
+    across(
+      c(temperature, salinity, depth, contains("avg_chl"):si_u_m, 
+        oxygen_mg_l_from_ctd_logs,
+        seapoint_chl_fluorometer_voltage:last_col()),
+      \(x) if_else(is.na(as.numeric(x)), as.character(x), "")
+    )
+  )  %>%
+        pivot_longer(
+     data      = .,
+     cols      = c(temperature, salinity, depth, contains("avg_chl"):si_u_m, 
+        oxygen_mg_l_from_ctd_logs,
+        seapoint_chl_fluorometer_voltage:last_col()),     # columns to pivot long,
+     names_to  = "name",  # desired name for category column
+     values_to = "value", # desired name for value column
+     ) %>%
+    distinct(value) %>% 
+   arrange(value) %>%
+    pull(value) %T>% print() 
+
+noaa_bad <- c("NA",   "Skip too shallow"  ,
+              
+"97/98"                            ,            "109/110"  ,                                   
+"113/114"                          ,            "115/116",
+"117/118"                          ,            "-",
+" Aboard R/V Savannah"             ,            "Lost ",
+"Lost",                                         "Do Not Use (Discrete Chl samples not usable)",
+"Broken Vial"                      ,            "Missing Vial ",
+"Missed"                           ,            "Double labeled",
+"Missing"                          ,            "RE-CAST NOT SAMPLED",
+"Missing "                         ,            "NOT COLLECTED",
+"Broken"                           ,            "Do Not Use (Discrete Chl samples not usable",
+"Sensor bad"                       ,            "Missing Tube ",
+"Bottles never tripped - recast"   ,            "Sensor Drift ",
+"Gain far too high unusable"       ,            "Sensor Cut out",
+"Excluded"                         ,            "Data lost from Acetone Spill",
+"77,78"                            ,            "79,80",
+"81,82"                            ,            "Bad analysis",
+"Acidified prior to Fo"            ,            "173/174",
+"175/176"                          ,            "177/178",
+"179/180"                          ,            "182/183",
+"184/185"                          ,            "186/187",
+"188/189"                          ,            "190/191",
+"192/193"                          ,            "107/108",
+"112/113"                          ,            "152/153",
+"155/156"                          ,            "162/163",
+"165/166"                          ,            "193/194",
+"128, 129"                         ,            "131, 132",
+"163, 164"                         ,            "165, 166",
+"167, 168"                         ,            "169, 170",
+"171, 172"                         ,            "175, 176",
+"158/159"                          ,            "160/161",
+"164/165"                          ,            "172/173",
+"174/175"                          ,            "178/179",
+"180/181"                          ,            "189/190",
+"7/8"                              ,            "43/44",
+"51/52"                            ,            "85/86",
+"89/90"                            ,            "135/136",
+"138/139"                          ,            "153/154",
+"170/171"                          ,            "69,70",
+"71,72"  , "Unusable", "Spilled"       )
+
+```
 
