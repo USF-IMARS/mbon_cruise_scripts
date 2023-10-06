@@ -4,7 +4,8 @@ author: "Sebastian Di Geronimo"
 date: '2023-03-13'
 format: html
 ---
-# 1.0 Information
+# 1.0 ---- Documentation ----
+
 ## 1.1 Links: SeaBass Instructions for Submission of HPLC
 Instructions: 
   <https://seabass.gsfc.nasa.gov/wiki/Data_Submission>
@@ -97,8 +98,14 @@ Use the /below_detection_limit to mask any relevant values. It is distinct from 
 SeaBASS files may only contain data from a single cruise or deployment. If necessary, sort and separate your data by cruise then create multiple SeaBASS files
 An online tool (HPLC2sb) is optionally available to help convert NASA GSFC HPLC spreadsheets into SeaBASS file format. However, please read its limitations and caveats carefully. <https://seabass.gsfc.nasa.gov/hplc2sb/>
 
-# 2.0 Start Code:
+
+
+# 2.0 ---- Setup ----
+
+
 ## 2.1 Load Libraries
+
+
 ```{r setup}
 if (!nzchar(system.file(package = "librarian"))) 
   install.packages("librarian")
@@ -120,6 +127,8 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("select", "dplyr")
 ```
 
+## 2.2 Load Data
+
 
 ```{r load-hplc}
 # load consolidated HPLC by cruise
@@ -138,7 +147,11 @@ loc <-
   here("data", "processed", "hplc", glue("ind_file_{Sys.Date()}"))
 ```
 
-## 2.2 ---- Edit Header Information Here -----------------------
+# 3.0
+
+## 3.1
+
+---- Edit Header Information Here -----------------------
 ```{r edit-chunk}
 prepared_by <- 
   list(
@@ -207,8 +220,10 @@ if (!str_detect(hd_def$suffix, "R1")) {
 
 ```
 
-## 2.3 All SeaBass Standard Fields 
+## 3.2 All SeaBass Standard Fields 
+
 <https://seabass.gsfc.nasa.gov/wiki/stdfields>
+
 ```{r std-fields}
 sb_field <- 
   read_tsv(here("data", "metadata", "seabass_standard_fields_all.txt"),
@@ -333,12 +348,16 @@ hplc_data <- hplc_data2 <-
 
 ```
 
-## Calculate Replicate Info
+
+## 3.3 Calculate Replicate Info
+
 With duplicate samples, there needs to be added <field>_sd and <field>_bincount
 
 If no duplicate, set <field>_sd = -9999
 
 NOTE: this is done in the above chunk
+
+
 ```{r calc-rep}
 # hplc_data <- 
 #   hplc_data %>%
@@ -424,7 +443,9 @@ NOTE: this is done in the above chunk
 
 ```
 
-## 2.4 Header Information
+## 3.4 Header Information
+
+
 TODO: change how list is created? 
   I don't know which one is easier to read and/or faster to run
   instead of: 
@@ -437,6 +458,8 @@ TODO: change how list is created?
         x = <info>,
         y = <more info>
         )
+
+
 ```{r default-info}
 hd_def$invest   <- str_c(contacts$invest, collapse = ",")
 hd_def$contact  <- str_c(contacts$email, collapse = ",")
