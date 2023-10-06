@@ -17,9 +17,9 @@ if (!nzchar(system.file(package = "librarian")))
   install.packages("librarian")
 
 librarian::shelf(
+  quiet = TRUE,
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
   openxlsx, cli,

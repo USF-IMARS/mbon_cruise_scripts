@@ -12,8 +12,12 @@ Complete the steps outlined in [pre_cruise_tasks.docx](mbon_imars_cruises/blank_
 # ---- Load Libraries ----
 ## Load Libraries
 ```{r setup}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
 librarian::shelf(
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  quiet = TRUE,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   
   # added
@@ -23,8 +27,6 @@ librarian::shelf(
   fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot, anytime, 
   parzer
 )
-
-library("conflicted")
 
 conflicts_prefer(
   dplyr::filter,

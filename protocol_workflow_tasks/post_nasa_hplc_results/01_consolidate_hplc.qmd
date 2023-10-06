@@ -7,7 +7,11 @@ format: html
 
 # Load Libraries
 ```{r setup}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
 librarian::shelf(
+  quiet = TRUE,
   librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   

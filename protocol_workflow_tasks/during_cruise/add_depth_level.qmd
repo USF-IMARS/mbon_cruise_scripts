@@ -16,7 +16,11 @@ We collect chl-a spectra, HPLC, CDOM and eDNA on every cruise so at least these
 many columns are needed. BB3 and Rrs may be included if taken on this cruise.
 
 ```{r setup}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
 librarian::shelf(
+  quiet = TRUE,
   librarian, 
   tidyverse, here, readxl, fs, magrittr, janitor, glue
 )
