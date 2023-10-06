@@ -5,24 +5,57 @@ date: "2022-08-25"
 output: html_document
 ---
 
+# 1.0 ---- Summary of Document ----
 
-# Load Libraries ----
+This doucment is ment to be used before submission of new/old data to the NASA
+SeaBASS Archive. 
+
+Two processes:
+1. Read `.sb` file to check for accuracy
+2. Run NASA's FCHECK protocol to verify it conforms to their SeaBASS file 
+   structure (i.e. `.sb`)
+
+
+The sections are broken down into two parts:
+1. HPLC data
+  - pigment data
+  - load 
+  - FCHECK
+  
+2. Particulate/phyto/non-algal absorption (i.e. $ a_p, a_{ph},~\text{and}~a_{nap} $) and
+   CDOM absorption (i.e. $ a_{CDOM} $)
+   - bio-optical data
+   - load
+   - FCHECK
+
+
+## Notes on FCHECK:
+
+- `FCHECK` uses `Perl` to run
+  - Since the SeaBASS archive has been around for awhile, they use the 
+    programming language `Perl` to run the `FCHECK` process
+  - if it is not available in your syste, it will ask you to download `Perl`
+  - if you do not have `FCHECK`, you will be prompted to download it as well
+
+
+
+# 2.0 ---- Setup ----
+
+## 2.1 Load Libraries ----
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 if (!nzchar(system.file(package = "librarian"))) 
   install.packages("librarian")
 
 librarian::shelf(
+  quiet = TRUE,
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   # broom # optional
   
   # additional
-  cli,
-  quiet = TRUE
+  cli
 )
-
-# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
   dplyr::filter(), 
@@ -31,14 +64,17 @@ conflicts_prefer(
 
 e <- new.env()
 source(here(".Rprofile"))
-source(here("scripts", "check_data.R"), local = e)
+source(here("scripts", "check_data.R"))
 source(here("scripts", "misc_functions.R"), local = e)
 attach(e, name = "fcheck_func")
+
 rm(e)
 ```
 
 
-# Read SeaBass **HPLC** Files and Check for Issues
+# 3.0 ---- HPLC Data ----
+
+## 3.1 Read SeaBass **HPLC** Files and Check for Issues
 All columns are read as characters to check for any issues with the data
 ```{r read-seabass-hplc}
 # get most recent directory created for seabass files
@@ -67,7 +103,9 @@ slice_sample(sb_data, n = 10)
 filter(sb_data, if_any(sample:volfilt, \(x) is.na(x) | str_detect(x, "-9999")))
 ```
 
-## FCHECK: Checking `.sb` Files Locally for Issues
+
+## 3.2 FCHECK: HPLC Checking `.sb` Files Locally for Issues
+
 This is used by NASA to pre-check the .sb files before official submission 
 process. This requires the use of "Perl" <https://www.perl.org/get.html>.
 A quick download and it should work.
@@ -104,12 +142,58 @@ fcheck_results <-
 ```
 
 
-# Check **Particulate absorption**, **CDOM absorption** and **[Chlorophyll-a]** Files
+# 4.0 ---- Check **Particulate absorption**, **CDOM absorption** and **[Chlorophyll-a]** Files ----
+
+
+## 4.1 Load Bio-optical Data
+
+
 ```{r directory-seabass-filt-cdom-chl}
 cruise_dir <- 
   here(cloud_dir, "seabass", "testing") %>%
   dir_ls() %T>% print()
+
+cruise_submit <- 
+  here(cloud_dir, "seabass", "submitted") %>%
+  dir_ls() %T>% print()
+
+# list of files for submission
+cruise_dir <- 
+  str_subset(
+    cruise_dir, 
+    str_c(basename(cruise_submit), collapse = "|"),
+    negate = TRUE
+  ) %T>% print()
+
+# check files to submit
+cruise_dir %>%
+  tibble(files = .) %>%
+  mutate(
+    base     = basename(files),
+    year     = str_extract(base, "\\d{2}"),
+    year     = glue("20{year}"),
+    doy      = str_extract(base, "\\d{3}$"),
+    doy      = as.numeric(doy),
+    year     = as.numeric(year),
+    count_ap = map_int(files, ~ length(dir_ls(.x, regexp = "ap.*\\.sb$"))),
+    count_ag = map_int(files, ~ length(dir_ls(.x, regexp = "ag.*\\.sb$"))),
+    count_chl = map_int(files, ~ length(dir_ls(.x, regexp = "chl.*\\.sb$"))),
+  ) %>%
+  arrange(year, doy) %>%
+  select(
+    "Year"                  = year,
+    "Cruise ID"             = base,
+    "ap Samples"            = count_ap,
+    "ag Samples"            = count_ag,
+    "Extracted chl Samples" = count_chl,
+  ) # %>%
+# write_csv(file = here("files.csv"))
+
+# shell.exec(here())
 ```
+
+
+## 4.3 Read SeaBASS Files
 
 
 ```{r read-seabass-filt-cdom-chl}
@@ -139,7 +223,11 @@ ag  <- cruise_dat$data2[[1]]
 ap  <- cruise_dat$data2[[2]]
 chl <- cruise_dat$data2[[3]]
 ```
-# Notes to fix 
+
+
+## 4.4 FCHECK: Bio-optical Checking `.sb` Files Locally for Issues
+
+ Notes to fix 
 
 chl 
 - /calibration_data to /calibration_date
@@ -174,20 +262,35 @@ fcheck_results <-
   )
 ```
 
+## *WIP*: Show Results
 
 ```{r fcehck-seabass-filt-cdom-chl}
 fcheck_results %>%
   list_c() %$%
   list_c(fcheck2) %>%
   unique() %>%
-  str_subset(".*testing.*", 
-             negate = TRUE) %>%
-  sort() %>%
+  str_subset(".*testing.*",
+  negate = TRUE) %>%
+  sort() %>% 
   cat(sep = "\n") 
+
+
+fcheck_results %>%
+  list_c() %$%
+  list_c(fcheck2) %>%
+  tibble(tes = .) %>%
+  slice(
+    (19432 - 10):(19432 + 20), 
+    (22095 - 10):(22095 + 20)
+    )
+  which(str_detect(tes, "mal"))
 ```
 
 
-```{r}
+## X.0 ---- Move Files to Temporary Directory ----
+
+
+```{r mv-files-to-temp}
 {
   cli::cli_text(
     c(
@@ -236,4 +339,104 @@ if (cont == 1) {
 
 
 ```
+
+
+# X.0 ---- Load Bio-optical Data ----
+
+
+
+```{r}
+cruise_dir %>%
+  dir_ls(regexp = "\\.sb", recurse = 1) %>%
+  tibble(file = .) %>%
+  mutate(type = str_extract(file, "ag|ap|chl")) %>%
+  filter(str_detect(type, "ap") &
+    str_detect(file, "_MR|_54|ap_WS_|ap_57_")) %>%
+  # slice(1:10) %>%
+  slice_head(prop = 0.1) %>%
+  mutate(
+    info =
+      map(
+        file,
+        \(x) {
+          meta <- readr::read_lines(x) %>%
+            str_subset("^/") %>%
+            str_subset("=") %>%
+            str_remove_all("/|\\[.*\\]") %>%
+            str_split("=", simplify = TRUE) %>%
+            as_tibble() %>%
+            rename("param" = 1, "value" = 2) %>%
+            pivot_wider(
+              data         = .,
+              # id_cols      = c(file, type), # *optional* vector of unaffected columns,
+              names_from   = c(param), # category column(s) to pivot wide
+              values_from  = c(value), # value column(s) that hold data for each category column
+              names_sep    = "_",
+              names_repair = janitor::make_clean_names
+            ) %>%
+            hablar::retype(-station)
+
+
+          data <- read_sb_files(x, col_types = "c", sample_type = "default")
+
+          list(
+            "meta" = meta,
+            "data" = data
+          )
+        }
+      )
+  ) %>%
+  unnest_wider(info) %>%
+  unnest(meta) %>%
+  unnest(data) %>%
+  hablar::retype(-station) %>%
+  mutate(
+    start_date = ymd(start_date),
+    end_date   = ymd(end_date),
+    start_time = hms::as_hms(start_time),
+    end_time   = hms::as_hms(end_time)
+  ) %>%
+  mutate(
+    .by      = data_file_name,
+    aph_norm = aph / max(aph, na.rm = TRUE)
+  ) %T>% print() %>%
+  # slice(1) %>%
+  ggplot(aes(
+    x = wavelength,
+    # y = abs_ag,
+    # y = aph,
+    # color = month(start_date, label = TRUE, abbr = TRUE)
+    color = station
+  )) +
+  geom_smooth(
+    aes(y = ap),
+    method = "loess",
+    span = 0.01,
+    formula = y ~ x,
+    se = FALSE,
+    linetype = "dashed"
+  ) +
+  geom_smooth(
+    aes(y = aph),
+    method = "loess",
+    span = 0.01,
+    formula = y ~ x,
+    se = FALSE
+  ) +
+  # geom_line() +
+  labs(color = "Month") +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    limits = c(0, NA),
+    oob = scales::squish
+  ) +
+  # facet_wrap(~ year(start_date) + station, ncol = 3, scales = "free_y") +
+  facet_wrap(~cruise, ncol = 4, scales = "free_y") +
+  ggthemes::theme_calc()
+
+
+```
+
+
 
