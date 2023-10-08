@@ -369,7 +369,7 @@ This text will be converted to `NA` when read by `openxlsx::read.xlsx`
 
 To see the process of extracting this text, look to the end
 
-```{r}
+```{r noaa-na-strings}
 noaa_bad <- c(
   "NA", "Skip too shallow",
   "97/98", "109/110",
@@ -420,12 +420,11 @@ noaa <-
     "lon" = longitude_decimal,
     "lat" = latitude_decimal) %>%
   mutate(
-    .after  = date_gmt,
-    # .keep = "used",
-    time_gmt = as.numeric(time_gmt),
-    time_gmt = time_gmt + 1,
-    time_gmt = janitor::excel_numeric_to_date(time_gmt, include_time = TRUE),
-    time_gmt = hms::as_hms(time_gmt),
+    .after    = date_gmt,
+    time_gmt  = as.numeric(time_gmt),
+    time_gmt  = time_gmt + 1,
+    time_gmt  = janitor::excel_numeric_to_date(time_gmt, include_time = TRUE),
+    time_gmt  = hms::as_hms(time_gmt),
     date_time = ymd_hms(paste(date_gmt, time_gmt))
   ) %>% 
   # select(cruise, station, date_time, lon, lat) %>%
