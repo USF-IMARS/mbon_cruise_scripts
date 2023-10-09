@@ -79,6 +79,9 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
     # add columns for cruise ID and year
     mutate(
       cruise_id = str_extract(file_path, "\\w{1,2}\\d{4,5}"),
+      cruise_id = if_else(str_detect(file_path, "(?i)core"), 
+                          str_extract(file_path, "CORE_\\d{1,3}"),
+                          cruise_id),
       
       year = str_extract(file_path, "[0-9]{4}"),
       year = as.numeric(year)
@@ -87,7 +90,7 @@ if (!is.null(cloud_dir) & (check == 1 | check == 3)) {
   files_filt <- 
     files_all %>%
     # filter for cruise files
-    filter(str_detect(file_path, "(?i)fknms_")) %T>% 
+    filter(str_detect(file_path, "(?i)fknms_|core")) %T>% 
     print()
   
 } else {
@@ -208,7 +211,14 @@ og_data_chr <-
             janitor::clean_names() %>%
             mutate(across(everything(), \(x) as.character(x))) %>%
             # remove column
-            select(-any_of("time_filtered_24_00"))
+            select(
+              -any_of("time_filtered_24_00"), 
+              any_of(c(cruise = contains("cruise")
+                       # sample_collection_time_gmt = "sample_collection_time"
+                       )
+                     )
+              ) %T>% 
+          View(title = basename(.x))
         }
       )
     ) %>%
@@ -309,7 +319,7 @@ meta_list <- list()
 meta_list$sample_meta_data <-  
   files %>%
   unnest(data) %>% 
-  select(-c(file_path:last_c)) %>%
+  select(-c(file_path:last_c), -contains("time_zone")) %>%
   
   filter(
      # removes rows that contain no data encoded as 
@@ -491,7 +501,7 @@ if (sv) {
 if (FALSE) {
   here("data", "metadata", "inventory") %>%
   dir_ls(regexp = "imars_inventory") %>%
-  str_subset("~\\$", negate = TRUE) %>%
+  str_subset("~\\$", negate = TRUE) %>% 
   last_mod() %>%
 
   file_copy(new_path = inventory,
