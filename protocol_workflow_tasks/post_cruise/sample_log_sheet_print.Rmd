@@ -4,6 +4,7 @@ author: "Sebastian DiGeronimo"
 date: "2023-02-13"
 output: html_document
 ---
+
 # Info
 This script will write files per cruise with following information:
 - identifier	
@@ -46,18 +47,20 @@ if (!nzchar(system.file(package = "librarian")))
 
 librarian::shelf(
   quiet = TRUE,
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
+  # broom # optional
   
   # additional
   # readxl, # decided openxlsx is better to create file
   openxlsx, cli, janitor
+  
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 ```
 
 ```{r vars}
@@ -73,7 +76,7 @@ author <- "Sebastian Di Geronimo"
 # 2. hplc_progress
 # 3. cdom_progress
 # "Chl-a"           "HPLC"            "CDOM"      
-sht_num <- 1 # change here to 1, 2, 3
+sht_num <- 2 # change here to 1, 2, 3
 sht_nm  <-
   switch(
     sht_num,
