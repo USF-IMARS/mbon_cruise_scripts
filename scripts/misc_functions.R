@@ -160,21 +160,20 @@ get_sheet_info <- function(files,
 #' @examples
 #' # ADD_EXAMPLES_HERE
 #' 
-read_logsheets <-  function(
+read_logsheets <- function(
     .x, .y, .z, .l,
     sheet_type = c("filter", "edna"),
     na_skip = c("#N/A"),
-    ship_acr = "FK|WS|SV|WB|H"
-  ) {
-
+    ship_acr = "FK|WS|SV|WB|H|CORE") {
+  
   sheet_type <- match.arg(sheet_type)
-  
+
   na_skip <- unlist(na_skip)
-  
+
   # ---- load data
   # select sheet, skip number of lines to sample 1, stop columns after
   # `notes` or `collector`, remove NA values, clean names
-  # temp <- 
+  # temp <-
   #   openxlsx::read.xlsx(
   #     xlsxFile    = .x,
   #     sheet       = .y,
@@ -184,9 +183,9 @@ read_logsheets <-  function(
   #     detectDates = TRUE
   #   ) %>%
   #     janitor::clean_names() #%>%
-  temp <- 
+  temp <-
     openxlsx2::read_xlsx(
-      xlsxFile    = .x,
+      file        = .x,
       sheet       = .y,
       cols        = 1:.l,
       startRow    = .z,
@@ -194,62 +193,72 @@ read_logsheets <-  function(
       detectDates = TRUE
     ) %>%
     janitor::clean_names() %>%
-    
     # ---- fix time
     # time_gmt and time_sampled_24_00 to sample_collection_time_gmt
     # fix sample_id to identifier
-    rename(any_of(
-      c(sample_collection_time_gmt = "time_gmt",
-        sample_collection_time_gmt = "sample_collection_time_hh_mm",
-        # TODO: need to correct to gmt ----
-        sample_collection_time_gmt = "sample_collection_time_edt", 
-        sample_collection_time_gmt = "time_sampled_24_00",
-        identifier = "sample_id"))) 
-    
-    # make sure the identifiers contain: FK, WS, SV or WB
-    if (!str_detect(.x, "OCT2018")) {
-    temp <- 
-      temp %>%
-      filter(if_any(matches(c("identifier", "sample")),
-                    ~ str_detect(.x, ship_acr))
-             ) } else if (str_detect(.x, "OCT2018")) {
-               temp <- temp %>%
-                 filter(!is.na(vol_ml))
-             }
-    
-    # filter({if("identifier" %in% names(.)) {
-    #   str_detect(identifier, ship_acr) 
-    #   } else { . }})
-    # filter(str_detect(identifier, ship_acr)) #%>%
+    rename(
+      any_of(
+        c(
+          sample_collection_time_gmt = "time_gmt",
+          sample_collection_time_gmt = "sample_collection_time_hh_mm",
+          sample_collection_time_gmt = "sample_collection_time",
+          # TODO: need to correct to gmt ----
+          sample_collection_time_gmt = "sample_collection_time_edt",
+          sample_collection_time_gmt = "time_sampled_24_00",
+          identifier = "sample_id",
+          cruises    = "cruise_id"
+        )
+      )
+    )
 
-  # if vol_mol contains - or ~, remove 
-  temp <- 
+  # make sure the identifiers contain: FK, WS, SV or WB
+  if (!str_detect(.x, "OCT2018")) {
+    temp <-
+      temp %>%
+      filter(
+        if_any(
+          matches(
+            c("identifier", "sample")
+          ),
+          ~ str_detect(.x, ship_acr)
+        )
+      )
+  } else if (str_detect(.x, "OCT2018")) {
+    temp <- temp %>%
+      filter(!is.na(vol_ml))
+  }
+  
+  # filter({if("identifier" %in% names(.)) {
+  #   str_detect(identifier, ship_acr)
+  #   } else { . }})
+  # filter(str_detect(identifier, ship_acr)) #%>%
+
+  # if vol_mol contains - or ~, remove
+  temp <-
     temp %>%
     mutate(
-      vol_ml    = replace(vol_ml,  str_detect(vol_ml, "-"), NA),
+      vol_ml    = replace(vol_ml, str_detect(vol_ml, "-"), NA),
       vol_ml    = str_replace_all(vol_ml, "~", "")
     ) %>%
-    
     # try to convert to `numeric`
-   suppressMessages(type_convert(.)) %>%
-    
+    suppressMessages(type_convert(.)) %>%
     # make sure notes are strings
     mutate(
       notes = as.character(notes)
-    ) 
-  
-  
-  # ---- fix issues related to few sheets 
+    )
+
+  # ---- fix issues related to few sheets
   # fix vol_ml if contains `&` to add two values
   if (typeof(temp$vol_ml) == "character") {
     temp <- temp %>%
       mutate(
         vol_ml = (str_split(vol_ml, " & ")),
-        vol_ml = map(vol_ml, ~ sum(as.numeric(.x)))) %>%
+        vol_ml = map(vol_ml, ~ sum(as.numeric(.x)))
+      ) %>%
       unnest(vol_ml) %>%
       suppressMessages(type_convert(.))
   }
-  
+
   # fix depth_m to remove any `*` or `..`, then convert to num
   if (typeof(temp$depth_m) == "character") {
     temp <- temp %>%
@@ -259,95 +268,106 @@ read_logsheets <-  function(
       ) %>%
       suppressMessages(type_convert(.))
   }
-  
+
   # fix max_depth to replace `flow through` to 0
-  if ("max_depth" %in% names(temp)
-      && typeof(temp$max_depth) == "character") {
+  if ("max_depth" %in% names(temp) &&
+    typeof(temp$max_depth) == "character") {
     temp <- mutate(temp,
-                   max_depth = str_replace(max_depth, "flo.*", "0")) %>%
+      max_depth = str_replace(max_depth, "flo.*", "0")
+    ) %>%
       suppressMessages(type_convert(.))
   }
-  
+
   # fix date_mm_dd_yy when excel date is non-numeric
-  # i.e. error 08//01/2015 - encoded as string, all other values are 
+  # i.e. error 08//01/2015 - encoded as string, all other values are
   # read as strings (i.e. `"48025"` as string instead of `48025` as num)
-  if ("date_mm_dd_yy" %in% names(temp)
-    && typeof(temp$date_mm_dd_yy) == "character") {
+  if ("date_mm_dd_yy" %in% names(temp) &&
+    typeof(temp$date_mm_dd_yy) == "character") {
     temp <- temp %>%
       mutate(
         date_mm_dd_yy = str_replace(date_mm_dd_yy, "//", "/"),
-        date_mm_dd_yy = map_chr(date_mm_dd_yy,
-                                function(.x) {
-                                  if (!is.na(as.numeric(.x))) {
-                                    times <- as.numeric(.x) %>%
-                                      janitor::excel_numeric_to_date()
-                                  } else {
-                                    # convert strings "8/1/2015" to date 
-                                    times <- anytime::anydate(.x)
-                                  }
-                                  return(as.character(times))
-                                }),
-        
+        date_mm_dd_yy = map_chr(
+          date_mm_dd_yy,
+          function(.x) {
+            if (!is.na(as.numeric(.x))) {
+              times <- as.numeric(.x) %>%
+                janitor::excel_numeric_to_date()
+            } else {
+              # convert strings "8/1/2015" to date
+              times <- anytime::anydate(.x)
+            }
+            return(as.character(times))
+          }
+        ),
+
         # converts to correct format
         date_mm_dd_yy = suppressWarnings(as.POSIXct(date_mm_dd_yy))
       )
   }
-  
+
   if (any(str_detect(names(temp), "sample_number"))) {
-    temp <- 
+    temp <-
       mutate(temp, sample_number = as.character(sample_number))
   }
 
-  # add date_time, 
+  # add date_time,
   # first, converting excel date_time to HMS
   # i.e. 1899-01-01 12:15:34 UTC to 12:15:13
   # then, add date and time
   if (str_detect(sheet_type, "filter")) {
-  temp <- 
-    temp %>%
-    # fix date when entered as mm:dd:yy instead of mm/dd/yyyy
-    {if (nrow(filter(., date_mm_dd_yy > as_date("2015-01-01"))) < 1) {
-      mutate(., 
-             date_mm_dd_yy = as.character(date_mm_dd_yy), 
-             date_mm_dd_yy = str_replace(date_mm_dd_yy, ".* ", ""),
-             date_mm_dd_yy = str_replace_all(date_mm_dd_yy, ":", "/"),
-             date_mm_dd_yy = str_replace_all(date_mm_dd_yy, "(.*/.*/)", "\\120"),
-             date_mm_dd_yy = anytime::anydate(date_mm_dd_yy),
-             .before = 1)
-    } else {.}}  %>%
-    
-    
-    { if (all(class(temp$sample_collection_time_gmt) != "POSIXct")) {
-      mutate(.,
-    sample_collection_time_gmt = sample_collection_time_gmt*86400,
-    sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
-    date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
-    .after = sample_collection_time_gmt
-    )
-      } else {
-        mutate(.,
-               sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
-               date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
-               .after = sample_collection_time_gmt)
-      }} %>%
-    
-    # remover extract column if exists
-    select(-any_of("time_filtered_24_00"))  %>% 
-    mutate(station = str_remove(station, "~"),
-           station = str_replace_all(station, " ", ""),
-           station = str_to_upper(station),
-           station = case_when(
-             str_detect(station, "9.69999") ~ "9.7",
-             str_detect(station, "9.80000") ~ "9.8",
-             .default =  station))
+    temp <-
+      temp %>%
+      # fix date when entered as mm:dd:yy instead of mm/dd/yyyy
+      {
+        if (nrow(filter(., date_mm_dd_yy > as_date("2015-01-01"))) < 1) {
+          mutate(.,
+            date_mm_dd_yy = as.character(date_mm_dd_yy),
+            date_mm_dd_yy = str_replace(date_mm_dd_yy, ".* ", ""),
+            date_mm_dd_yy = str_replace_all(date_mm_dd_yy, ":", "/"),
+            date_mm_dd_yy = str_replace_all(date_mm_dd_yy, "(.*/.*/)", "\\120"),
+            date_mm_dd_yy = anytime::anydate(date_mm_dd_yy),
+            .before = 1
+          )
+        } else {
+          .
+        }
+      } %>%
+      {
+        if (all(class(temp$sample_collection_time_gmt) != "POSIXct")) {
+          mutate(.,
+            sample_collection_time_gmt = sample_collection_time_gmt * 86400,
+            sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+            date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
+            .after = sample_collection_time_gmt
+          )
+        } else {
+          mutate(.,
+            sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+            date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
+            .after = sample_collection_time_gmt
+          )
+        }
+      } %>%
+      # remover extract column if exists
+      select(-any_of("time_filtered_24_00")) %>%
+      mutate(
+        station = str_remove(station, "~"),
+        station = str_replace_all(station, " ", ""),
+        station = str_to_upper(station),
+        station = case_when(
+          str_detect(station, "9.69999") ~ "9.7",
+          str_detect(station, "9.80000") ~ "9.8",
+          .default = station
+        )
+      )
   } else {
     temp <- rename(temp, "time_gmt" = sample_collection_time_gmt)
   }
-  
-  
+
+
   # if (!nrow(temp) > 1) temp <- NULL
   return(temp)
-  
+
   # ---- end of function
 }
 
