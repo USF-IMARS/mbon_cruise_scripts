@@ -22,11 +22,8 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
-  openxlsx, cli,
-  quiet = TRUE
+  openxlsx, cli
 )
-
-# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
   dplyr::filter(), 
@@ -143,6 +140,7 @@ save_meta <-
 }
 
 ```
+
 
 ## Save New Worksheet or Updated Calibraiton ---
 

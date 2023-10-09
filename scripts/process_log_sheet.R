@@ -323,7 +323,8 @@ process_log_sheet <- function(
     sht_nm, 
     chl_names = names(chl_a), 
     nr_chl    = nrow(chl_a), 
-    type      = "formula"
+    type      = "formula",
+    meta_sub  = select(meta, "station" = 5, "depth" = 6)
     )
   
   # ---- Write Comments
@@ -969,57 +970,65 @@ add_info.formula <- function(
   sht_nm, 
   chl_names, 
   nr_chl,
+  meta_sub,
   ...) {
   
+
   # ---- Formulas for Chlor-a Sheet
-  # =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
-  no_acid_ratio <- paste0(
-    "IF(", paste0("R", 1:nr_chl + 3), ">0,((", paste0("Q", 1:nr_chl + 3), 
-    "/", paste0("R", 1:nr_chl + 3), ")+(", paste0("S", 1:nr_chl + 3), 
-    "/", paste0("T", 1:nr_chl + 3), "))/2,-999)")
-  
-  # V =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999)
-  chla_conc <- 
-    paste0("+IF(", paste0("L", 1:nr_chl + 3),">0,(", 
-           paste0("O", 1:nr_chl + 3),"*((",paste0("L", 1:nr_chl + 3),
-           "-",paste0("N", 1:nr_chl + 3),")*",paste0("U", 1:nr_chl + 3),
-           ")+",paste0("P", 1:nr_chl + 3),")*",paste0("K", 1:nr_chl + 3),
-           "/",paste0("J", 1:nr_chl + 3),",-999)")
-  
-  formulas <- 
-    tibble(
-      # W =AVERAGE(V4:V5)
-      avg = paste0(
-        "IF(AND(", paste0("V", seq(1, nr_chl, 2) + 3), ">=0, ", 
-        paste0("V", seq(1, nr_chl, 2) + 4), ">=0), ",
-        paste0("AVERAGE(",paste0("V", seq(1, nr_chl, 2) + 3), ":",
-               paste0("V", seq(1, nr_chl, 2) + 4),")"), ", -999)"
-      ),
+  formulas <-
+    meta_sub  %>%
+    rownames_to_column("rows") %>%
+    group_by(station, depth) %>%
+    
+    mutate(
+      rows = as.numeric(rows) + 3,
+      grp_num = n(),
+      grp_rows = max(rows),
+      # =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
+      no_acid_ratio =
+        glue(
+          "IF(R{rows}>0,((Q{rows}/R{rows})+",
+          "(S{rows}/T{rows}))/2,-999)"
+        ),
+      
+      # V =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999)
+      chla_conc =
+        glue(
+          "+IF(L{rows}>0,(",
+          "O{rows}*((L{rows}",
+          "-N{rows})*U{rows}",
+          ")+P{rows})*K{rows}/K{rows},-999)"
+        ),
+      
+      avg = glue("V{min(rows)}:V{max(rows)}"),
+      
       # X =STDEV(V4:V5)
-      stdev = paste0(
-        "IF(AND(", paste0("V", seq(1, nr_chl, 2) + 3), ">=0, ", 
-        paste0("V", seq(1, nr_chl, 2) + 4), ">=0), ",
-        paste0("STDEV(",paste0("V", seq(1, nr_chl, 2) + 3), ":",
-               # paste0("V", seq(1, nr_chl, 2) + 4),")"), ", \"\")"
-               paste0("V", seq(1, nr_chl, 2) + 4),")"), ", -999)"
-      ),
-    )  %>%
-    bind_rows(tibble(avg = rep(NA, nr_chl / 2))) %>%
-    mutate(rows = rep(1:(nr_chl / 2), 2)) %>%
-    arrange(rows, !is.na(avg), avg) %>%
-    select(-rows) %>%
-    mutate( 
-      # col U 
-      no_acid_ratio = no_acid_ratio,
-      # col V
-      chla_conc = chla_conc) 
+      stdev = glue("IF(AND({avg}>=0), STDEV({avg}),-999)"),
+      
+      # W =AVERAGE(V4:V5)
+      avg = glue("IF(AND({avg}>=0), AVERAGE({avg}),-999)"),
+
+      across(
+        c(avg, stdev),
+        ~ case_when(
+          grp_num > 1 
+          & rows == grp_rows ~ .x,
+          .default = NA
+        )
+      )
+    ) 
   
-  # ---- column values for comments
+  # TODO: check if duplicates at every row and then figure out how to not add avg and sd
+
+  one_sample_taken <- filter(formulas, n() == 1) %$% rows
+
+  # ---- column locations for formulas
   na_ratio  <- which(str_detect(chl_names, "(?i)^'No Acid' ratio"))
   chl_conc  <- which(str_detect(chl_names, "(?i)^\\[Chl a\\]"))
   avg_chl   <- which(str_detect(chl_names, "(?i)^AVG"))
   std_chl   <- which(str_detect(chl_names, "(?i)^STDEV"))
   
+
   # ---- add formulas
   writeFormula(
     wb, 
@@ -1048,6 +1057,44 @@ add_info.formula <- function(
     formulas$stdev, 
     startCol = std_chl,
     startRow = 4)
+   
+  # browser()
+  
+  # ---- comment if only one sample was taken at a station
+  if (!rlang::is_empty(one_sample_taken)) {
+    one_sample_comm <-
+      createComment(
+        "one sample taken, no avg/std dev possible",
+        author  = "",
+        visible = FALSE,
+        width   = 2,
+        height  = 4
+      )
+    
+    map(
+      one_sample_taken,
+      \(.x) {
+        
+      writeComment(
+        wb,
+        sht_nm[2],
+        col = avg_chl,
+        row = .x,
+        comment = one_sample_comm
+      )
+        
+      writeComment(
+        wb,
+        sht_nm[2],
+        col = std_chl,
+        row = .x,
+        comment = one_sample_comm
+      )
+      
+      }
+      
+    )
+  }
   
   # ---- end of function add_info.formula
 }
