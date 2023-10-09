@@ -12,17 +12,17 @@ if (!nzchar(system.file(package = "librarian")))
 
 librarian::shelf(
   quiet = TRUE,
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
   cli, openxlsx, janitor
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 ```
 
 # File Paths
