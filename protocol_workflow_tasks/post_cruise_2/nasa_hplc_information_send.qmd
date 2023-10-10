@@ -5,7 +5,7 @@ date: "2023-05-02"
 format: html
 ---
 
-# Info:
+# 1.0 ---- Info ----
 
 This file loads cruise metadata for HPLC and converts to the necessary format
 used in the NASA-HPLC sample submission file before sending physical samples to 
@@ -14,9 +14,9 @@ Crystal Thomas at NASA for processing.
 TODO: add way to check `hplc_progress_pres_abs.xlsx` at:
 <https://usf.app.box.com/file/1203915391640>
 
-# Setup
+# 2.0 ---- Setup ----
 
-## Load Libraries 
+## 2.1 Load Libraries 
 ```{r setup}
 if (!nzchar(system.file(package = "librarian"))) 
   install.packages("librarian")
@@ -28,8 +28,7 @@ librarian::shelf(
   # broom # optional
   
   # additional
-  openxlsx, hms,
-  quiet = TRUE
+  openxlsx, hms, janitor
 )
 
 # shelf(conflicted) # may be needed if won't allow loading of certain packages
@@ -42,8 +41,13 @@ conflicts_prefer(
 source(here("scripts", "misc_functions.R"))
 ```
 
-## ---- Edit: Info ----
+## 2.2 ---- Edit: Info ----
+
+
 This info is from the NASA intake form, sent in previously
+
+You may edit the grant name, number and the person to contact.
+
 ```{r grant-info}
 source(here(".Rprofile"))
 
@@ -62,15 +66,25 @@ grant_info <-
     "Sebastian Di Geronimo, sebastian15@usf.edu"
   ),
   
-  # your last name
+  # PIs last name
   last_nm = "Muller-Karger"
   
   )
 ```
 
-## File Paths
+
+## 2.3 File Paths
+
+
+Path:
 - Sample Info Template
-- Cruise Metadata
+  - "HPLC_SampleInfo_template_rev2019.xlsx"
+  - from NASA SeaBASS
+  - a form to input metadata before sending samples for analysis
+  
+- Cruise metadata
+  - all cruise metadata through time
+  - you should filter either by cruise ID or specific dates
 
 ```{r file-path}
 # path to sample submission template
@@ -88,32 +102,49 @@ metadata <-
   here(cloud_dir) %>%
   dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
   str_subset("~", negate = TRUE) %>%
-  read.xlsx(sheet = "sample_meta_data",
-            detectDates = FALSE
-            # rows = 1:1700
-            ) %>%
-  filter(str_detect(sample_type, "(?i)hplc")) %>%
+  read.xlsx(
+    sheet = "sample_meta_data",
+    detectDates = FALSE
+    ) %>%
+  filter(str_detect(sample_type, "(?i)hplc"))  %>%
   mutate(
-    date     = janitor::excel_numeric_to_date(date_mm_dd_yy),
-    time     = hms::as_hms(sample_collection_time_gmt),
-    datetime = ymd_hms(glue("{date} {time}"), truncated = 3),
-    station  = str_remove(station, "\\.0$"),
-    .before  = date_mm_dd_yy
-  )
+    date      = excel_numeric_to_date(date_mm_dd_yy),
+    date_time = excel_numeric_to_date(date_time, include_time = TRUE, tz = "GMT"),
+    time      = hms::as_hms(sample_collection_time_gmt),
+    datetime  = ymd_hms(str_c(date, time), truncated = 3),
+    station   = str_remove(station, "\\.0$"),
+    .before   = date_mm_dd_yy
+  ) %T>% print()
+
 
 # select cruise IDs for submission
+# if you want to select by cruise, add names in `str_subset()`
 cruise_id <- 
   metadata %$% 
-  unique(cruise_id) %>%
-  str_subset(str_c("(W[SB]|H)2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
-  str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
+  unique(cruise_id) #%>%
+  # July 2023 filtered cruise sent 
+  # str_subset(str_c("(W[SB]|H)2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
+  # str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
+  
+  # Edit here: ====
+  # str_subset(str_c("<edit>", sep = "|"), negate = TRUE) 
+
 
 # filter metadata to match cruise IDs
-metadata_filt <- 
+metadata_filt <-
   metadata %>%
-  filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
+  # filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
+  # September 2023
+  filter(datetime > as_date("2023-09-01"))
 ```
-This gets the cell locations within the `template` to add data into
+
+## 2.4 Extract Column Locations for Grant Info
+
+
+This locates the cell locations within the `template` to add the grant info and
+the metadata.
+
+
 ```{r cell-locations}
 grant_info$sheet_nm <- getSheetNames(template)
 
@@ -131,12 +162,12 @@ grant_info$loc <-
 
 # column names to use
 grant_info$col_names <- 
-read.xlsx(
-  template,
-  sheet         = grant_info$sheet_nm,
-  startRow      = grant_info$loc[1],
-  skipEmptyCols = FALSE
-) %>%
+  read.xlsx(
+    template,
+    sheet         = grant_info$sheet_nm,
+    startRow      = grant_info$loc[1],
+    skipEmptyCols = FALSE
+  ) %>%
   names()
 
 # location to add grant info
@@ -152,34 +183,51 @@ grant_info$grant_loc <-
   )
 ```
 
-# Get Water Body for Each Station
+
+
+## 2.5 Set Water Body for Each Station
+
+Add new stations as needed in the correct region:
 - Florida Keys
 - West Florida Shelf
 - Southwest Florida Shelf
+
+NOTE: the regions may change 
+
 ```{r water-body}
 water_body <- list(
-  "Florida Keys" = c(
-    glue("{1:18}"),
-    glue("9.{1:9}"), "9B", "24", "LK", "MR", "WS", "21.5"
+  "Florida Keys" = 
+    c(
+      1:18, 
+      seq(9.1, 9.9, by = 0.1),
+      "9B", "24", "LK", "MR", "WS", "21.5", "PLUME"
   ),
-  "Southwest Florida Shelf" = c(
-    glue("{30:68}"),
-    glue("57.{1:3}"), "KW1", "KW2", "KW4"
+  "Southwest Florida Shelf" = 
+    c(
+      30:68,
+      seq(57.1, 57.3, by = 0.1),
+      "KW1", "KW2", "KW4"
   ),
   "West Florida Shelf" = c(
     "Z04-068", "CBH", "NBH", "EB1",
     as.vector(outer(
-      c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG"),
+      c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG", "CORE-"),
       c(1:12),
       str_c
     ))
   )
 ) %T>% print()
 ```
+# 3.0 ---- Convert Convert Format to NASA Sample Submission Form ----
 
-# Convert Format to NASA Sample Submission Form
-## Column Names
-### ---- Needed Format
+
+## 3.1 Info: Required Column Names
+
+This part will take the current format and convert it to the required format.
+
+This info is for the user to know what is being changed.
+
+---- *Required Format*
 hplc_gsfc_id
 X2
 PI
@@ -205,7 +253,7 @@ filter.storage.before.shipment.to.GFC
 other
 other   
 
-### ---- Current Format
+---- *Current Format*
 base
 cruise_id
 year
@@ -224,7 +272,11 @@ sample_number
 collector
 max_depth
 
-## Conversion
+
+
+## 3.2 Convert Metadata to `SampleInfo_template`
+
+
 ```{r format-info}
 metadata_filt
 
@@ -261,7 +313,11 @@ meta_format <-
     # other,
     # other,
   ) %>%
+  
+  # relocate columns
   select(contains(grant_info$col_names)) %>%
+  
+  # add water body names
   mutate(
     name.of.water.body = case_match(
       station,
@@ -270,67 +326,96 @@ meta_format <-
       water_body[[3]] ~ names(water_body)[3],
       .default = NA_character_
     ),
+    
+    # add depth if NA
     depth = if_else(is.na(depth), 1, depth),
   ) %>%
+  
+  # add water column depth if NA using all stations and taking the median
   mutate(
     .by = station,
     water_depth = if_else(!is.na(water_depth), water_depth,
       median(water_depth, na.rm = TRUE)
     )
   ) %>%
+  
+  # arrange by time
   arrange(year, month, nchar(sample), sample) %T>%
   print()
 
 unique(meta_format$cruise)
 ```
+# 4.0 ---- Check Information Before Sending ----
+
+## 4.1 Plot: Downlaod and Load Base Map
+
+Loads: 
+1. topography
+  - Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), 
+    (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+
+2. land mass
+  -Global Self-consistent, Hierarchical, High-resolution Geography Database 
+   (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
 
 
-## Check Spatial Locations
 ```{r load-base-map}
-# scripts to download and create maps
-source(here("scripts", "map_files_dwnlod.R"))
-# fixes issue with reading raster file using decimal degrees
-sf::sf_use_s2(FALSE)
+if (exists("base_plt")) {
+  cli::cli_alert_info("{.var base_plot} is already loaded!")
+} else {
+  
+  # scripts to download and create maps
+  source(here("scripts", "map_files_dwnlod.R"))
+  # fixes issue with reading raster file using decimal degrees
+  sf::sf_use_s2(FALSE)
 
-# path to base map files
-map_loc <- here("data", "map_shp")
+  # path to base map files
+  map_loc <- here("data", "map_shp")
 
-# spatial extent
-exnt <- c(xmin = -84, # West
-          xmax = -80, # East
-          ymin = 24,  # South
-          ymax = 28.5 # North 
-        )
-
-# download topography (.nc) and coastline (.shp)
-world_download(
-  path_land  = map_loc,
-  path_topo  = map_loc,
-  extent     = exnt,
-  use_suffix = NULL
-)
-
-# select and read coastline file from GSHHS then crop
-# load maps
-map_obj <-
-  load_map_obj(
-    .map_coast = map_loc,
-    .map_state = NULL,
-    .map_bath  = NULL,
-    .map_file  = "etopo1.nc",
-    .extent    = exnt
+  # spatial extent
+  exnt <- c(
+    xmin = -84, # West
+    xmax = -80, # East
+    ymin = 24, # South
+    ymax = 28.5 # North
   )
 
-# Plot Base Map with larger degree extent
-deg <- 0.5
+  # download topography (.nc) and coastline (.shp)
+  world_download(
+    path_land  = map_loc,
+    path_topo  = map_loc,
+    extent     = exnt,
+    use_suffix = NULL
+  )
 
-base_plt <- 
-base_map_plot(map_obj$coast_topo, .bathy = NULL, 
-              c(exnt[1] - deg, exnt[2] + deg, exnt[3] - deg, exnt[4] + deg)
-              )
+  # select and read coastline file from GSHHS then crop
+  # load maps
+  map_obj <-
+    load_map_obj(
+      .map_coast = map_loc,
+      .map_state = NULL,
+      .map_bath  = NULL,
+      .map_file  = "etopo1.nc",
+      .extent    = exnt
+    )
 
-rm(deg)
+  # Plot Base Map with larger degree extent
+  deg <- 0.5
+
+  base_plt <-
+    base_map_plot(map_obj$coast_topo,
+      .bathy = NULL,
+      c(exnt[1] - deg, exnt[2] + deg, exnt[3] - deg, exnt[4] + deg)
+    )
+
+  rm(deg)
+}
 ```
+
+## 4.2 Plot: Check Spatial Locations
+
+Plot station lon/lat and check if location makes sense. If it does not, you may
+need to update the document used to extract the metadata.
 
 ```{r map-data-names, fig.height=15, fig.width=15}
 meta_format %>%
@@ -406,6 +491,8 @@ meta_format %>%
   theme_bw())
 ```
 
+## 4.3 Plot: Interactive Map to Verify Stations
+
 ```{r check-spatial, fig.height=15, fig.width=20}
 (meta_format %>%
    # filter(station == "2" | station == "MR") %>%
@@ -429,37 +516,38 @@ meta_format %>%
   plotly::layout(legend = list(orientation = "h", x = 0.2))
 ```
 
-## Check if Samples are within 10 days of the Start of Cruise
+## 4.4 Check Samples are within 10 days of the Start of Cruise
 ```{r date-start-end, fig.width=20, fig.height=10}
 new <- new.env()
 source(here("scripts", "misc_functions.R"), local = new)
 attach(new)
 rm(new)
 
-cruise_event <- 
+cruise_event <-
   meta_format %>%
   mutate(
     .keep = "used",
-        start_date = str_extract(cruise, "\\d+"),
-        start_year = str_extract(start_date, "\\d{2}"),
-        start_year = str_c("20", start_year),
-        doy = str_remove(start_date, "\\d{2}"),
-        doy = as.numeric(doy),
-        start_date = as.Date(paste0(start_year, "-01-01"), tz = "UTC") - days(1),
-        start_date = as.Date(doy, origin = start_date, tz = "UTC"),
-        end_date = start_date + days(10),
-        start_date = as.POSIXct(start_date, tz = "GMT"),
-        end_date = as.POSIXct(end_date, tz = "GMT")
-    ) %>%
-    select(-doy, -start_year) %>%
-    distinct() 
+    start_date = str_extract(cruise, "\\d{4,5}"),
+    start_date =
+    if_else(
+      is.na(start_date),
+      as_date(str_c(year, month, day)),
+      parse_date_time(start_date, orders = "yj"),
+    ),
+    
+    end_date = start_date + 9
+    
+  ) %>%
+  filter(
+    .by = cruise, 
+    start_date == min(start_date)) %>%
+  distinct(cruise, start_date, end_date) %T>% print()
 
 
 meta_format %>%
   mutate(
     date = glue("{year}-{month}-{day}"),
-    date = as_date(date),
-    date = as.POSIXct(date),
+    date = as_datetime(date, tz = "UTC")
   ) %>%
   nest(.by = cruise) %>%
   mutate(
@@ -473,9 +561,15 @@ meta_format %>%
     )
   ) %>%
   pull(plt)
-
-detach()
 ```
+
+# 5.0 ---- Final Formatting before Saving ----
+
+## 5.1 Final Format and Physical Sample Check
+
+The file <hplc_progress_pres_abs.xlsx> is referenced to filter out samples that 
+were not physically found in the freezer or had another reason for not to be
+included in the SeaBASS extraction
 
 ```{r final-format}
 # find previously saved files
@@ -499,19 +593,15 @@ hplc_check <-
     notes           = as.character(notes),
     collected_by    = as.character(collected_by)
   )) %>%
-  list_rbind() 
+  list_rbind() %T>% print()
 
-hplc_miss <- 
-  filter(hplc_check, str_detect(absent, "(?i)X"))
-
-hplc_check <-
-  filter(hplc_check, str_detect(present, "(?i)X"))
+hplc_miss <- filter(hplc_check, str_detect(absent, "(?i)X"))
+hplc_check <- filter(hplc_check, str_detect(present, "(?i)X")) %T>% print()
 
 # filter out samples that are absent from the freezer
-meta_format <-
-  # test <-
+meta_format2 <-
   meta_format %>%
-  right_join(
+  inner_join(
     x  = .,
     y  = select(hplc_check, identifier, notes),
     by = join_by("sample" == "identifier")
@@ -537,65 +627,93 @@ meta_format <-
     cruise = case_when(
       str_detect(cruise, "WS") ~ str_replace(cruise, "WS", "Walton Smith "),
       str_detect(cruise, "WB") ~ str_replace(cruise, "WB", "Weather Bird II "),
-      str_detect(cruise, "H") ~ str_replace(cruise, "H", "Hogarth ")
+      str_detect(cruise, "H") ~ str_replace(cruise, "H", "Hogarth "),
+      str_detect(cruise, "(?i)CORE") ~ 
+        str_replace(cruise, "CORE_", 
+                    "CMS Collaborative Oceanographic Research and Education  ")
+      
     )
-  ) %>%
-  full_join(
-    here("data", "raw", "hplc") %>%
-      dir_ls(regexp = "09-02.*xlsx$") %>%
-      str_subset("~", negate = TRUE) %>%
-      read.xlsx(sheet = "SS from clients", startRow = 19) %>%
-      filter(str_detect(sample, "WS16319")) %>%
-      select("dup" = sample, cruise, station, depth),
-    by = c("cruise", "station", "depth")
-  ) %>%
-  # add note for samples in 2015/2016
-  mutate(
-    notes = if_else(
-      str_detect(sample, "WS16"),
-      glue("**duplicate previously extracted in M-K 09-02 report, sample {dup},"),
-      notes
-    ),
-    notes = if_else(year < 2017,
-      glue(
-        "{notes}",
-        paste(
-          "samples kept in -80C freezer until May 2023, then kept in liquid N2",
-          "until shipment"
-        ),
-        .sep = " ",
-        .na = ""
-      ),
-      glue("{notes}", .na = NULL)
-    ),
-    filter.storage.before.shipment.to.GFC =
-      if_else(
-        year < 2017,
-        glue("{filter.storage.before.shipment.to.GFC}, and liquid N2 dry shipper"),
-        filter.storage.before.shipment.to.GFC
-      ),
-    notes = as.character(notes)
-  ) %>%
-  select(-dup)
-
+  ) %T>% print()
 ```
-## Check for Missing Data
-```{r check-na}
-print(naniar::vis_miss(select(meta_format, -1, -2)))
-count(meta_format, name = "total number of samples")
-count(meta_format, cruise, name = "total number per crusie")
 
-count(meta_format, cruise, indicate.if.filters.are.replicates, 
+
+## 5.2 Optional: Add Notes to Cruises that May not be There
+
+```{r add-notes}
+meta_format2 <-
+  meta_format2 %>%
+#   
+#   mutate(
+#     notes = case_when(
+#       str_detect(sample) 
+#       str_detect(cruise)
+#     )
+#   ) %>%
+  
+  # ---- previous notes from earlier cruises
+# full_join(
+  #   here("data", "raw", "hplc") %>%
+  #     dir_ls(regexp = "09-02.*xlsx$") %>%
+  #     str_subset("~", negate = TRUE) %>%
+  #     read.xlsx(sheet = "SS from clients", startRow = 19) %>%
+  #     filter(str_detect(sample, "WS16319")) %>%
+  #     select("dup" = sample, cruise, station, depth),
+  #   by = c("cruise", "station", "depth")
+  # ) %>%
+  # add note for samples in 2015/2016
+  # mutate(
+  #   notes = if_else(
+  #     str_detect(sample, "WS16"),
+  #     glue("**duplicate previously extracted in M-K 09-02 report, sample {dup},"),
+  #     notes
+  #   ),
+  #   notes = if_else(year < 2017,
+  #     glue(
+  #       "{notes}",
+  #       paste(
+  #         "samples kept in -80C freezer until May 2023, then kept in liquid N2",
+  #         "until shipment"
+  #       ),
+  #       .sep = " ",
+  #       .na = ""
+  #     ),
+  #     glue("{notes}", .na = NULL)
+  #   ),
+  #   filter.storage.before.shipment.to.GFC =
+  #     if_else(
+  #       year < 2017,
+  #       glue("{filter.storage.before.shipment.to.GFC}, and liquid N2 dry shipper"),
+  #       filter.storage.before.shipment.to.GFC
+  #     ),
+  #   notes = as.character(notes)
+  # ) %>%
+  
+
+  select(-contains("dup")) %T>% print()
+```
+
+
+## 5.3 Final Check for Missing Information and Summary of Samples
+```{r check-na}
+print(naniar::vis_miss(select(meta_format2, -1, -2)))
+count(meta_format2, name = "total number of samples")
+count(meta_format2, cruise, name = "total number per crusie")
+
+count(meta_format2, cruise, indicate.if.filters.are.replicates, 
       name = "total", 
       .drop = FALSE) %>%
   filter(str_detect(indicate.if.filters.are.replicates, "D")) %>%
   mutate(total = as.integer(total/2))
 
-count(meta_format, station, 
+count(meta_format2, station, 
       name = "total")
 ```
 
-# Save Workbook
+# 6.0 ---- Save Workbook ----
+
+Save the metadata as an excel workbook locally and copy to the cloud if the 
+results are satisfactory
+
 ```{r save-wb}
 sv <- TRUE
 
@@ -616,7 +734,7 @@ if (TRUE) {
   writeData(
     wb,
     sheet    = 1,
-    x        = meta_format,
+    x        = meta_format2,
     startRow = grant_info$loc[1] + 1,
     colNames = FALSE
   )
@@ -645,7 +763,7 @@ if (TRUE) {
         glue(
           grant_info$last_nm,
           format(Sys.Date(), "_%Y%m%d_"),
-          str_c(cruise_id, collapse = "_"),
+          str_c(cruise_id[cruise_id %in% meta_format$cruise], collapse = "_"),
           ".xlsx"
         )
       ),
@@ -654,7 +772,7 @@ if (TRUE) {
   }
 }
 
-
+# ---- run here to copy the newest xlsx file to the cloud service
 if (FALSE) {
   dir_loc %>%
   dir_ls(regexp = grant_info$last_nm) %>%
@@ -665,108 +783,5 @@ if (FALSE) {
 }
 ```
 
-# ---- OLD CODE ----
-```{r}
-# sv <- FALSE
-# if (FALSE) {
-#   wb <- loadWorkbook(template)
-# 
-#   writeData(
-#     wb,
-#     sheet    = 1,
-#     x        = grant_info$info,
-#     startRow = grant_loc[1],
-#     startCol = grant_loc[2] + 1,
-#     colNames = FALSE
-#   )
-# 
-#   writeData(wb,
-#     sheet = 1,
-#     x = meta_format_filt,
-#     startRow = loc[1] + 1,
-#     colNames = FALSE
-#   )
-# 
-# 
-#   if (!sv) {
-#     # open
-#     openXL(wb)
-# 
-#     sv <- TRUE
-#   } else if (sv) {
-#     cli::cli_alert_warning(
-#       c(
-#         "Make sure you want to save before continuing\n",
-#         "[Enter] to continue\n",
-#         "[Esc]   to cancel\n"
-#       )
-#     )
-#     readline("")
-# 
-# 
-#     cli::cli_alert_info("Saving File!")
-#     # save
-#     saveWorkbook(
-#       wb   = wb,
-#       file = here(
-#         "data", "metadata",
-#         glue(
-#           grant_info$last_nm,
-#           format(Sys.Date(), "_%Y%m%d_"),
-#           str_c(cruise_id, collapse = "_"),
-#           ".xlsx"
-#         )
-#       )
-#     )
-#   }
-# }
-# 
-# 
-# ---- old code
-# meta_format_check <-
-#   meta_format %>%
-#   filter(cruise %in% getSheetNames(prev_f)) %>% 
-#   full_join(hplc_check,
-#     by = join_by(sample == identifier),
-#     na_matches = "never"
-#   ) %>%
-#   mutate(
-#     arr = str_extract(sheet, "\\d+"),
-#     arr = if_else(is.na(arr), 
-#                   str_extract(cruise, "\\d+"),
-#                   arr 
-#                   )
-#   ) %>%
-#     
-#   arrange(arr) %>%
-#   select(-c(1:3, 6, 9, name.of.water.body, filter.type:contains("shipment")),
-#          -arr)
-# 
-# meta_format_filt <- 
-#   meta_format_check %>%
-#   filter(if_any(c(present, absent), \(x) !is.na(x)) &
-#     !is.na(present)) %>%
-#   select(-c(present:notes)) 
-# 
-# naniar::vis_miss(meta_format_check)
-# naniar::vis_miss(meta_format_filt)
-# 
-#   
-# if (TRUE || !file_exists(here("data", "metadata", "hplc_check"))) {
-#   cli::cli_alert_info("Saving `hplc_check` file.")
-#   openxlsx::write.xlsx(
-#     meta_format_check,
-#     file = here("data", "metadata",
-#      glue("hplc_check",
-#           ".xlsx")
-#           ),
-#     na = "",
-#     overwrite = FALSE
-#   )
-#   shell.exec(here("data", "metadata",
-#      glue("hplc_check",
-#           ".xlsx")
-#           ))
-# }
-```
+
 
