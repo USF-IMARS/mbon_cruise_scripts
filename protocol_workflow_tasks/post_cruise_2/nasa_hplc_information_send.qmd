@@ -495,8 +495,6 @@ meta_format %>%
 
 ```{r check-spatial, fig.height=15, fig.width=20}
 (meta_format %>%
-   # filter(station == "2" | station == "MR") %>%
-   # filter(station == "2") %>%
   ggplot(aes(x = lon, y = lat, 
              cruise = cruise,
               group = station
