@@ -24,6 +24,9 @@ librarian::shelf(
   librarian, 
   tidyverse, here, readxl, fs, magrittr, janitor, glue
 )
+
+source(here("scripts", "misc_functions.R"))
+
 ```
 
 
@@ -210,33 +213,57 @@ stop("\r      ")
 ```{r}
 # rstudioapi::selectFile()
 
-dat <- 
-  here("C:/Users", "imars_cruise", "Documents",
-       "s_fl_cruise_data", 
-     "old_cruises_for_reference",
-     "imars_inventory_chl_hplc_cdom_update_feb_06_2023.xlsx") %>% 
-  read_xlsx(sheet = 6) %>%
-  arrange(date_mm_dd_yy) 
+dat <-
+  here(cloud_dir) %>%
+  dir_ls(regexp = "imars_inventory") %>%
+  str_subset("~", negate = TRUE) %>%
+  read_xlsx(
+    sheet = 6,
+    guess_max = 9000
+    ) %>%
+  arrange(date_mm_dd_yy)
 
-dat %>% 
+dat2 <- 
+  dat %>% 
   count(
-    year, cruise_id, station
+    year, cruise_id, station, depth_m, sample_type, date_time
   ) %>% 
-  filter(cruise_id != "WS18285") %>% 
-  arrange(desc(n))
+  arrange(desc(n)) %>%
+  filter(!str_detect(sample_type, "(?i)dna|fcm|sterivex|blank|phyto")) %>%
+  pivot_wider(
+    data         = .,
+    id_cols      = c(cruise_id, station, depth_m, date_time), # *optional* vector of unaffected columns,
+    names_from   = c(sample_type), # category column(s) to pivot wide
+    values_from  = c(n), # value column(s) that hold data for each category column
+    names_sep    = "_",
+    names_repair = janitor::make_clean_names
+    ) 
+  
+
 ```
+
+
+
 ```{r}
 depths <- c("Surface", "Mid", "Bottom")
 
-dat_rank <- dat %>% 
-  distinct(cruise_id, year, date_mm_dd_yy, station, depth_m) %>% 
-  # filter(is.na(depth_m))
+dat_rank <-
+  dat2 %>%
   mutate(
     .after = depth_m,
-    .by = c(cruise_id, station),
+    .by = c(cruise_id, station, date_time),
+      cruise_id = 
+      case_when(
+        str_detect(cruise_id, "SV18067") ~ "SAV1803",
+        str_detect(cruise_id, "SV18173") ~ "SAV18173",
+        str_detect(cruise_id, "WS20230") ~ "WS20231",
+        .default = cruise_id
+      ),
+    # station = str_replace(station, "LK", "LK/21"),
+    
     depth_m = if_else(is.na(depth_m), 1, depth_m),
     depth_rank = dense_rank(depth_m),
-    depth_lvl = case_when(
+    depth_level = case_when(
       n() == 1 & depth_m < 6 ~ depths[1], # surface
       n() == 1 & depth_m >= 6 ~ depths[3], # bottom
       n() == 2 & depth_rank == 1 & depth_m < 6 ~ depths[1], # surface
@@ -246,22 +273,47 @@ dat_rank <- dat %>%
       n() == 3 & depth_rank == 1 ~ depths[1], # "surf",
       n() == 3 & depth_rank == 3 ~ depths[3], #"bott",
       .default = "idk"
+    ),
+    
+    depth_level = 
+      if_else(
+        str_detect(cruise_id, "WS18285") 
+        & str_detect(station, "TB6") 
+        & depth_m > 3,
+        depths[3],
+        depth_level,        
+      ),
+
+    depth_level = 
+      if_else(
+        str_detect(cruise_id, "WS19210") 
+        & str_detect(station, "GP1") 
+        & depth_m > 3,
+        depths[3],
+        depth_level,        
+      ),
+    
+    sample_info = glue::glue("{cruise_id}-{station}-{depth_level}"),
+    
+    across(
+      chl_a:cdom,
+      ~if_else(!is.na(.), "x", NA)
     )
+    
+  
+    
+    
   ) %T>%
-  print()
-```
+    View()
 
-
-```{r}
-# check handwritten logs or NOAA log sheet for these cruises and stations
-dat_rank %>% 
+dat_rank %>%
   filter(.by = c(cruise_id, station),
-         any(str_detect(depth_lvl, "idk"))
-         ) %>%
-  View()
+         n() == 2 ) #%>%
+         arrange(date_time, cruise_id,  station)
+
 ```
 
-Notes:
+Notes for fixed samples:
 SV18067 
   - check WS, depths are 2 and 4.8 (probably 48?)
 SV18173 
@@ -286,4 +338,27 @@ dat %>%
   left_join(dat_rank) %>% 
   janitor::get_dupes(identifier)
 ```
+
+```{r}
+date_range <- 
+  range(dat_rank$date_time, na.rm = TRUE) %>%
+  format(
+   "%Y_%b" 
+  ) %>%
+  str_c(collapse = "_")
+
+dat_rank %>%
+  filter(!str_detect(cruise_id, "FK")) %>%
+  select(sample_info, chl_a:cdom) %>%
+  save_csv(
+    .data          = .,
+    # save_location  = here(),
+    save_location  = cloud_dir,
+    save_name      = glue("imars_samples_collected_list_{date_range}"),
+    overwrite      = FALSE,
+    verbose        = TRUE,
+    time_stamp_fmt = NULL
+  )
+```
+
 
