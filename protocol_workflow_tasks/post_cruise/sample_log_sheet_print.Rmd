@@ -93,13 +93,14 @@ dir_create(local_sv)
 
 # Find Cruise Metadata 
 This file is located in:
-box > imars_imars_cruises > imars_inventory_chl_hplc_cdom_updated_<date>.xlsx
+box > imars_imars_cruises > imars_inventory_chl_hplc_cdom.xlsx
 
 https://usf.app.box.com/folder/179388329770?s=f6kujckfibt78al222ied0w2m6dxa529
 ```{r load-meta-file}
 meta <-
-  dir_ls(here(cloud_dir),
-         regexp = "imars_inventory_chl_hplc_cdom") %>%
+  here(cloud_dir) %>%
+  dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
+  str_subset("~", negate = TRUE) %>%
   read.xlsx(sheet = "sample_meta_data") %>%
   mutate(collection_date = excel_numeric_to_date(date_mm_dd_yy)) %>%
   filter(

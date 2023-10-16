@@ -6,7 +6,7 @@ output: html_document
 ---
 # Info:
 This script creates process logs sheets within box. These are formatted from the
-file imars_inventory_chl_hplc_cdom_update_<date>.xlsx. They are used to fill in
+file imars_inventory_chl_hplc_cdom.xlsx. They are used to fill in
 file name and Turner Triology values.
 
 
@@ -70,8 +70,9 @@ crs_log_exst <-
   mutate(cruise_id = str_extract(files, "[A-Z]{1,3}\\d{4,5}"))
 
 meta_all <-
-  dir_ls(here(cloud_dir), 
-         regexp = "imars_inventory_chl_hplc_cdom") %>%
+  here(cloud_dir) %>%
+  dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
+  str_subset("~", negate = TRUE) %>%
   openxlsx::read.xlsx(sheet = "sample_meta_data") %>%
   mutate(
     date_time     = janitor::convert_to_datetime(date_time, tz = "UTC"),
