@@ -72,7 +72,7 @@ rm(e)
 ```
 
 
-# 3.0 ---- HPLC Data ----
+# 3.0 ---- Data: HPLC ----
 
 ## 3.1 Read SeaBass **HPLC** Files and Check for Issues
 All columns are read as characters to check for any issues with the data
@@ -142,8 +142,11 @@ fcheck_results <-
 ```
 
 
-# 4.0 ---- Check **Particulate absorption**, **CDOM absorption** and **[Chlorophyll-a]** Files ----
+# 4.0 ---- Data: ap, aCDOM, chl ----
 
+ap    = Particulate absorption, phytoplankton absorption, and non-algal absorption
+aCDOM = CDOM absorption 
+chl   = [Chlorophyll-a]
 
 ## 4.1 Load Bio-optical Data
 
@@ -190,6 +193,15 @@ cruise_dir %>%
 # write_csv(file = here("files.csv"))
 
 # shell.exec(here())
+ 
+# all seabass files 
+cruise_dat <-
+  cruise_dir %>%
+  dir_ls(regexp = "\\.sb", recurse = 1) %>%
+  tibble(file = .) %>%
+  mutate(type = str_extract(file, "ag|ap|chl")) %T>% 
+  print()
+
 ```
 
 
@@ -197,31 +209,175 @@ cruise_dir %>%
 
 
 ```{r read-seabass-filt-cdom-chl}
-cruise_dat <-
-  cruise_dir %>%
-  dir_ls(regexp = "\\.sb", recurse = 1) %>%
-  tibble(file = .) %>%
-  mutate(type = str_extract(file, "ag|ap|chl")) %>%
-  # slice_head(n = 6, by = type)  %>%
-  
-   mutate(
-     data = map(
-      file,
-      # function to read seasbass hplc files and extract data
-      \(x) read_sb_files(x, col_types = "c", sample_type = "default")
-      )
-    ) %>%
-  nest(.by = type) %>%
+# function to read metadata and data from .sb files
+loads_datas <-
+  . %>%
   mutate(
-    data2 = map(
-      data, 
-      \(x) unnest(x, cols = data)
+    info =
+      map2(
+        file,
+        row_number(),
+        # function to read seasbass hplc files and extract data
+        \(x, y, z = nrow(.)) {
+          cli_alert_info(glue("{y} of {z}: Reading {basename(x)}"))
+          meta <-
+            readr::read_lines(x) %>%
+            str_subset("^/") %>%
+            str_subset("=") %>%
+            str_remove_all("/|\\[.*\\]") %>%
+            str_split("=", simplify = TRUE) %>%
+            as_tibble() %>%
+            rename("param" = 1, "value" = 2) %>%
+            pivot_wider(
+              names_from   = c(param),
+              values_from  = c(value),
+              names_sep    = "_",
+              names_repair = janitor::make_clean_names
+            ) %>%
+            mutate(
+              across(
+                everything(), 
+                ~ if_else(str_detect(.x, "na|no_cal_file"), NA, .x)),
+              water_depth = as.numeric(water_depth)
+            )
+
+
+          if (any(names(meta) %in% c("station", "station_name"))) {
+            meta <-
+              hablar::retype(meta, -station)
+          } else {
+            meta <- hablar::retype(meta)
+          }
+
+          data <- read_sb_files(x, col_types = "c", sample_type = "default")
+
+          list(
+            "meta" = meta,
+            "data" = data
+          )
+        }
       )
-  )
+  ) %>%
+  unnest_wider(info)
+
+# function to convert date and time to date_time
+fix_time <- 
+  . %>%
+  mutate(
+    .after     = end_time,
+    start_date = ymd(start_date),
+    end_date   = ymd(end_date),
+    start_time = hms::as_hms(start_time),
+    end_time   = hms::as_hms(end_time),
+    date_time  = ymd_hms(paste(start_date, start_time))
+  ) %>%
+  arrange(date_time)
+
+
+# # cruise_dat <-
+#   cruise_dat %>%
+#   mutate(
+#     data = map2(
+#       file,
+#       row_number(),
+#       # function to read seasbass hplc files and extract data
+#       \(x, y, z = nrow(cruise_dat)) {
+#         cli_alert_info(glue("{y} of {z}: Reading {basename(x)}"))
+#         read_sb_files(x, col_types = "c", sample_type = "default")
+#       }
+#     )
+#   ) %>%
+#   nest(.by = type) %>%
+#   mutate(
+#     data2 = map(
+#       data,
+#       \(x) unnest(x, cols = data)
+#     )
+#   ) %T>% print()
+
+
+
+# ---- load seabass data
+# --- ap
+data_ap <-  
+  cruise_dat %>%
+  filter(type == "ap") %>%
+  slice_head(
+    prop = 1,
+    # n = 20,
+    by = type
+    ) %>%
+  loads_datas
+  
+# --- ag
+load_ag <-
+  cruise_dat %>%
+  filter(str_detect(type, "ag")) %>%
+  slice_head(
+    prop = 1,
+    # n = 20,
+    by = type
+    ) %>%
+  loads_datas 
+
+# --- chl
+load_chl <- 
+  cruise_dat %>%
+  filter(str_detect(type, "chl")) %>%
+  slice_head(
+    prop = 1,
+    # n = 20,
+    by = type
+    ) %>%
+  loads_datas 
+
+
+
+
+# ---- extract metadata
+# --- ap
+meta_ap <- 
+  data_ap %>%
+  select(-data) %>%
+  # mutate(
+  #   meta = map(meta,  
+  #              ~ .x %>% 
+  #             mutate(calibration_date = as.character(calibration_date)))
+  #   ) %>%
+  unnest(meta) %>%
+  fix_time() %T>% print()
+
+# --- ag
+meta_ag <- 
+  load_ag %>%
+  select(-data) %>%
+  unnest(meta) %>%
+  fix_time() %T>% print()
+
+# --- chl
+meta_chl <- 
+  load_chl %>%
+  select(-data) %>%
+  mutate(
+    meta = map(
+      meta, 
+      ~ mutate(
+        .x,
+        calibration_date = as.character(calibration_date)
+        )
+      )
+  ) %>%
+  unnest(meta) %>%
+  fix_time() %T>% print()
+
 
 ag  <- cruise_dat$data2[[1]]
 ap  <- cruise_dat$data2[[2]]
 chl <- cruise_dat$data2[[3]]
+
+
+
+  
 ```
 
 
