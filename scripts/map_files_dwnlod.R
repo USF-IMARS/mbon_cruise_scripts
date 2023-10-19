@@ -249,7 +249,8 @@ load_map_obj <- function(
   
   # ---- libraries
   library("sf")
-  library("raster")
+  # library("raster")
+  library("terra")
   library("fs")
   library("cli")
   
@@ -355,7 +356,8 @@ load_map_obj <- function(
     bathy <- 
       bathy %>%
       
-    raster::raster() %>%
+    # raster::raster() %>%
+    terra::rast() %>%
     as.data.frame(xy = TRUE)
   
   }
@@ -400,7 +402,7 @@ base_map_plot <- function(
   # ---- libraries
   library("ggplot2")
   library("metR")
-  librarian::shelf(directlabels)
+  library("directlabels")
   
   # ---- plot 
   plt <- 
