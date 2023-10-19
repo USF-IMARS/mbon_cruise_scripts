@@ -148,7 +148,7 @@ ap    = Particulate absorption, phytoplankton absorption, and non-algal absorpti
 aCDOM = CDOM absorption 
 chl   = [Chlorophyll-a]
 
-## 4.1 Load Bio-optical Data
+## 4.1 Paths to Bio-optical Data
 
 
 ```{r directory-seabass-filt-cdom-chl}
@@ -172,14 +172,14 @@ cruise_dir <-
 cruise_dir %>%
   tibble(files = .) %>%
   mutate(
-    base     = basename(files),
-    year     = str_extract(base, "\\d{2}"),
-    year     = glue("20{year}"),
-    doy      = str_extract(base, "\\d{3}$"),
-    doy      = as.numeric(doy),
-    year     = as.numeric(year),
-    count_ap = map_int(files, ~ length(dir_ls(.x, regexp = "ap.*\\.sb$"))),
-    count_ag = map_int(files, ~ length(dir_ls(.x, regexp = "ag.*\\.sb$"))),
+    base      = basename(files),
+    year      = str_extract(base, "\\d{2}"),
+    year      = glue("20{year}"),
+    doy       = str_extract(base, "\\d{3}$"),
+    doy       = as.numeric(doy),
+    year      = as.numeric(year),
+    count_ap  = map_int(files, ~ length(dir_ls(.x, regexp = "ap.*\\.sb$"))),
+    count_ag  = map_int(files, ~ length(dir_ls(.x, regexp = "ag.*\\.sb$"))),
     count_chl = map_int(files, ~ length(dir_ls(.x, regexp = "chl.*\\.sb$"))),
   ) %>%
   arrange(year, doy) %>%
@@ -226,8 +226,7 @@ loads_datas <-
             str_subset("=") %>%
             str_remove_all("/|\\[.*\\]") %>%
             str_split("=", simplify = TRUE) %>%
-            as_tibble() %>%
-            rename("param" = 1, "value" = 2) %>%
+            as_tibble(.name_repair = ~ c("param", "value")) %>%
             pivot_wider(
               names_from   = c(param),
               values_from  = c(value),
@@ -236,8 +235,9 @@ loads_datas <-
             ) %>%
             mutate(
               across(
-                everything(), 
-                ~ if_else(str_detect(.x, "na|no_cal_file"), NA, .x)),
+                everything(),
+                ~ if_else(str_detect(.x, "na|no_cal_file"), NA, .x)
+              ),
               water_depth = as.numeric(water_depth)
             )
 
@@ -258,7 +258,7 @@ loads_datas <-
         }
       )
   ) %>%
-  unnest_wider(info)
+  unnest_wider(info) %T>% print()
 
 # function to convert date and time to date_time
 fix_time <- 
@@ -271,7 +271,7 @@ fix_time <-
     end_time   = hms::as_hms(end_time),
     date_time  = ymd_hms(paste(start_date, start_time))
   ) %>%
-  arrange(date_time)
+  arrange(date_time) 
 
 
 # # cruise_dat <-
@@ -370,14 +370,28 @@ meta_chl <-
   unnest(meta) %>%
   fix_time() %T>% print()
 
-
-ag  <- cruise_dat$data2[[1]]
-ap  <- cruise_dat$data2[[2]]
-chl <- cruise_dat$data2[[3]]
+select(meta_ap, cruise, station, start_date, end_date)
 
 
+calc_diff_time <- 
+  . %>%
+  summarise(
+    .by = cruise,
+    start_date = min(start_date),
+    end_date = max(end_date),
+    date_time_min = min(date_time),
+    date_time_max = max(date_time)
+  ) %>%
+  mutate(
+    date_diff = end_date - start_date,
+    date_time_diff = date_time_max - date_time_min
+    )
+ 
 
-  
+calc_diff_time(meta_ap) 
+calc_diff_time(meta_ag) 
+calc_diff_time(meta_chl) 
+ 
 ```
 
 
@@ -392,6 +406,8 @@ chl
   - /units=yyyy,mo,dd,hh,mn,ss,degrees,degrees,none,none,m,m,L,mg/m^3
 - 1)  Required header label \"/water_depth\" not provided."
   - add /water_depth = na
+  
+  
 ```{r fcehck-seabass-filt-cdom-chl}
 # ---- Toggle if want to see fcheck out put or look just for errors
 verb <- FALSE
@@ -463,28 +479,33 @@ if (cont == 1) {
   cruise_dir %>%
   # str_subset("", negate = TRUE) %>%
   # str_subset("", negate = FALSE) %>%
-  walk(
+  walk2(
     .,
+    row_number(.),
     submit_path = here(cloud_dir, "seabass", "temp"),
-    (\(x, submit_path) {
+    num = length(.),
+    \(x, row, submit_path, num) {
       
-      cli::cli_alert_info("Copying files from cruise {basename(x)}")
+      cli::cli_alert_info("Cruise: {basename(x)} ({row} of {num})")
       
+      file_to_move <- dir_ls(x)
+      
+      cli_alert_info("Files amount: {length(file_to_move)}\n\n---\n\n")
       
       new_loc     <-  here(submit_path, basename(x))
       new_loc_sup <- here(new_loc, "supplimental_docs")
-        
+
       # copy files to new location
       dir_copy(x, new_loc)
-      
+
       # move non-seabass files (not .sb) to supplemental docs
       dir_create(new_loc_sup)
-      
+
       dir_ls(new_loc, type = "file") %>%
       str_subset("\\.sb$", negate = TRUE) %>%
       file_move(new_loc_sup)
-    
-      })
+
+      }
     
   )
 
@@ -595,4 +616,153 @@ cruise_dir %>%
 ```
 
 
+
+
+
+
+
+
+# X.X ---- Base Map Data ----
+
+Topography, ETOPO1, 0.0166667 degrees, Global (longitude -180 to 180), (Ice Sheet Surface) from https://coastwatch.pfeg.noaa.gov/erddap/griddap/
+
+Global Self-consistent, Hierarchical, High-resolution Geography Database (GSHHG) from https://www.ngdc.noaa.gov/mgg/shorelines/
+
+```{r base-map}
+if (exists("base_plt")) {
+  
+  cli::cli_alert_info("{.var base_plot} is already loaded!")
+  
+} else {
+  source(here("scripts", "map_files_dwnlod.R"))
+  # path to base map files
+  map_loc <- here("data", "map_shp")
+
+  # spatial extent
+  exnt <- 
+    c(
+      xmin = -84, # West
+      xmax = -80, # East
+      ymin = 24,  # South
+      ymax = 28.5 # North 
+      )
+  ## ---- download topography (.nc) and coastline (.shp)
+  world_download(
+    path_land  = map_loc,
+    path_topo  = map_loc,
+    extent     = exnt,
+    use_suffix = NULL
+  )
+  
+  ## ---- Load Base Maps for Plotting
+  # select and read coastline file from GSHHS then crop
+  map_obj <-
+    load_map_obj(
+      .map_coast = map_loc,
+      .map_state = NULL,
+      .map_bath  = map_loc,
+      .map_file  = "etopo1.nc",
+      .extent    = exnt
+    )
+
+  ## ---- Plot Base Map
+  base_plt <- base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
+  base_plt
+}
+```
+
+```{r extract-data-lat-lon-info}
+map_all <-
+  . %>% 
+  select(cruise, station, date_time, "lat" = north_latitude, "lon" = west_longitude) %>% 
+  distinct() %>% 
+  arrange(date_time) %>% 
+  mutate(
+    .by = cruise,
+    lon_lag = dplyr::lead(lon),
+    lat_lag = dplyr::lead(lat),
+    ) %T>% print() %>% 
+  nest(.by = cruise) %T>% print()
+
+map_ap <- map_all(meta_ap) 
+map_ag <- map_all(meta_ag) 
+```
+
+```{r plot-cruise-track, fig.width=15, fig.asp=1.2}
+map_dat <-
+  . %>%
+  mutate(
+    plt = map2(
+      data,
+      cruise,
+      \(x, y) {
+        base_plt +
+          # ---- Sample Locations
+          ggarchery::geom_arrowsegment(
+            data = x,
+            aes(
+              x     = lon,
+              xend  = lon_lag,
+              y     = lat,
+              yend  = lat_lag,
+              # color = station
+              color = fct_reorder(format(date_time, "%B %d"), date_time)
+            ),
+            arrow_positions = 0.5,
+            arrows = arrow(length = unit(0.1, "inches")),
+            na.rm  = TRUE
+            # show.legend = FALSE
+          ) +
+          geom_point(
+            data = x,
+            aes(
+              x = lon,
+              y = lat
+            ),
+          ) +
+          ggrepel::geom_text_repel(
+            aes(
+              x = lon,
+              y = lat,
+              label = station
+            ),
+            data = x,
+            size = 2.5,
+            hjust = 0,
+            family = "serif"
+          ) +
+          labs(
+            title = y,
+            color = "Days of Coverage"
+          ) +
+          coord_sf(
+            xlim = range(x$lon) + c(-0.5, 0.5),
+            ylim = range(x$lat) + c(-0.5, 0.5)
+            ) +
+          theme(
+            legend.position = c(0.2, 0.14),
+            legend.text     = element_text(size = 10),
+            legend.title    = element_text(size = 15)
+          )
+      }
+    )
+  )
+
+# map_dat %$% 
+#   plt
+
+map_ap %>%
+ # filter(str_detect(cruise, "WS15208")) %>%
+  # slice(1) %>%
+map_dat()  %$% 
+  plt
+
+
+map_ap %>%
+ # filter(str_detect(cruise, "WS15208")) %>%
+  # slice(1) %>%
+map_dat()  %$% 
+  plt
+  
+```
 
