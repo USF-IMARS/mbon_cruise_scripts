@@ -76,7 +76,7 @@ author <- "Sebastian Di Geronimo"
 # 2. hplc_progress
 # 3. cdom_progress
 # "Chl-a"           "HPLC"            "CDOM"      
-sht_num <- 2 # change here to 1, 2, 3
+sht_num <- 1 # change here to 1, 2, 3
 sht_nm  <-
   switch(
     sht_num,
@@ -282,17 +282,25 @@ for (cruise  in unique(meta$cruise_id)) {
   # ---- set page setup for printing
   # errors if sheet exist in workbook with print page set already
   if (page_set) {
-  pageSetup(
-    wb,
-    sheet       = cruise,
-    orientation = "portrait",
-    fitToWidth  = TRUE,
-    left        = 0.25,
-    right       = 0.25,
-    top         = 0.25,
-    bottom      = 0.25,
-    printTitleRows = c(1:3)
+    pageSetup(
+      wb,
+      sheet       = cruise,
+      orientation = "portrait",
+      fitToWidth  = TRUE,
+      left        = 0.25,
+      right       = 0.25,
+      top         = 0.25,
+      bottom      = 0.25,
+      printTitleRows = c(1:3)
+      )
+      
+    setHeaderFooter(
+      wb,
+      sheet  = cruise,
+      header = c(NA, "&[Page] of &[Pages]", NA)
     )
+    
+    
   }
 
   freezePane(
