@@ -297,7 +297,7 @@ for (cruise  in unique(meta$cruise_id)) {
     setHeaderFooter(
       wb,
       sheet  = cruise,
-      header = c(NA, "&[Page] of &[Pages]", NA)
+      header = c(NA, NA, "&[Page] of &[Pages]")
     )
     
     
