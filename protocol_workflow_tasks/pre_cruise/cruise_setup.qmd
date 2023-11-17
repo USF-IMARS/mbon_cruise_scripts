@@ -68,9 +68,9 @@ cruise_folder_path <- here(cloud_dir, "years")
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "WS",                                     # HERE, ship acronym
-    start_dates = "September 16 2023",         # START DATE HERE, month day year
-    end_dates   = "September 22 2023",           # END DATE HERE, month day year
+    ship        = "H",                                     # HERE, ship acronym
+    start_dates = "November 10 2023",         # START DATE HERE, month day year
+    end_dates   = "November 17 2023",           # END DATE HERE, month day year
     volunteer   = FALSE                      # HERE, if need volunteer paperwork
     ) %>%
   mutate(
@@ -273,7 +273,7 @@ if (exists("base_plt")) {
 
   ## ---- Plot Base Map
   base_plt <-
-    base_map_plot(map_obj$coast_topo, .bathy = NULL, exnt)
+    base_map_plot(map_obj$coast_topo, .bathy = map_obj$bathy, exnt)
   base_plt
 }
 ```
@@ -331,7 +331,8 @@ imars_map <-
     data = loca,
     aes(x = lon, 
         y = lat, 
-        color = labl),
+        color = labl,
+        shape = labl),
   ) +
   geom_text_repel(
     aes(x = lon, 
@@ -342,12 +343,13 @@ imars_map <-
     hjust  = 0,
     family = "serif"
   ) +
-  
+  # "#1B9E77" "#D95F02" "#7570B3" "#E7298A" "#66A61E"
   scale_color_manual(
     name   = "Samples",
-    values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7")
+    values = RColorBrewer::brewer.pal(n = 5, name = "Dark2")
+    # values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7")
     ) +
-
+  labs(shape = "Samples") + 
   # ---- Zooplankton
   new_scale_color() +
   geom_point(
@@ -565,6 +567,7 @@ rm(sv_arg)
 ```
 
 # ---- Copy files from Cloud to Local
+
 ```{r copy-cloud-local}
 if (exists("local_dir")) {
   cli::cli_text(

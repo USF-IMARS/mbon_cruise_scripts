@@ -430,7 +430,7 @@ base_map_plot <- function(
       aes(
         x = x,
         y = y,
-        z = -Altitude
+        z = -altitude
       ),
       col = "grey70",
       breaks = c(100, 50, 25, 10, 0)
@@ -444,7 +444,7 @@ base_map_plot <- function(
       aes(
         x = x, 
         y = y, 
-        z = -Altitude,
+        z = -altitude,
         # label = ..level..
         label = after_stat(level)
       ), 
