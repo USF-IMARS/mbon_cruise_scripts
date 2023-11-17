@@ -11,9 +11,9 @@ if (!nzchar(system.file(package = "librarian")))
   install.packages("librarian")
 
 librarian::shelf(
+  quiet = TRUE,
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
   readxl, hms
@@ -33,6 +33,14 @@ na_skip <- c("NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a", "Flow",
 source(here("scripts", "misc_functions.R"))
 source(here(".Rprofile"))
 ```
+
+# ---- Cruise Filter ----
+```{r cruise-filter}
+# Enter cruise ids to filter by
+cruise_filter <- c("") %T>% 
+  print()
+```
+
 
 # ---- Search Box for FKNMS Logsheets ----
 ```{r find-files-box}
@@ -86,7 +94,7 @@ files_filt <-
          year != 2019
         ) %>%
   filter(
-    str_detect(cruise_id, "WS23203")
+    str_detect(cruise_id, str_c(cruise_filter, collapse = "|"))
   ) %T>% 
   print()
 ```
@@ -233,13 +241,17 @@ cruise_summary %>%
   arrange(date)
 
 cruise_summary
+```
 
-# save current sheet
+
+## Save current Sheet
+
+```{r save-meta}
 save_csv(
   .data          = data_all,
   save_location  = here("data", "metadata", "edna_meta"),
   save_name      = "edna_metadata",
-  overwrite      = FALSE,
+  # overwrite      = FALSE,
   # overwrite      = TRUE,
   verbose        = TRUE,
   time_stamp_fmt = "%Y-%m-%d"
@@ -257,6 +269,7 @@ save_csv(
 ```
 
 # ---- Merge to Enrique's Format ----
+
 ```{r convert-to-enrique}
 master_file <-
 suppressWarnings(master <- 
@@ -290,7 +303,7 @@ finals <-
     "long"        = "lon",
     "lat"         = "lat",
     "depth"       = "depth_level",
-    "depth_m"       = "depth_m",
+    "depth_m"     = "depth_m",
     "Replicate"   = "replicate",
     "filter type" = "filter_type"
   ) 
@@ -299,7 +312,10 @@ finals <-
   bind_rows(master, finals) %>%
   filter(cruise_id %in% pull(cruise_summary, cruise_id)) %>%
   select(-1)
+```
 
+
+```{r save-enrique-format}
 if (FALSE) {
   arg <- list()
   arg$noaa_dir <- here("data", "metadata", "edna_meta", "send_noaa")
@@ -333,6 +349,7 @@ if (FALSE) {
     )
 }
 ```
+
 # ---- Added Dec 2022 and Jan 2023 Cruise ----
 # KEEP for now!!!
 ```{r cruise-specific}
