@@ -46,8 +46,12 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 ```
 
 ```{r}
-meta_file <- here( CRUISE_LOGSHEET ) 
+# meta_file <- here( CRUISE_LOGSHEET ) 
+meta_file <- rstudioapi::selectFile()
+```
 
+
+```{r}
 meta_dat <- 
   meta_file %>% 
   getSheetNames() %>% 
