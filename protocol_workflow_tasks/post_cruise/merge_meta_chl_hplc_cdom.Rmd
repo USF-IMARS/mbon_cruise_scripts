@@ -353,7 +353,8 @@ meta_list$sample_meta_data <-
     & !(!is.na(notes) 
         & str_detect(
           notes, 
-          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost")))
+          "Not taken|not enough water|no more cdom bottles|sample was not taken|sample was lost"))) %T>%
+    print()
    
 
 meta_list$sample_meta_data %$% unique(station)
