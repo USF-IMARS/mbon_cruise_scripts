@@ -5,9 +5,21 @@ date: "2023-10-18"
 format: html
 ---
 
+Work in progress
 
 # 1.0 ---- Summary of Document ----
 
+This script is used to merge data and metadata from O2 measurements to estimate
+primary production. 
+
+This data comes from NOAA AOML as part of the South Florida Ecosystem 
+Restoration project (SFER) in partnership with MBON.
+
+
+--
+NOTE: 
+--
+This script was made quickly so it may not work across computers
 
 # 2.0 ---- Setup ----
 
