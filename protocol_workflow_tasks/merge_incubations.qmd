@@ -1,0 +1,165 @@
+---
+title: "Merge Incubations with Metadata"
+author: "Sebastian Di Geronimo"
+date: "2023-10-18"
+format: html
+---
+
+
+# 1.0 ---- Summary of Document ----
+
+
+# 2.0 ---- Setup ----
+
+## 2.1 Load Libraries
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
+librarian::shelf(
+  quiet = TRUE,
+  librarian, conflicted, dplyr, stringr,
+  forcats, lubridate, fs, magrittr, here,
+  
+  # additional
+  openxlsx, janitor, rstudioapi
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+
+```
+
+## 3.0 Set Dataset Path
+
+```{r load-data}
+# file_incubation <-
+#   here("data", "raw") %>%
+#   dir_ls(regexp = "Incubations\\.xlsx") %T>% print()
+ 
+# file_metadata <-
+#   here("data", "raw") %>%
+#   dir_ls(regexp = "SampleLog") %>%
+#   str_subset("~", negate = TRUE) %T>% print()
+
+file_incubation <- rstudioapi::selectFile(caption = "Select Incubation File") %T>% print()
+file_metadata <-  rstudioapi::selectFile(caption = "Select Metadata File") %T>% print()
+```
+
+# 4.0 Load Datasets
+
+```{r load-data}
+# ---- metadata
+dat_meta <- 
+  openxlsx::read.xlsx(
+  file_metadata,
+  sheet = "All Depths",
+  detectDates = TRUE) %>%
+  janitor::clean_names(replace = janitor:::mu_to_u) %>%
+  select(1, cruise:depth)  %>%
+  relocate(station, .after = cruise)  %>%
+  
+  # fix station and cruise names
+  mutate(
+    station = str_replace(station, "^LK", "21/LK"),
+    station = str_replace(station, "^21$", "21/LK"),
+    station = str_replace(station, "^21.5/LK$", "21/LK"),
+    station = case_when(
+      rank == 94 ~ "54b",
+      rank == 91 ~ "57b",
+      .default = station
+    ),
+    cruise = if_else(
+      between(date_gmt, as_date("2018-07-01"), as_date("2018-08-30")),
+      "WS18218",
+      cruise)
+  )  %>%
+  
+  # remove bad stations
+  filter(
+    rank != 63
+    & rank != 914
+    & rank != 1165
+  ) %T>% print()
+
+# ---- incubation
+dat_incubation <- 
+  openxlsx::read.xlsx(
+  file_incubation,
+  sheet = "Final"
+  ) %>%
+  janitor::clean_names(replace = janitor:::mu_to_u)  %>%
+  
+  # fix station and cruise names
+  mutate(
+    station = str_replace(station, "^LK", "21/LK"),
+    cruise = str_replace(cruise, "SAV18069", "SAV1803")
+    ) %T>% print()
+```
+
+
+# 5.0 Get Distinct Metadata with Incubations as a Reference
+
+```{r}
+# ---- filter incubation to distinct cruise and station
+filt_incubation <- 
+  dat_incubation %>%
+  distinct(cruise, station) %T>% print()
+
+
+# ---- filter metadata to distinct cruise and station
+filt_meta <- 
+  dat_meta %>%
+  select(-rank) %>%
+  arrange(cruise, station, desc(depth)) %>%
+  distinct(cruise, station, date_gmt, .keep_all = TRUE) %T>% print()
+
+# ---- merge filtered metadata and filtered incubation data
+full_metadata <- 
+  inner_join(
+    filt_meta,
+    filt_incubation, 
+    by = c("cruise", "station")
+    ) %T>% print()
+
+# ---- show missing incubations
+anti_join(
+  filt_incubation, 
+  dat_meta,
+  by = c("cruise", "station")
+  )
+```
+
+# 6.0 Save Merged Incubations and Metadata 
+
+```{r}
+save_loc <-
+  rstudioapi::selectDirectory(caption = "Select Save Location") %>%
+  here("merged_incubations_metadata.xlsx") %T>% print()
+
+
+dat_incubation %>%
+  mutate(
+    .before = 1,
+    rank    = fct_inorder(as.character(row_number()))
+  ) %>%
+  right_join(
+    full_metadata,
+    .,
+    by = c("cruise", "station")
+  ) %>%
+  arrange(rank) %T>% print() %>%
+  openxlsx::write.xlsx(
+    file      = save_loc,
+    overwrite = FALSE
+  )
+
+
+shell.exec(save_loc)
+
+```
+
+
+
