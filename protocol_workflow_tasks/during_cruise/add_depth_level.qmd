@@ -129,7 +129,7 @@ edna_collect <-
     #   depth_level),
     collected   = str_extract(sample, "\\w{1,2}\\d{4,5}"),
     collected   = glue::glue("{collected}-{station}-{depth_level}", .na = ""),
-    collected   = str_replace(collected, "LK", "LK/21"),
+    collected   = str_replace(collected, "LK", "21/LK"),
     x = "x"
   ) %>% 
   # --- may remove if don't want number of samples taken per type
@@ -155,7 +155,8 @@ both_sheets <-
     sample_collect,
     edna_collect
     ) %>% 
-  filter(!str_detect(collected, "(?i)blank")) %T>%
+  filter(!str_detect(collected, "(?i)blank")) %>% 
+  mutate(collected2 = str_replace(collected, "^(H)(\\d)", "HG\\2"), .after = 1) %T>%
   print()
 ```
 
@@ -174,6 +175,9 @@ file_name <-
         glue("imars_samples_collected_{cruise_id}.xlsx") )
 
 if (!file_exists(file_name)) {
+  cli::cli_alert_info("Location: {dirname(file_name)}")
+  cli::cli_alert_info("File Name: {basename(file_name)}")
+  
   openxlsx::write.xlsx(
     x         = both_sheets, 
     file      = file_name, 
@@ -191,12 +195,16 @@ if (!file_exists(file_name)) {
 
 if (overwrite == 1) {
   cli::cli_alert_info("Overwriting Previous File!")
+  cli::cli_alert_info("Location: {dirname(file_name)}")
+  cli::cli_alert_info("File Name: {basename(file_name)}")
+  
   openxlsx::write.xlsx(
     x = both_sheets, 
     file = file_name, 
     overwrite = TRUE)
   
   shell.exec(file_name)
+  shell.exec(dirname(file_name))
 }
 
 ```
