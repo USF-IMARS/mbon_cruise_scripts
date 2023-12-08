@@ -78,7 +78,8 @@ process_log_sheet <- function(
   cruise,
   sht_nm  = c("metadata", "Chl-a"), 
   inst_nm = "PElam850+ (2)",
-  creator = "Sebastian Di Geronimo") {
+  creator = "Sebastian Di Geronimo",
+  debug = FALSE) {
 
   # ========================================================================== #
   # ---- Setup ----
@@ -95,7 +96,9 @@ process_log_sheet <- function(
     # additional
     openxlsx, hms, janitor, cli
   )
-
+  
+  if (debug) browser()
+  
   # ---- Styles for formatting
   sstyles <- style_formatting()
   
