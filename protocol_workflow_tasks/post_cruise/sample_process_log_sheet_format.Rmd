@@ -67,7 +67,10 @@ crs_log_exst <-
   here(cloud_dir, "process_logs") %>%
   dir_ls() %>%
   tibble(files = .) %>%
-  mutate(cruise_id = str_extract(files, "[A-Z]{1,3}\\d{4,5}"))
+  mutate(
+    cruise_id = str_extract(files, "[A-Z]{1,3}\\d{4,5}"),
+    cruise_id = if_else(is.na(cruise_id), str_extract(files, "[A-Z]{4}_\\d"), cruise_id)
+  ) %T>% print()
 
 meta_all <-
   here(cloud_dir) %>%

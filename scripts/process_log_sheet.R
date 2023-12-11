@@ -78,7 +78,8 @@ process_log_sheet <- function(
   cruise,
   sht_nm  = c("metadata", "Chl-a"), 
   inst_nm = "PElam850+ (2)",
-  creator = "Sebastian Di Geronimo") {
+  creator = "Sebastian Di Geronimo",
+  debug = FALSE) {
 
   # ========================================================================== #
   # ---- Setup ----
@@ -95,7 +96,9 @@ process_log_sheet <- function(
     # additional
     openxlsx, hms, janitor, cli
   )
-
+  
+  if (debug) browser()
+  
   # ---- Styles for formatting
   sstyles <- style_formatting()
   
@@ -987,17 +990,17 @@ add_info.formula <- function(
       # =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
       no_acid_ratio =
         glue(
-          "IF(R{rows}>0,((Q{rows}/R{rows})+",
-          "(S{rows}/T{rows}))/2,-999)"
+          "IF(R{rows}>0,",
+          "((Q{rows}/R{rows})+(S{rows}/T{rows}))/2,", 
+          "-999)"
         ),
       
       # V =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999)
       chla_conc =
         glue(
-          "+IF(L{rows}>0,(",
-          "O{rows}*((L{rows}",
-          "-N{rows})*U{rows}",
-          ")+P{rows})*K{rows}/K{rows},-999)"
+          "+IF(L{rows}>0,",
+          "(O{rows}*((L{rows}-N{rows})*U{rows})+P{rows})*K{rows}/J{rows},",
+          "-999)"
         ),
       
       avg = glue("V{min(rows)}:V{max(rows)}"),
@@ -1057,8 +1060,6 @@ add_info.formula <- function(
     formulas$stdev, 
     startCol = std_chl,
     startRow = 4)
-   
-  # browser()
   
   # ---- comment if only one sample was taken at a station
   if (!rlang::is_empty(one_sample_taken)) {
@@ -1399,9 +1400,9 @@ update_proc_log.meta <- function(
     ) %>%
     unnest(c(chl_a, cdom, hplc)) %>%
     mutate(
-      .by = c(station, depth_m),
-      cdom = replace(cdom, duplicated(cdom), NA),
-      hplc = replace(hplc, duplicated(hplc), NA),
+      .by   = c(station, depth_m),
+      cdom  = replace(cdom, duplicated(cdom), NA),
+      hplc  = replace(hplc, duplicated(hplc), NA),
       ranks = str_remove(chl_a, ".*-"),
       ranks = str_remove_all(ranks, "[:alpha:]"),
       ranks = as.numeric(ranks),
@@ -1410,16 +1411,16 @@ update_proc_log.meta <- function(
     arrange(ranks) %>%
     select(-ranks, -cdom) %>%
     mutate(
-      .keep = "unused",
-      "Date (UTC)" = date_mm_dd_yy,
-      "Time (UTC)" = sample_collection_time_gmt,
-      "Latitude (deg. N)" = lat,
+      .keep                = "unused",
+      "Date (UTC)"         = date_mm_dd_yy,
+      "Time (UTC)"         = sample_collection_time_gmt,
+      "Latitude (deg. N)"  = lat,
       "Longitude (deg. W)" = lon,
-      "Bottom Depth (m)" = max_depth,
-      "Sample Depth (m)" = depth_m,
-      "Station ID" = station,
-      "Sample ID" = chl_a,
-      "HPLC Sample ID" = hplc,
+      "Bottom Depth (m)"   = max_depth,
+      "Sample Depth (m)"   = depth_m,
+      "Station ID"         = station,
+      "Sample ID"          = chl_a,
+      "HPLC Sample ID"     = hplc,
     )
   
   hdr_name <- names(meta)
