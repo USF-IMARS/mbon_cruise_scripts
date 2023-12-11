@@ -68,14 +68,18 @@ cruise_folder_path <- here(cloud_dir, "years")
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "H",                                     # HERE, ship acronym
-    start_dates = "November 10 2023",         # START DATE HERE, month day year
-    end_dates   = "November 17 2023",           # END DATE HERE, month day year
+    ship        = "HG",                                   # HERE, ship acronym
+    start_dates = "January 13 2024",         # START DATE HERE, month day year
+    end_dates   = "January 20 2024",           # END DATE HERE, month day year
     volunteer   = FALSE                      # HERE, if need volunteer paperwork
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
-    cruise_id = str_c(ship, format(cruise_id, "%y"), yday(cruise_id)),
+    cruise_id = str_c(
+      ship, 
+      format(cruise_id, "%y"), 
+      str_pad(yday(cruise_id), width = 3, pad = 0)
+      ),
     label = map2_chr(
       .x = start_dates,
       .y = end_dates,
