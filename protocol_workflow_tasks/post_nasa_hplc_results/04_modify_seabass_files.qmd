@@ -67,10 +67,12 @@ comment_add <-
   glue(
     "\n!\n",
     "! {format(Sys.Date(), \"%B %d, %Y\")} version {version}:\n",
-    "! Recommended by SeaBASS: remove data <250 nm then re-apply the smoothing ",
-    "filter",
+    "! Recommended by SeaBASS:\n",
+    "! - remove data <250 nm then re-calculate ag\n",
+    "! - update checklist and protocol to reflect this change",
     "\n!\n"
-  )
+  ) %T>% 
+  print()
 
 ```
 
@@ -83,6 +85,7 @@ current file name and rename to the current version.
 
 ```{r find-file-paths}
 file_loc <- here(cloud_dir, "seabass")
+file_loc_new <- here(file_loc, "temp")
 
 sb_files <-
   here(file_loc, "testing") %>%
@@ -93,14 +96,11 @@ sb_files <-
     new_file = str_replace(new_file, "R1", version),
     new_dir  = str_extract(new_file, "SFMBON_(\\w{1,2}\\d{4,6})", group = 1),
     # new_file = here("data", "processed", "ag_data", new_dir, new_file)
-    new_file = here(file_loc, "temp", new_dir, new_file)
+    new_file = here(file_loc_new, new_dir, new_file)
   ) %T>% print()
 
-sb_files %<>%
-  slice(1:50)
-
-# file_loc <- here("data", "raw", "update_test") 
-# sb_files <- 
+# file_loc <- here("data", "raw", "update_test")
+# sb_files <-
 #   here(file_loc) %>%
 #   dir_ls(regexp = "\\.sb$", recurse = 2) %>%
 #   tibble(files = .)  %>%
@@ -109,8 +109,20 @@ sb_files %<>%
 #     new_file = str_replace(new_file, "R1", version),
 #     new_dir  = str_extract(new_file, "SFMBON_(\\w{1,2}\\d{4,6})", group = 1),
 #     # new_file = here("data", "processed", "ag_data", new_dir, new_file)
-#     new_file = here(file_loc, new_dir, new_file)
+#     new_file = here(file_loc, new_dir, new_file),
 #   ) %T>% print()
+
+# updated supplemental documents
+supp_doc <- 
+  c(
+    pro  = basename(dir_ls(here(file_loc, "testing"), regexp = "Protocol")),
+    check = basename(dir_ls(here(file_loc, "testing"), regexp = "check"))
+  ) %>%
+  c(.,
+    str_remove(., "_v2")
+    ) %T>% 
+  print()
+
 ```
 
 # 3.0 ---- Update Information ----
@@ -135,7 +147,7 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
   tictoc::tic() # <-- start clock
   plan(multisession, workers = 8)
 
-  without_progress({
+  with_progress({
     p <- progressor(steps = nrow(sb_files))
 
     # --- start manipulation ---- #
@@ -146,8 +158,9 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
         data = future_map(files, ~ read_file(.x)),
 
         # get index to the last comment line
-        indx = max(str_locate_all(data, "!")[[1]][, 1], na.rm = TRUE),
-
+        # indx = max(str_locate_all(data, "!")[[1]][, 1], na.rm = TRUE),
+        indx = stringi::stri_locate_last(data, regex = "!")[, 1],
+        
         # add comment to last comment line
         dat_update =
           stringi::stri_sub_replace(
@@ -163,11 +176,26 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
             str         = dat_update,
             regex       = basename(files),
             replacement = basename(new_file)
+          ), 
+        
+        # update checklist of file name within file
+        dat_update =
+          stringi::stri_replace(
+            str         = dat_update,
+            regex       = supp_doc[4],
+            replacement = supp_doc["check"]
+          ),
+        
+        # update protocol of file name within file
+        dat_update =
+          stringi::stri_replace(
+            str         = dat_update,
+            regex       = supp_doc[3],
+            replacement = supp_doc["pro"]
           )
       )
     # ---- end manipulation --- #
   })
-
   plan(sequential)
 
   tictoc::toc() # <-- end clock
@@ -192,8 +220,9 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
         data = map_chr(files, ~ read_file(.x), .progress = TRUE),
 
         # get index to the last comment line
-        indx = max(str_locate_all(data, "!")[[1]][, 1], na.rm = TRUE),
-
+        # indx = max(str_locate_all(data, "!")[[1]][, 1], na.rm = TRUE),
+        indx = stringi::stri_locate_last(data, regex = "!")[, 1],
+        
         # add comment to last comment line
         dat_update =
           stringi::stri_sub_replace(
@@ -209,6 +238,22 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
             str         = dat_update,
             regex       = basename(files),
             replacement = basename(new_file)
+          ),
+        
+        # update checklist of file name within file
+        dat_update =
+          stringi::stri_replace(
+            str         = dat_update,
+            regex       = supp_doc[4],
+            replacement = supp_doc["check"]
+          ),
+        
+        # update protocol of file name within file
+        dat_update =
+          stringi::stri_replace(
+            str         = dat_update,
+            regex       = supp_doc[3],
+            replacement = supp_doc["pro"]
           )
       )
    tictoc::toc() # <-- end clock
@@ -225,6 +270,7 @@ rm(parallel_pkgs)
 
 ```{r save-data}
 overwrite <- FALSE
+# overwrite <- TRUE
 
 sb_files2 %$%
   walk2(
@@ -233,7 +279,7 @@ sb_files2 %$%
     \(.x, .y) {
       dir_create(dirname(.y))
       if (!file_exists(.y) || overwrite) {
-        cli::cli_alert_success("{basename(.y)} is being written!")
+        # cli::cli_alert_success("{basename(.y)} is being written!")
         
         write_file(.x, .y)
       } else {
@@ -242,15 +288,27 @@ sb_files2 %$%
     }
   )
 
+# copy supplemental docs to each cruise folder
+dir_ls(file_loc_new, type = "directory") %>%
+  here("supplemental_docs")  %T>% 
+  dir_create() %>%
+  walk(
+    ~ str_subset(supp_doc, "v2") %>%
+      str_c(collapse = "|") %>%
+      dir_ls(file_loc, regexp = ., recurse = 1) %>%
+      file_copy(new_path = .x, overwrite = overwrite)
+  )
+
+# open folder in explorer window
 dirname(dirname(sb_files2$new_file[1])) |> shell.exec()
 ```
 
 
- # -------------------------------------------------------------------------- #
+# # -------------------------------------------------------------------------- #
  #
 # 4.0 ---- TODO: Remove ---- 
  #
- # -------------------------------------------------------------------------- #
+# # -------------------------------------------------------------------------- #
 
 
 
