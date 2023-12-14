@@ -1,0 +1,776 @@
+---
+title: "Modify SeaBASS Files"
+author: "Sebastian Di Geronimo"
+date: "2023-12-13"
+format: html
+---
+
+
+# 1.0 ---- Summary of Document ----
+
+This document is used to update the headers for SeaBASS files when many files 
+need to be updated and the information is the same. This will essentially loop 
+through each file and add/replace the information needed.
+
+Specifically, this will be used to change the version number from `_Rx` to `_Ry` 
+where `x` and `y` are integers. The file name will be updated as well as 
+within the header. 
+  - e.g. `data_file_name=<file name>_Rx.sb` to `data_file_name=<file name>_Ry.sb`
+
+Also, a comment should be added as to what was changed and when.
+e.g:
+```
+!
+! MONTH DAY, YEAR version Ry corrects <updated information>
+!
+```
+Steps:
+1. Change file information outside of this document
+2. Load libraries
+3. Locate file paths that need updating
+4. Determine which version to update
+5. Add comment to file about the update
+
+
+# 2.0 ---- Setup ----
+
+## 2.1 Load Libraries
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
+librarian::shelf(
+  quiet = TRUE,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  
+  # additional
+  
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+
+```
+
+
+## 2.2 Update Comments
+
+Here is the version to change to and the comment to add to each file.
+
+```{r update-comment}
+version <- "R2"
+
+comment_add <-
+  glue(
+    "\n!\n",
+    "! {format(Sys.Date(), \"%B %d, %Y\")} version {version}:\n",
+    "! Recommended by SeaBASS: remove data <250 nm then re-apply the smoothing ",
+    "filter",
+    "\n!\n"
+  )
+
+```
+
+
+## 2.3 Find File Paths
+
+Find the path for all SeaBASS files to be updated. This will extract the 
+current file name and rename to the current version.
+
+
+```{r find-file-paths}
+file_loc <- here(cloud_dir, "seabass")
+
+sb_files <-
+  here(file_loc, "testing") %>%
+  dir_ls(regexp = "\\.sb$", recurse = 2) %>%
+  tibble(files = .)  %>%
+  mutate(
+    new_file = basename(files),
+    new_file = str_replace(new_file, "R1", version),
+    new_dir  = str_extract(new_file, "SFMBON_(\\w{1,2}\\d{4,6})", group = 1),
+    # new_file = here("data", "processed", "ag_data", new_dir, new_file)
+    new_file = here(file_loc, "temp", new_dir, new_file)
+  ) %T>% print()
+
+sb_files %<>%
+  slice(1:50)
+
+# file_loc <- here("data", "raw", "update_test") 
+# sb_files <- 
+#   here(file_loc) %>%
+#   dir_ls(regexp = "\\.sb$", recurse = 2) %>%
+#   tibble(files = .)  %>%
+#   mutate(
+#     new_file = basename(files),
+#     new_file = str_replace(new_file, "R1", version),
+#     new_dir  = str_extract(new_file, "SFMBON_(\\w{1,2}\\d{4,6})", group = 1),
+#     # new_file = here("data", "processed", "ag_data", new_dir, new_file)
+#     new_file = here(file_loc, new_dir, new_file)
+#   ) %T>% print()
+```
+
+# 3.0 ---- Update Information ----
+
+## 3.1 Change Infomation as Neded
+
+Steps:
+1. Read files as binary using `read_file()`
+2. Find where the last `!` is located. This is the last instance of a comment
+3. Add comment to file data
+4. Update file name. Internally, the file name is referenced in header section:
+   `/data_file_name`
+
+```{r update-info}
+# look for `furrr` and `progressr` package, and will skip is not downloaded.
+parallel_pkgs <- c("furrr", "progressr", "future")
+
+if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
+  shelf(parallel_pkgs)
+  handlers("cli")
+
+  tictoc::tic() # <-- start clock
+  plan(multisession, workers = 8)
+
+  without_progress({
+    p <- progressor(steps = nrow(sb_files))
+
+    # --- start manipulation ---- #
+    sb_files2 <-
+      sb_files %>%
+      mutate(
+        # read file
+        data = future_map(files, ~ read_file(.x)),
+
+        # get index to the last comment line
+        indx = max(str_locate_all(data, "!")[[1]][, 1], na.rm = TRUE),
+
+        # add comment to last comment line
+        dat_update =
+          stringi::stri_sub_replace(
+            data,
+            from  = indx,
+            to    = indx,
+            value = comment_add
+          ),
+
+        # update version of file name within file
+        dat_update =
+          stringi::stri_replace(
+            str         = dat_update,
+            regex       = basename(files),
+            replacement = basename(new_file)
+          )
+      )
+    # ---- end manipulation --- #
+  })
+
+  plan(sequential)
+
+  tictoc::toc() # <-- end clock
+
+  unshelf(parallel_pkgs)
+} else {
+  
+  # if dont have accessto `future` and `furrr` packages
+  cli::cli_alert_warning(
+    c(
+      "The packages {.pkg {parallel_pkgs}} ",
+      "{col_red(\"were not found\")} in your search path.\n\n",
+      "If you want to do parallel processing, try:\n\n",
+      "\t{.code librarian::shelf({parallel_pkgs[1]}, {parallel_pkgs[2]})}"
+    )
+  )
+  tictoc::tic() # <-- start clock
+   sb_files2 <-
+      sb_files %>%
+      mutate(
+        # read file
+        data = map_chr(files, ~ read_file(.x), .progress = TRUE),
+
+        # get index to the last comment line
+        indx = max(str_locate_all(data, "!")[[1]][, 1], na.rm = TRUE),
+
+        # add comment to last comment line
+        dat_update =
+          stringi::stri_sub_replace(
+            data,
+            from  = indx,
+            to    = indx,
+            value = comment_add
+          ),
+
+        # update version of file name within file
+        dat_update =
+          stringi::stri_replace(
+            str         = dat_update,
+            regex       = basename(files),
+            replacement = basename(new_file)
+          )
+      )
+   tictoc::toc() # <-- end clock
+}
+
+rm(parallel_pkgs)
+```
+
+## 3.2 Save New Version
+
+5. Save file as binary to remove the `carriage return` character when in text 
+   format, instead of binary. 
+   - If left in, the `FCHECK` from SeaBASS would give a warning.
+
+```{r save-data}
+overwrite <- FALSE
+
+sb_files2 %$%
+  walk2(
+    dat_update,
+    new_file,
+    \(.x, .y) {
+      dir_create(dirname(.y))
+      if (!file_exists(.y) || overwrite) {
+        cli::cli_alert_success("{basename(.y)} is being written!")
+        
+        write_file(.x, .y)
+      } else {
+        cli::cli_alert_warning("{basename(.y)} exists and is not being overwritten!")
+        }
+    }
+  )
+
+dirname(dirname(sb_files2$new_file[1])) |> shell.exec()
+```
+
+
+ # -------------------------------------------------------------------------- #
+ #
+# 4.0 ---- TODO: Remove ---- 
+ #
+ # -------------------------------------------------------------------------- #
+
+
+
+```{r}
+# sb_files2 %>%
+#   mutate(
+#     file = str_extract(data, basename(files)),
+#     files2 = str_replace(data, basename(files), basename(new_file))
+#   ) %$% 
+#   print(files2)
+```
+
+
+```{r}
+test2 <-
+      file_path$files[[1]] %>%
+      read_file()
+
+    indx2 <-
+      str_locate_all(test2, "!")[[1]][, 1] %>%
+      max()
+
+    str_sub(test2, start = indx2, end = indx2) <- comment_add
+
+    write_file(
+      test2,
+      new_file
+    )
+
+
+```
+
+
+```{r load-data}
+dat <-
+  file_path %>%
+  read_lines() 
+indx      <- which(dat == "!") |> max()
+dat[indx] <- comment_add
+f_test    <- file(new_file, open = "w")
+cat(dat, sep = "\n", file = f_test)
+close(f_test)
+shell.exec(here(new_file))
+```
+
+
+
+```{r}
+test2 <- 
+file_path %>%
+  read_file() 
+
+indx2 <- 
+  test2 %>%
+  str_locate_all("!") %>%
+  `[[`(1) %>%
+  `[`(,1) %>%
+  max()
+
+str_sub(test2, start = indx2, end = indx2) <- comment_add
+
+test2
+
+write_file(
+  test2,
+  new_file
+)
+
+
+str_c(dat, collapse = "\n") %>%
+
+write_file(
+  # dat,
+  new_file
+)
+shell.exec(here(new_file))
+```
+
+```{r}
+profvis::profvis({
+  for (i in 1:100) {
+    dat <-
+      file_path %>%
+      read_lines()
+    indx <- which(dat == "!") |> max()
+    dat[indx] <- comment_add
+
+    f_test <- file(new_file, open = "wb")
+    cat(dat, sep = "\n", file = f_test)
+    close(f_test)
+  }
+},
+ rerun = TRUE
+)
+```
+
+
+```{r}
+profvis::profvis({
+  for (i in 1:100) {
+    dat <-
+      file_path %>%
+      read_lines()
+    indx <- which(dat == "!") |> max()
+    dat[indx] <- comment_add
+
+    str_c(dat, collapse = "\n") %>%
+      write_file(new_file)
+  }
+},
+ rerun = TRUE
+)
+
+```
+
+```{r}
+profvis::profvis({
+  for (i in 1:100) {
+    test2 <-
+      file_path %>%
+      read_file()
+
+    indx2 <-
+      test2 %>%
+      str_locate_all("!") %>%
+      `[[`(1) %>%
+      `[`(, 1) %>%
+      max()
+
+    str_sub(test2, start = indx2, end = indx2) <- comment_add
+
+    write_file(
+      test2,
+      new_file
+    )
+  }
+},
+ rerun = TRUE
+)
+```
+
+```{r}
+microbenchmark::microbenchmark(
+  {
+    dat <-
+      file_path %>%
+      read_lines()
+    indx <- which(dat == "!") |> max()
+    dat[indx] <- comment_add
+
+    f_test <- file(new_file, open = "wb")
+    cat(dat, sep = "\n", file = f_test)
+    close(f_test)
+  },
+  {
+        dat <-
+      file_path %>%
+      read_lines()
+    indx <- which(dat == "!") |> max()
+    dat[indx] <- comment_add
+
+    str_c(dat, collapse = "\n") %>%
+      write_file(new_file)
+  },
+  {
+     test2 <-
+      file_path %>%
+      read_file()
+
+    indx2 <-
+      test2 %>%
+      str_locate_all("!") %>%
+      `[[`(1) %>%
+      `[`(, 1) %>%
+      max()
+
+    str_sub(test2, start = indx2, end = indx2) <- comment_add
+
+    write_file(
+      test2,
+      new_file
+    )
+  },
+  times = 1000L,
+  control = list(order = "inorder", warmup = 20)
+  
+)
+```
+
+```{r bench-data-update}
+microbenchmark::microbenchmark(
+  {
+  
+  sb_files %>%
+  slice_head(n = 10) %>%
+  mutate(
+    # read file
+    data = map(files, ~ read_file(.x), .progress = TRUE),
+    
+    # get index to the last comment line
+    indx = map_int(
+      data,
+      \(.x) {
+        str_locate_all(.x, "!")[[1]][, 1] %>%
+          max(na.rm = TRUE)
+      }
+    ),
+    
+    # add comment to last comment line
+    data_update = map2_chr(
+      data,
+      indx,
+      \(.x, .y) {
+        str_sub(.x, start = .y, end = .y) <- comment_add
+        return(.x)
+        }
+    ),
+    
+    # update version of file name within file
+    data_update = str_replace(data_update, basename(files), basename(new_file))
+  )
+  },
+  {
+
+  sb_files  %>%
+  slice_head(n = 10) %$%
+  map2(
+    files, 
+    new_file,
+    \(.x, .y) {
+      dat <- read_file(.x)
+      
+      indx <- 
+        str_locate_all(dat, "!")[[1]][, 1] %>%
+        max(na.rm = TRUE)
+      
+      dat_update <- dat
+      str_sub(dat_update, start = indx, end = indx) <- comment_add
+      
+      dat_update = str_replace(dat_update, basename(.x), basename(.y))
+      
+      results <- 
+        tibble(
+          new_file   = .y,
+          dat_old    = dat,
+          indx       = indx,
+          dat_update = dat_update
+          )
+          
+      return(results)
+      
+      }
+    )  %>%
+  list_rbind()
+
+    
+  },
+  times = 100L,
+  control = list(order = "inorder", warmup = 20)
+
+  
+)
+
+profvis::profvis(
+  {
+      sb_files  %>%
+  slice_head(n = 10) %$%
+  map2(
+    files, 
+    new_file,
+    \(.x, .y) {
+      dat <- read_file(.x)
+      
+      indx <- 
+        str_locate_all(dat, "!")[[1]][, 1] %>%
+        max(na.rm = TRUE)
+      
+      dat_update <- dat
+      str_sub(dat_update, start = indx, end = indx) <- comment_add
+      
+      dat_update = str_replace(dat_update, basename(.x), basename(.y))
+      
+      results <- 
+        tibble(
+          new_file   = .y,
+          dat_old    = dat,
+          indx       = indx,
+          dat_update = dat_update
+          )
+          
+      return(results)
+      
+      }
+    )  %>%
+  list_rbind()
+  }
+)
+
+
+profvis::profvis(
+  rerun = T,
+  {
+  
+  sb_files %>%
+  slice_head(n = 10) %>%
+  mutate(
+    # read file
+    data = map(files, ~ read_file(.x), .progress = TRUE),
+    
+    # get index to the last comment line
+    indx = map_int(
+      data,
+      \(.x) {
+        str_locate_all(.x, "!")[[1]][, 1] %>%
+          max(na.rm = TRUE)
+      }
+    ),
+    
+    # add comment to last comment line
+    data_update = map2_chr(
+      data,
+      indx,
+      \(.x, .y) {
+        str_sub(.x, start = .y, end = .y) <- comment_add
+        return(.x)
+        }
+    ),
+    
+    # update version of file name within file
+    data_update = str_replace(data_update, basename(files), basename(new_file))
+  )
+  }
+)
+```
+
+```{r}
+# look for `furrr` and `progressr` package, and will skip is not downloaded.
+parallel_pkgs <- c("furrr", "progressr")
+if (
+  nzchar(system.file(package = parallel_pkgs[1])) &
+    nzchar(system.file(package = parallel_pkgs[2]))
+) {
+  shelf(furrr, progressr)
+  handlers("cli")
+
+  tictoc::tic() # <-- start clock
+  plan(multisession, workers = 5)
+
+  with_progress({
+    p <- progressor(steps = nrow(sb_files))
+  
+  sb_files2 <-
+  sb_files %>%
+  mutate(
+    # read file
+    data = future_map(files, ~ read_file(.x), .progress = TRUE),
+
+     # get index to the last comment line
+    indx = future_map_int(
+      data,
+      \(.x) {
+        str_locate_all(.x, "!")[[1]][, 1] %>%
+          max(na.rm = TRUE)
+      }
+    ),
+
+    # add comment to last comment line
+    dat_update = furrr::future_map2_chr(
+      data,
+      indx,
+      \(.x, .y) {
+        str_sub(.x, start = .y, end = .y) <- comment_add
+        return(.x)
+        }
+    ),
+
+    # update version of file name within file
+    data_update = str_replace(dat_update, basename(files), basename(new_file))
+  )
+# 
+#   sb_files3 <- 
+#   sb_files %$%
+#   map2(
+#     files, 
+#     new_file,
+#     \(.x, .y) {
+#       dat <- read_file(.x)
+#       
+#       indx <- 
+#         str_locate_all(dat, "!")[[1]][, 1] %>%
+#         max(na.rm = TRUE)
+#       
+#       dat_update <- dat
+#       str_sub(dat_update, start = indx, end = indx) <- comment_add
+#       
+#       dat_update = str_replace(dat_update, basename(.x), basename(.y))
+#       
+#       results <- 
+#         tibble(
+#           new_file   = .y,
+#           dat_old    = dat,
+#           indx       = indx,
+#           dat_update = dat_update
+#           )
+#           
+#       return(results)
+#       
+#       }
+#     )  %>%
+#   list_rbind()
+  })
+
+  plan(sequential)
+
+  tictoc::toc() # <-- end clock
+
+  unshelf(furrr, future)
+} else {
+  cli_alert_warning(
+    c(
+      "The packages {.pkg {parallel_pkgs}} ",
+      "{col_red(\"were not found\")} in your search path.\n\n",
+      "If you want to do parallel processing, try:\n\n",
+      "\t{.code librarian::shelf({parallel_pkgs[1]}, {parallel_pkgs[2]})}"
+    )
+  )
+}
+
+rm(parallel_pkgs)
+
+# 
+# head(sb_files3)
+# sb_files3$dat_update[[800]]
+```
+
+```{r}
+{
+ tictoc::tic() # <-- start clock
+sb_files2 <-
+  sb_files %>%
+  mutate(
+    # read file
+    data = map(files, ~ read_file(.x), .progress = TRUE),
+    
+    # get index to the last comment line
+    indx = map_int(
+      data,
+      \(.x) {
+        str_locate_all(.x, "!")[[1]][, 1] %>%
+          max(na.rm = TRUE)
+      }
+    ),
+    
+    # add comment to last comment line
+    data_update = map2_chr(
+      data,
+      indx,
+      \(.x, .y) {
+        str_sub(.x, start = .y, end = .y) <- comment_add
+        return(.x)
+        }
+    ),
+    
+    # update version of file name within file
+    data_update = str_replace(data_update, basename(files), basename(new_file))
+  )
+  tictoc::toc() # <-- end clock
+}
+test <- 
+sb_files  %>%
+  slice(1:2) %$%
+  map2(
+    files, 
+    new_file,
+    \(.x, .y) {
+      dat <- read_file(.x)
+      
+      indx <- 
+        str_locate_all(dat, "!")[[1]][, 1] %>%
+        max(na.rm = TRUE)
+      
+      dat_update <- dat
+      str_sub(dat_update, start = indx, end = indx) <- comment_add
+      
+      dat_update = str_replace(dat_update, basename(.x), basename(.y))
+      
+      results <- 
+        tibble(
+          new_file   = .y,
+          dat_old    = dat,
+          indx       = indx,
+          dat_update = dat_update
+          )
+          
+      return(results)
+      
+      }
+    )  %>%
+  list_rbind()
+
+
+test$dat_update[[1]]
+
+ tictoc::tic() # <-- start clock
+
+  sb_files %>%
+  slice(1:(nrow(.) - 1)) %>%
+  mutate(
+    # read file
+    data = map_chr(files, ~ read_file(.x), .progress = TRUE)
+  )
+
+  tictoc::toc() # <-- end clock
+```
+
+```{r}
+parallel_pkgs <- c("furrr", "progressr")
+all(map_lgl(c("furrr", "progressr"), ~ nzchar(system.file(package = .x))))
+
+nzchar(system.file(package = parallel_pkgs[1])) &
+    nzchar(system.file(package = parallel_pkgs[2]))
+```
+
