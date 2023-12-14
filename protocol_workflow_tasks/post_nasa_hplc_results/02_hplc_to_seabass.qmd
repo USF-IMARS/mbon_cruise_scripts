@@ -193,7 +193,7 @@ acknowledge <-
 hd_def <- list()
 
 # version
-hd_def$suffix <- "R2"
+hd_def$suffix <- "R1"
 
 ## version notes:
 ## if verion is R2 or above, add version notes if need to resubmit
