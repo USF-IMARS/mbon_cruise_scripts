@@ -62,8 +62,9 @@ source(here(".Rprofile"))
 # EDIT location if want to put elsewhere. This will put it in the year of the
 # start date. Folders will be created if they don't exists.
 
-cruise_folder_path <- here(cloud_dir, "years")
-# cruise_folder_path <- here("data", "years")
+cruise_folder_path <- here(cloud_dir, "years") # cloud directory
+# cruise_folder_path <- here("data", "years")  # this project folder
+# cruise_folder_path <- here(local_dir)        # if using cruise laptop    
 
 # ---- Edit Cruise Info ----
 cruise_id <-
@@ -71,7 +72,8 @@ cruise_id <-
     ship        = "HG",                                   # HERE, ship acronym
     start_dates = "January 13 2024",         # START DATE HERE, month day year
     end_dates   = "January 20 2024",           # END DATE HERE, month day year
-    volunteer   = FALSE                      # HERE, if need volunteer paperwork
+    # volunteer   = FALSE                      # HERE, if need volunteer paperwork
+    volunteer   = TRUE                      # HERE, if need volunteer paperwork
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
