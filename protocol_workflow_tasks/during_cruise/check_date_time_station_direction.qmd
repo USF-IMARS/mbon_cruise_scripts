@@ -48,7 +48,11 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 ```{r}
 # select logsheet
 # meta_file <- here( CRUISE_LOGSHEET )
-meta_file <- rstudioapi::selectFile(caption = "Select Logsheet")
+meta_file <- 
+  rstudioapi::selectFile(
+    caption = "Select Logsheet",
+    path = here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data")
+    )
 ```
 
 
@@ -145,7 +149,7 @@ if (exists("base_plt")) {
 
 ```{r add-stations, fig.width=8.5, fig.height=11}
 set.seed(123)
-cruise <- str_extract(meta_file, "(WS|H|WB)\\d{4,5}")
+cruise <- str_extract(meta_file, "(WS|H|WB|HG)\\d{4,5}")
 imars_map <-
   base_plt +
   # ---- Cruise ID
