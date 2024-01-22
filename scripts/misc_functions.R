@@ -165,7 +165,7 @@ read_logsheets <- function(
     sheet_type = c("filter", "edna"),
     na_skip = c("#N/A"),
     ship_acr = "FK|WS|SV|WB|H|CORE") {
-  
+
   sheet_type <- match.arg(sheet_type)
 
   na_skip <- unlist(na_skip)
@@ -190,7 +190,7 @@ read_logsheets <- function(
       cols        = 1:.l,
       startRow    = .z,
       na.strings  = na_skip,
-      detectDates = TRUE
+      detectDates = FALSE
     ) %>%
     janitor::clean_names() %>%
     # ---- fix time
@@ -281,8 +281,12 @@ read_logsheets <- function(
   # fix date_mm_dd_yy when excel date is non-numeric
   # i.e. error 08//01/2015 - encoded as string, all other values are
   # read as strings (i.e. `"48025"` as string instead of `48025` as num)
-  if ("date_mm_dd_yy" %in% names(temp) &&
-    typeof(temp$date_mm_dd_yy) == "character") {
+  if (
+    "date_mm_dd_yy" %in% names(temp) 
+    && (typeof(temp$date_mm_dd_yy) == "character" 
+        | is.numeric(temp$date_mm_dd_yy)
+        )
+    ) {
     temp <- temp %>%
       mutate(
         date_mm_dd_yy = str_replace(date_mm_dd_yy, "//", "/"),
@@ -309,7 +313,7 @@ read_logsheets <- function(
     temp <-
       mutate(temp, sample_number = as.character(sample_number))
   }
-
+  
   # add date_time,
   # first, converting excel date_time to HMS
   # i.e. 1899-01-01 12:15:34 UTC to 12:15:13
@@ -325,18 +329,20 @@ read_logsheets <- function(
             date_mm_dd_yy = str_replace(date_mm_dd_yy, ".* ", ""),
             date_mm_dd_yy = str_replace_all(date_mm_dd_yy, ":", "/"),
             date_mm_dd_yy = str_replace_all(date_mm_dd_yy, "(.*/.*/)", "\\120"),
-            date_mm_dd_yy = anytime::anydate(date_mm_dd_yy),
+            # date_mm_dd_yy = anytime::anydate(date_mm_dd_yy),
             .before = 1
           )
         } else {
           .
         }
-      } %>%
+      } %>% 
       {
         if (all(class(temp$sample_collection_time_gmt) != "POSIXct")) {
           mutate(.,
             sample_collection_time_gmt = sample_collection_time_gmt * 86400,
+            sample_collection_time_gmt = round(sample_collection_time_gmt),
             sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+            
             date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
             .after = sample_collection_time_gmt
           )
