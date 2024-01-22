@@ -132,8 +132,25 @@ process_log_sheet <- function(
       values_from  = identifier,
       values_fn    = list,
       names_repair = make_clean_names
-    ) %>%
-    unnest(c(chl_a, cdom, hplc)) %>%
+    )
+  
+  meta <-  tryCatch({
+    
+      unnest(meta, c(chl_a, cdom, hplc))
+    }, error = function(e) {
+      # will stop if cannot unnest
+      # this will usually happen if there are more than 2 chl-a sample IDs
+      # because the depth was written the same for both surface and bottom
+      message(sprintf("Error in %s: %s", deparse(e[["call"]]), e[["message"]]))
+      View(meta)
+      
+      stop(
+        paste("Check columns, the depth may be written the same for both", 
+        "surface and bottom. \nCheck stations: MR, LK, or WS!"))
+    })
+
+  meta <- 
+    meta %>%
     mutate(
       .by   = c(station, depth_m),
       cdom  = replace(cdom, duplicated(cdom), NA),
