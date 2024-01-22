@@ -41,10 +41,10 @@ cruise_path <-
   print()
 
 # select using FileExplorer
-cruise_path <- 
-  here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
-  rstudioapi::selectFile(path = .) %T>% 
-  print()
+# cruise_path <- 
+#   here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
+#   rstudioapi::selectFile(path = .) %T>% 
+#   print()
 
 if (length(cruise_path) > 1) {
   cruise_path <- cruise_path[menu(basename(cruise_path))]
@@ -209,6 +209,10 @@ if (overwrite == 1) {
 
 ```
 ## WIP: Add <cruise id>-<station>-<qualitative depth> to Older Files
+
+
+
+This is to do the same for all cruise data not just the one.
 
 ```{r}
 {
