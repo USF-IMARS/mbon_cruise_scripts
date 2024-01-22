@@ -51,30 +51,50 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 meta_file <- 
   rstudioapi::selectFile(
     caption = "Select Logsheet",
-    path = here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data")
+    # path = here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data")
     )
 ```
 
 
 ```{r}
+# select sheet
+# 1: field_loghsheet
+# 2: eDNA
+sheet_type <- c("(?i)field", "(?i)edna")[2] # <-- edit 1 or 2
+
 meta_dat <- 
   meta_file %>% 
   getSheetNames() %>% 
-  str_subset("(?i)field") %>% 
+  str_subset(sheet_type) %>% 
   read.xlsx(
     meta_file,
     sheet = .,
    # detectDates = TRUE
   ) %>% 
   janitor::clean_names() %>% 
-  filter(!is.na(vol_ml)) %>%
+  filter(!is.na(vol_ml)) 
+
+meta_dat <-
+  meta_dat %>%
+  {
+    if (str_detect(sheet_type, "edna")) {
+      rename(
+        .,
+        "date_mm_dd_yy" = mm_dd_yy,
+        "sample_collection_time_gmt" = time_gmt
+      )
+    } else {
+      .
+    }
+  } %>%
   mutate(
     .after = sample_collection_time_gmt,
     date_time = date_mm_dd_yy + sample_collection_time_gmt,
     date_time = janitor::excel_numeric_to_date(
-      date_time, 
-      include_time = TRUE, 
-      tz = "GMT"),
+      date_time,
+      include_time = TRUE,
+      tz = "GMT"
+    ),
     date_mm_dd_yy = as_date(date_time),
     sample_collection_time_gmt = hms::as_hms(date_time)
   ) %T>% print()
@@ -86,7 +106,10 @@ meta_dat <-
 ```{r}
 map_dat <-
   meta_dat %>%
-  distinct(pick(date_mm_dd_yy:station)) %>%
+  distinct(
+    pick(
+      date_mm_dd_yy, sample_collection_time_gmt, date_time, lon, lat, station
+      )) %>%
   arrange(date_time) %>%
   mutate(
     lon_lag = dplyr::lead(lon),
