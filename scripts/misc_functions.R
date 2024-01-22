@@ -205,6 +205,7 @@ read_logsheets <- function(
           # TODO: need to correct to gmt ----
           sample_collection_time_gmt = "sample_collection_time_edt",
           sample_collection_time_gmt = "time_sampled_24_00",
+          date_mm_dd_yy = "mm_dd_yy",
           identifier = "sample_id",
           cruises    = "cruise_id"
         )
@@ -343,13 +344,13 @@ read_logsheets <- function(
             sample_collection_time_gmt = round(sample_collection_time_gmt),
             sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
             
-            date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
+            date_time = ymd(date_mm_dd_yy) + lubridate::hms(sample_collection_time_gmt),
             .after = sample_collection_time_gmt
           )
         } else {
           mutate(.,
             sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
-            date_time = ymd(date_mm_dd_yy) + hms(sample_collection_time_gmt),
+            date_time = ymd(date_mm_dd_yy) + lubridate::hms(sample_collection_time_gmt),
             .after = sample_collection_time_gmt
           )
         }
@@ -367,7 +368,18 @@ read_logsheets <- function(
         )
       )
   } else {
-    temp <- rename(temp, "time_gmt" = sample_collection_time_gmt)
+    
+    
+    temp <-  mutate(temp,
+                    sample_collection_time_gmt = sample_collection_time_gmt * 86400,
+                    sample_collection_time_gmt = round(sample_collection_time_gmt),
+                    sample_collection_time_gmt = hms::as_hms(sample_collection_time_gmt),
+                    
+                    date_time = ymd(date_mm_dd_yy) + lubridate::hms(sample_collection_time_gmt),
+                    .after = sample_collection_time_gmt
+    )  %>%
+    rename("time_gmt" = sample_collection_time_gmt,
+           "mm_dd_yy" = date_mm_dd_yy)
   }
 
 
