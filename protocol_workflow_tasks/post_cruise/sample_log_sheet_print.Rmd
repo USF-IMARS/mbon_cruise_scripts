@@ -76,7 +76,7 @@ author <- "Sebastian Di Geronimo"
 # 2. hplc_progress
 # 3. cdom_progress
 # "Chl-a"           "HPLC"            "CDOM"      
-sht_num <- 1 # change here to 1, 2, 3
+sht_num <- 2 # change here to 1, 2, 3
 sht_nm  <-
   switch(
     sht_num,
@@ -312,7 +312,12 @@ for (cruise  in unique(meta$cruise_id)) {
 }
 
 activeSheet(wb) <- 1
+```
+## Optional: Check Workbook
 
+Skip if you trust the workbook will be correct. 
+
+```{r check-workbook}
 if (!exists("open_file") || open_file) {
   openXL(wb)
   open_file <-  TRUE
