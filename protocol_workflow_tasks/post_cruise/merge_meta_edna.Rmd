@@ -35,9 +35,14 @@ source(here(".Rprofile"))
 ```
 
 # ---- Cruise Filter ----
+
+Enter desired cruise ids. If none are entered, stop.
+
+Enter with quotes separated with a comma
+i.e. c("Cruise1", "cruise2")
+
 ```{r cruise-filter}
-# Enter cruise ids to filter by
-cruise_filter <- c("") %T>% 
+cruise_filter <- c("<enter cruise ID here>") %T>% 
   print()
 ```
 
@@ -124,7 +129,9 @@ files <-
     data_row =  map_int(data, \(x) nrow(x))
     ) %>%
   filter(data_row > 0) %>%
-  select(-data_row)
+  select(-data_row) 
+
+files$data
 ```
 # ---- Check Mismatched Column Types or Names ----
 This will show the column that have a different type than what it should be. The
@@ -217,7 +224,7 @@ dat_blnk <-
   summarise(
     .by = cruise_id,
     date = min(mm_dd_yy, na.rm = TRUE),
-    across(sterivex, sum, na.rm = TRUE)
+    across(sterivex, \(.x) sum(.x, na.rm = TRUE))
   ) %>%
   rename("blank" = sterivex) %>%
   select(-date)
@@ -227,7 +234,7 @@ cruise_summary <-
   summarise(
     .by  = cruise_id,
     date = min(mm_dd_yy, na.rm = TRUE),
-    across(sterivex, sum, na.rm = TRUE)
+    across(sterivex, \(.x) sum(.x, na.rm = TRUE))
   )
 
 cruise_summary %>%
@@ -246,12 +253,13 @@ cruise_summary
 
 ## Save current Sheet
 
+
 ```{r save-meta}
 save_csv(
   .data          = data_all,
   save_location  = here("data", "metadata", "edna_meta"),
-  save_name      = "edna_metadata",
-  # overwrite      = FALSE,
+  save_name      = glue("edna_metadata_", str_c(cruise_summary$cruise_id, collapse = "_")),
+  overwrite      = FALSE,
   # overwrite      = TRUE,
   verbose        = TRUE,
   time_stamp_fmt = "%Y-%m-%d"
@@ -260,7 +268,7 @@ save_csv(
 save_csv(
   .data          = cruise_summary,
   save_location  = here("data", "metadata", "edna_meta"),
-  save_name      = "edna_summary",
+  save_name      = glue("edna_summary_", str_c(cruise_summary$cruise_id, collapse = "_")),
   overwrite      = FALSE,
   # overwrite      = TRUE,
   verbose        = TRUE,
@@ -311,7 +319,8 @@ finals <-
 finals <- 
   bind_rows(master, finals) %>%
   filter(cruise_id %in% pull(cruise_summary, cruise_id)) %>%
-  select(-1)
+  select(-1) %T>% 
+  print()
 ```
 
 
