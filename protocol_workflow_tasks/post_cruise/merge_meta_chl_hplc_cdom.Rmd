@@ -481,8 +481,11 @@ if (sv) {
     )
     readline("")
 
-   dir_create(here("data", "metadata", "inventory"))
     cli::cli_alert_info("Saving File!")
+    cli::cli_alert_info("Location: {.path 
+                        {here(\"data\", \"metadata\", \"inventory\")}}")
+    cli::cli_alert_info("File Base Name: {.var imars_inventory}")
+    dir_create(here("data", "metadata", "inventory"))
     # save
     saveWorkbook(
       wb = wb,
@@ -497,6 +500,11 @@ if (sv) {
       overwrite = TRUE
     )
 }
+
+here("data", "metadata", "inventory") %>%
+  dir_ls(regexp = "imars_inventory") %>%
+  str_subset("~\\$", negate = TRUE) %>% 
+  shell.exec()
 
 # save to cloud
 if (FALSE) {
