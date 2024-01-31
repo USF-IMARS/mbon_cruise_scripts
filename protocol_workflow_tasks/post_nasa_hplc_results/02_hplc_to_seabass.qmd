@@ -116,9 +116,7 @@ librarian::shelf(
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
-  hms, janitor,
-  
-  quiet = TRUE
+  hms, janitor
 )
 
 library("conflicted")
@@ -215,7 +213,7 @@ if (!str_detect(hd_def$suffix, "R1")) {
       )
     )
 } else {
-  hd_def$add_comment$all <- NA
+  hd_def$add_comment$all <- "!"
 }
 
 ```
@@ -509,7 +507,7 @@ hplc_data <-
         }
         glue(
           .sep = "\n",
-          .na = "",
+          .na = "!",
           "!",
           "! COMMENTS",
           "! Prepared by: {prepared_by$name}",
@@ -517,7 +515,7 @@ hplc_data <-
           "! Creation Date: {format(Sys.Date(), \"%B %d, %Y\")}",
           # hd_def$add_comment,
           comms,
-          "!",
+          # "!",
           "! Samples were processed at NASA GSFC by Crystal Thomas",
           "!",
           "! Values of -9999 represent missing information;",
@@ -667,7 +665,7 @@ hplc_w_head
 ```{r create-header-info}
 # if want to see header output, set to true
 verb <- FALSE
-# verb <- TRUE
+verb <- TRUE
 
 # cruise data header_info cruise_id 
 hplc_final <-
@@ -928,7 +926,7 @@ if (!arg_ls$wrt_cld) {
          dir_ls() %>%
          tibble(map_file = .) %>%
          mutate(
-           cruise_id = str_extract(map_file, "((WS|WB|SV)[0-9].*)(?=_s)")
+           cruise_id = str_extract(map_file, "((WS|WB|SV|H|HG)[0-9].*)(?=_s)")
            )
         )
       ) %>%
@@ -987,8 +985,11 @@ If want to save a consolidated HPLC data file with the selected variables as a
 arg_ls <- 
   list(
     run   = FALSE,
+    # run   = TRUE,
     local = FALSE,
+    # local = TRUE,
     cloud = FALSE
+    # cloud = TRUE
   )
 
 if (arg_ls$local | arg_ls$cloud | arg_ls$run) {
