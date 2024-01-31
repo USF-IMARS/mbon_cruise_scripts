@@ -34,6 +34,8 @@ M-K 09-02 report.xlsx : nov16, mar17 jun17 oct17 jan18
 M-K 10-11 part1 report.xlsx
 M-K 10-11 part2 report.xlsx
 M-K_05-17_report.xlsx : mar16
+
+M-K_13-01_report: all 2022 cruise data
 ```{r file-path}
 dir_hplc <- here("data", "raw", "hplc")
 
@@ -46,20 +48,29 @@ cal_file <-
 
 # pigment files
 file_pig <-
-    dir_hplc %>%
-    dir_ls(
-           recurse = FALSE,
-           type = "file",
-           # included ^[^~]* to not match ~, means that a file is opened
-           regexp = "^[^~]*\\.xlsx$") %>% 
-    str_sort() %>%
-    str_subset("M-K 10-11 part1 report.xlsx", negate = TRUE) %>%
-    tibble(file = ., base = basename(.)) %>%
+  dir_hplc %>%
+  dir_ls(
+    recurse = FALSE,
+    type = "file",
+    # included ^[^~]* to not match ~, means that a file is opened
+    regexp = "^[^~]*\\.xlsx$"
+  ) %>%
+  str_sort() %>%
+  str_subset("M-K 10-11 part1 report.xlsx", negate = TRUE) %>%
+  str_subset("M-K_13-01", negate = FALSE) %>%
+  tibble(file = ., base = basename(.)) %>%
   mutate(
-    sheets = map(file, 
-                 \(x) excel_sheets(x)),
-    cal_files = case_when(str_detect(base, "10-11") ~ cal_file[1],
-                          .default = cal_file[2])
+    sheets =
+      map(
+        file,
+        \(x) excel_sheets(x)
+      ),
+    cal_files = 
+      case_when(
+        str_detect(base, "13-01") ~ str_subset(cal_file, "10032021"),
+        str_detect(base, "10-11") ~ str_subset(cal_file, "02062020"),
+        .default = str_subset(cal_file, "06122017")
+    )
   ) %>%
   unnest(sheets) %>%
   pivot_wider(
@@ -67,7 +78,8 @@ file_pig <-
     names_from   = sheets, # category column(s) to pivot wide
     values_from  = sheets, # value column(s) that hold data for each category column
     names_repair = janitor::make_clean_names
-    ) 
+  ) %T>% 
+  print()
 ```
 
 ## Read Files and Select Variables for SeaBass
@@ -122,8 +134,18 @@ hplc_data <-
               )
             )
           ) %>%
-      
         # change time to hh:mm:ss and add date
+        mutate(
+          time  = 
+            if_else(
+              str_detect(time, ":") 
+              & str_length(time) == 5, 
+              time, 
+              str_replace(time, "(\\d{2})(\\d{2})", "\\1:\\2")
+              ),
+           time = glue("{time}:00"),
+           time = as.character(time),
+          ) %>%
         mutate(
           time  = hms::as_hms(time),
           month = str_extract(month, "\\w{3}"), # fix one month: Febuary
@@ -190,7 +212,8 @@ hplc_data <-
       str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
       TRUE ~ "no"
-      ))
+      )) %T>% 
+  print()
 ```
 
 
@@ -231,26 +254,26 @@ aoml <-
 
 hplc_data <-
   hplc_data %>%
-  left_join(aoml, by = join_by(cruise_id == cruise, station)) %>%
-  mutate(
-    cruise_id,
-    station,
-    lon   = if_else(abs(lon - longitude_decimal) < 0.1 
-                    | is.na(longitude_decimal), 
-                    lon, longitude_decimal),
-    lat   = if_else(abs(lat - latitude_decimal) < 0.1
-                    | is.na(latitude_decimal), 
-                    lat, latitude_decimal),
-    lon = round(lon, 4),
-    lat = round(lat, 4),
-    date  = if_else(abs(as.double(date, date_gmt, units = "days")) <= 1
-                    | is.na(date_gmt), 
-                    date, date_gmt), 
-    time  = if_else(abs(as.double(time - time_gmt, units = "secs")) < 600
-                    | is.na(time_gmt), 
-                    time, time_gmt),
-    .keep = "unused"
-  ) %>%
+  # left_join(aoml, by = join_by(cruise_id == cruise, station)) %>%
+  # mutate(
+  #   cruise_id,
+  #   station,
+  #   lon   = if_else(abs(lon - longitude_decimal) < 0.1 
+  #                   | is.na(longitude_decimal), 
+  #                   lon, longitude_decimal),
+  #   lat   = if_else(abs(lat - latitude_decimal) < 0.1
+  #                   | is.na(latitude_decimal), 
+  #                   lat, latitude_decimal),
+  #   lon = round(lon, 4),
+  #   lat = round(lat, 4),
+  #   date  = if_else(abs(as.double(date, date_gmt, units = "days")) <= 1
+  #                   | is.na(date_gmt), 
+  #                   date, date_gmt), 
+  #   time  = if_else(abs(as.double(time - time_gmt, units = "secs")) < 600
+  #                   | is.na(time_gmt), 
+  #                   time, time_gmt),
+  #   .keep = "unused"
+  # ) %>%
   nest(.by = c(cruise, cruise_id)) %>%
   mutate(
     data  = map(.x = data,
@@ -526,6 +549,8 @@ hplc_gps <-
     )
   )
 
+hplc_gps$plt
+
 # save final maps
 if (FALSE) {
   hplc_gps %$%
@@ -540,7 +565,7 @@ if (FALSE) {
           )
         dir_create(map_dir)
 
-        save_plot(
+        cowplot::save_plot(
           filename    = here(map_dir, x),
           plot        = y,
           base_height = 11,
