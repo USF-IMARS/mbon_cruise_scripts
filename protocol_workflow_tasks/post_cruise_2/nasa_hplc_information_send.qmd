@@ -625,6 +625,7 @@ meta_format2 <-
     cruise = case_when(
       str_detect(cruise, "WS") ~ str_replace(cruise, "WS", "Walton Smith "),
       str_detect(cruise, "WB") ~ str_replace(cruise, "WB", "Weather Bird II "),
+      str_detect(cruise, "HG") ~ str_replace(cruise, "HG", "Hogarth "),
       str_detect(cruise, "H") ~ str_replace(cruise, "H", "Hogarth "),
       str_detect(cruise, "(?i)CORE") ~ 
         str_replace(cruise, "CORE_", 
@@ -709,10 +710,13 @@ count(meta_format2, station,
 
 # 6.0 ---- Save Workbook ----
 
-Save the metadata as an excel workbook locally and copy to the cloud if the 
-results are satisfactory
+
+## 6.1 Save to Local Computer
+
+Save the metadata as an excel workbook locally
 
 ```{r save-wb}
+# sv <- FALSE
 sv <- TRUE
 
 dir_loc <- here("data", "metadata", "hplc_info")
@@ -769,15 +773,33 @@ if (TRUE) {
     )
   }
 }
+```
 
-# ---- run here to copy the newest xlsx file to the cloud service
-if (FALSE) {
+
+## 6.2 Save NASA Sample Form to Cloud
+
+If the results are satisfactory, copy the most recent xlsx file to the cloud
+service 
+
+Current save location in Box: mbon_imars_cruises/hplc/hplc_sample_info
+
+```{r cloud-save-wb}
+if (FALSE) { # <-- change to TRUE when ready to save
   dir_loc %>%
-  dir_ls(regexp = grant_info$last_nm) %>%
-  str_subset("~\\$", negate = TRUE) %>%
-  last_mod() %>%
-  file_copy(new_path = here(cloud_dir, "hplc", "hplc_sample_info"),
-            overwrite = TRUE)
+    dir_ls(regexp = grant_info$last_nm) %>%
+    str_subset("~\\$", negate = TRUE) %>%
+    last_mod() %>%
+    file_copy(
+      new_path = here(cloud_dir, "hplc", "hplc_sample_info"),
+      overwrite = TRUE
+    )
+} else {
+  cli::cli_alert_warning(
+    c(
+      "Not saving file to cloud directory!\n",
+      "Change the value of `FALSE` to `TRUE` to save the file to the cloud"
+    )
+  )
 }
 ```
 
