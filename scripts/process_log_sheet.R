@@ -1225,6 +1225,7 @@ update_proc_log <- function(x, type = c("meta", "cal", "meta2"), ...) {
 ##%######################################################%##
 update_proc_log.cal <- function(x, cal, ...) {
   
+  
   names(cal) <-  c(
     "Fluorometer Calibration date",
     "'No Acid' Slope",
@@ -1239,14 +1240,21 @@ update_proc_log.cal <- function(x, cal, ...) {
       sheet       = "Chl-a", 
       startRow    = 3, 
       detectDates = TRUE,
-      sep.names   = " ") %>%
+      sep.names   = " ") 
+  
+  if (!lubridate::is.Date(update$`Process date`)) {
+    update <- mutate(update, `Process date` =  as_date(`Process date`))
+  }
+  
+  
+  update <- 
+    update %>%
     mutate(
       .keep = "none",
       `Process date`,
       data = pmap(
         list(`Process date`, `Fluorometer Calibration date`), cal,
         .f = function(x, y, cal) {
-          
           if (is.na(x)) {
             cal[which(cal[,1][[1]] == max(cal[,1][[1]])),]
             
@@ -1271,7 +1279,8 @@ update_proc_log.cal <- function(x, cal, ...) {
           # }
         }
       )
-    ) %>%
+    ) 
+  update <- update %>%
     unnest(data)
   
   wb <- loadWorkbook(x)
