@@ -10,7 +10,12 @@ file imars_inventory_chl_hplc_cdom.xlsx. They are used to fill in
 file name and Turner Triology values.
 
 
-# Load Libraries ----
+
+
+
+# ---- Load Libraries ----
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 if (!nzchar(system.file(package = "librarian"))) 
@@ -35,10 +40,14 @@ source(here("scripts", "process_log_sheet.R"))
 
 sht_nm <- c("metadata", "Chl-a")
 ```
-# Triology Calibration Information ----
+
+
+# ---- Triology Calibration Information ----
+
 This will need to be updated over time
 Update: "2022-04-29", 0.17441, -0.501753918982416, 27.32, 200.39
 Update: "2023-03-28",
+Update: "2024-02-02", 0.17478, -0.27767397, 27.52, 191.97
 
 ```{r triology-calibration}
 cal <- 
@@ -46,8 +55,9 @@ cal <-
     ~cal_date,    ~no_acid_slop, ~no_acid_y_int,     ~cal_no_acid_low, ~cal_no_acid_high,
     # <date>      <dbl>          <dbl>               <dbl>            <dbl>
     "2022-04-29", 0.17441,      -0.501753918982416, 27.32,            200.39,
-    "2023-03-28", 0.177357021947293, 0.134407327675063, 27.52, 192.11,
-    # "2022-04-01", 1, 1, 1, 11,
+    "2023-03-28", 0.177357021947293, 0.134407327675063, 27.52,        192.11,
+    "2024-02-02", 0.17478,      -0.27767397,        27.52,            191.97
+    # "2024-04-01", 1, 1, 1, 11,
 
     ) %>%
   mutate(
@@ -56,11 +66,16 @@ cal <-
 cal
 
 # Change to TRUE if need to update calibration for process logs
-# update_cal <- TRUE 
 update_cal <- FALSE 
+update_cal <- TRUE
 ```
 
-# Read Log and filter Cruise IDs without Process Log File ----
+
+
+# ---- Read Log and filter Cruise IDs without Process Log File ----
+
+
+
 ```{r read-log}
 # cruise IDs that already have process logs
 crs_log_exst <- 
@@ -90,15 +105,17 @@ meta_all <-
     )
 
 if (update_cal) {
-  cli_alert_warning(c("You've set update_cal = {update_cal}. You will be ", 
-                      "updating the log!"))
+  cli_alert_warning(
+    "You've set update_cal = {update_cal}. You will be updating the log!"
+  )
 } else {
-  stopifnot("No files need creating!" = nrow(meta_all) > 1 )
+  stopifnot("No files need creating!" = nrow(meta_all) > 1)
 }
 
 ```
 
-## Create Workbook ----
+## ---- Create Workbook ----
+
 function: process_log_sheet(.meta, cal, cruise)
 Uses logsheet info for data and cruise ID
 Uses calibration variable to input into new ones
@@ -107,6 +124,8 @@ If a new cruise process log needs to be created, it will be created here.
 If the calibration needs to be updated, `update_cal` needs to be set to `TRUE`
 and it will update all files that already exists with the new calibration if the
 sample has not been run yet.
+
+
 
 ```{r workbook}
 if (!update_cal) {
@@ -131,6 +150,8 @@ save_meta <-
 } else if (update_cal) {
   save_meta <- 
     crs_log_exst %>%
+    # if need to udpate a specific cruise
+    # filter(str_detect(cruise_id, "<cruise ID>")) %>%
     mutate(
       sheets = map(
         .x = files,
@@ -138,32 +159,40 @@ save_meta <-
         .progress = TRUE
       )
     )
-  
+
 } else {
   cli_alert_danger("Stop?")
 }
-
 ```
 
 
-## Save New Worksheet or Updated Calibraiton ---
+## ---- Save New Worksheet or Updated Calibration ----
+
+Prior to running, check arg list to make sure nothing goes wrong
+
+ignore = TRUE   - checks to redo all or ignore some
+overwrt = FALSE - skip saving of files if file exist
+dir_loc = local - save to a local folder instead of cloud to verify changes
 
 ```{r save}
 arg <- 
   list(
     ignore  = TRUE, # redo all or ignore some
+    # ignore  = FALSE, # redo all or ignore some
     overwrt = FALSE,
+    # overwrt = TRUE,
     
     # directory location
-    dir_loc = here(cloud_dir, "process_logs") # cloud
-    # dir_loc = here("data", "process_logs", Sys.Date()) # local
+    dir_loc = here("data", "process_logs", Sys.Date()) # local
+    # dir_loc = here(cloud_dir, "process_logs") # cloud
   )
-
 
 dir_create(arg$dir_loc)
 
+cli_alert_info("File save location: {.file {dirname(arg$dir_loc)}}")
 
 for (i in seq(nrow(save_meta))) {
+  
   if (nrow(meta_all) > 0) {
     arg$file_name <-
       here(
@@ -173,24 +202,33 @@ for (i in seq(nrow(save_meta))) {
           "{save_meta$data[[i]]$year[[1]]}_",
           "{min(format(save_meta$data[[i]]$date_mm_dd_yy, \"%m\"), na.rm = TRUE)}",
           "_abs.xlsx"
-          )
+        )
       )
-    } else if (update_cal) {
-    arg$file_name <-  
+  } else if (update_cal) {
+    arg$file_name <-
       here(arg$dir_loc, basename(save_meta$files[[i]]))
   }
-   if (!file_exists(arg$file_name) | !arg$ignore) {
-     cli_alert_info("Trying to create file {.file {basename(arg$file_name)}}")
-     try(
-       saveWorkbook(save_meta$sheets[[i]],
-                    arg$file_name,
-                    overwrite = arg$overwrt,
-                    returnValue = TRUE), 
-       silent = FALSE)
-   } else {
-     cli_alert_info("Ignoring file {.file {basename(arg$file_name)}}")
-   }
   
+  # ---- if need to skip a file because currently being used ---- #
+  # if (str_detect(arg$file_name, "<cruise ID>")) {
+    # cli_alert_warning("Skipping file {.file {basename(arg$file_name)}}")
+    # next()
+  # }
+  
+  if (!file_exists(arg$file_name) | !arg$ignore) {
+    cli_alert_info("Trying to create file {.file {basename(arg$file_name)}}")
+    try(
+      saveWorkbook(
+        wb          = save_meta$sheets[[i]],
+        file        = arg$file_name,
+        overwrite   = arg$overwrt,
+        returnValue = TRUE
+      ),
+      silent = FALSE
+    )
+  } else {
+    cli_alert_info("Ignoring file {.file {basename(arg$file_name)}}")
+  }
 }
 
 ```
