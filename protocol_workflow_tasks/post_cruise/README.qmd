@@ -1,5 +1,5 @@
 # workflow
-```
+```mermaid
 graph TD
 
 merge_meta_chl_hplc{{merge_meta_chl_hplc}}
