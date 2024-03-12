@@ -311,6 +311,10 @@ if (exists("base_plt")) {
 ## Plot Map
 
 ```{r add-stations, fig.width=8.5, fig.height=11}
+
+
+# edit NOAA cruise plus colors
+
 set.seed(123)
 imars_map <-
   base_plt +
@@ -344,7 +348,7 @@ imars_map <-
     aes(x = lon, 
         y = lat),
     shape = 3,
-    color = "gray",
+    color = "gray40",
     size  = 1
   ) +
   # # add labels for all none sampled locations
