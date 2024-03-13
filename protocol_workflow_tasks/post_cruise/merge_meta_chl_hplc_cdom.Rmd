@@ -362,6 +362,10 @@ meta_list$sample_meta_data %$% unique(station)
 
 ## --- 6.2 Station Summary
 
+
+After running, look for columns `chl_a`, `hplc` and `cdom` for *NA*s. 
+- If you see one, check if the metadata is wrong
+
 ```{r station-summary}
 meta_list$station_summary <- 
   meta_list$sample_meta_data %>%
@@ -433,9 +437,12 @@ meta_list <- list_flatten(meta_list, name_spec = "{inner}")
 
 wb        <- loadWorkbook(inventory)
 
-getSheetNames(inventory)
+sheet_names <- 
+  getSheetNames(inventory) %>% 
+  str_subset("unknown", negate = TRUE) %T>%
+  print()
 
-for (i in getSheetNames(inventory)) {
+for (i in sheet_names) {
   print(i)
   
   # ---- reorder data for sheet `sample_meta_data`
@@ -504,6 +511,7 @@ if (sv) {
 here("data", "metadata", "inventory") %>%
   dir_ls(regexp = "imars_inventory") %>%
   str_subset("~\\$", negate = TRUE) %>% 
+  last_mod() %>% 
   shell.exec()
 
 # save to cloud

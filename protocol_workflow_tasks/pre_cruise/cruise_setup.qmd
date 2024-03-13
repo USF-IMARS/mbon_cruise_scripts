@@ -10,7 +10,7 @@ editor: source
 Complete the steps outlined in [pre_cruise_tasks.docx](mbon_imars_cruises/blank_sheets/pre_cruise_tasks.docx).
 
 # ---- Load Libraries ----
-## Load Libraries
+
 ```{r setup}
 if (!nzchar(system.file(package = "librarian"))) 
   install.packages("librarian")
@@ -49,12 +49,20 @@ ls("proj_functions")
 sf::sf_use_s2(FALSE)
 ```
 
-## File Path and Cruise ID
-Ship:
-WS = Walton Smith
-WB = WeatherBird II
-SV = Savannah
-H = Hogarth
+
+
+# ---- File Path and Cruise ID ----
+
+
+|   Ship Name    |  Acronym   |
+| :-----------:  | :--------: |
+| Walton Smith   |    WS      |
+| WeatherBird II |    WB      |
+| Savannah       |    SV      |
+| Hogarth        |    H|HG    |
+
+
+
 ```{r cruide-id-info}
 source(here(".Rprofile"))
 
@@ -70,10 +78,10 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "January 13 2024",         # START DATE HERE, month day year
-    end_dates   = "January 20 2024",           # END DATE HERE, month day year
-    # volunteer   = FALSE                      # HERE, if need volunteer paperwork
-    volunteer   = TRUE                      # HERE, if need volunteer paperwork
+    start_dates = "March 02 2024",         # START DATE HERE, month day year
+    end_dates   = "March 08 2024",           # END DATE HERE, month day year
+    volunteer   = FALSE                      # HERE, if need volunteer paperwork
+    # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
@@ -110,7 +118,11 @@ cli::cli_alert_warning(
 invisible(readline())
 }
 ```
+
+
 # Create Cloud Directory for Cruise and Copy Files
+
+
 Function to create the cruise directory within the `cruise_folder_path`.
 Sub-directories created: 
   - "metadata" for logsheets 
@@ -126,6 +138,9 @@ This function will copy blank files of:
   - volunteer paperwork (`Volunteer` = `TRUE` shows that volunteer paperwork is 
                          needed)
   - map file if exists locally
+  
+  
+  
 ```{r cruise-directory}
 dir_path <-
   cruise_setup(
@@ -143,7 +158,10 @@ dir_path <-
     str_subset("~", negate = TRUE)
 ```
 
-## Load Data Locations (Lat/Lon)
+
+# Load Data Locations (Lat/Lon)
+
+
 ```{r load-locations}
 cli_alert_info("Cruise path: {dirname(dirname(dir_path))}")
 
@@ -206,12 +224,16 @@ filter(noaa_loc, !(station %in% loca$station)) %$% station
 ```
 
 ## Match NOAA and IMaRS Locations
+
+
 Labels:
 "CHL, HPLC, CDOM",
 "CHL, HPLC (replicate), CDOM",
 "CHL, HPLC, CDOM, eDNA",
 "CHL, HPLC (replicate), CDOM, eDNA",
 "CHL, HPLC, CDOM, eDNA surf and bot"
+
+
 ```{r data-manipulation}
 # define labels for map
 loca <-
@@ -284,8 +306,15 @@ if (exists("base_plt")) {
 }
 ```
 
-# ---- Plot Locations ----
+# ---- Map Sample Locations ----
+
+## Plot Map
+
 ```{r add-stations, fig.width=8.5, fig.height=11}
+
+
+# edit NOAA cruise plus colors
+
 set.seed(123)
 imars_map <-
   base_plt +
@@ -319,7 +348,7 @@ imars_map <-
     aes(x = lon, 
         y = lat),
     shape = 3,
-    color = "gray",
+    color = "gray40",
     size  = 1
   ) +
   # # add labels for all none sampled locations
@@ -372,12 +401,15 @@ imars_map <-
   theme(
     legend.position = c(0.2, 0.14),
     legend.text     = element_text(size = 10),
-    legend.title    = element_text(size = 15)
+    legend.title    = element_text(size = 15),
+    legend.background = element_rect(color = "black")
   )
 
 imars_map
 ```
 ## Save Map
+
+
 ```{r save-map, fig.width=8.5, fig.height=11}
 sv_arg <-
   list(
@@ -422,7 +454,10 @@ rm(sv_arg)
 ```
 
 
-# ---- eDNA map only ----
+# ---- eDNA Sample Map ----
+
+## Filter for eDNA Stations
+
 ```{r edna-stations}
 loca_edna <-
   loca %>%
@@ -434,6 +469,8 @@ loca_edna <-
 cli_alert("Stations not sampling for eDNA")
 filter(noaa_loc, !(station %in% loca_edna$station)) %$% station
 ```
+
+## Plot eDNA Map
 
 ```{r edna-stations-map, fig.width=8.5, fig.height=11}
 set.seed(123)
@@ -525,8 +562,10 @@ edna_map <-
   theme(
     legend.position = c(0.2, 0.14),
     legend.text     = element_text(size = 10),
-    legend.title    = element_text(size = 15)
+    legend.title    = element_text(size = 15),
+    legend.background = element_rect(color = "black")
   )
+
 edna_map
 ```
 
