@@ -104,7 +104,8 @@ sb_data <-
   mutate(data = map(
     file, 
     # function to read seasbass hplc files and extract data
-    \(x) read_sb_files(x, col_type = "c", sample_type = "hplc")
+    \(x) read_sb_files.hplc(x, col_type = "c", sample_type = "hplc",
+                            add_na = NULL)
     )) %>%
   unnest(data)
 
