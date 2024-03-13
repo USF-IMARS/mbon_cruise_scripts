@@ -67,7 +67,7 @@ cal
 
 # Change to TRUE if need to update calibration for process logs
 update_cal <- FALSE 
-update_cal <- TRUE
+# update_cal <- TRUE
 ```
 
 
@@ -87,6 +87,7 @@ crs_log_exst <-
     cruise_id = if_else(is.na(cruise_id), str_extract(files, "[A-Z]{4}_\\d"), cruise_id)
   ) %T>% print()
 
+# cruise IDs without process log
 meta_all <-
   here(cloud_dir) %>%
   dir_ls(regexp = "imars_inventory_chl_hplc_cdom") %>%
@@ -102,7 +103,8 @@ meta_all <-
   filter(
     year >= 2019 & !str_detect(cruise_id, c("WS19028|WS19119|WS19210"))
     & !(cruise_id %in% crs_log_exst$cruise_id)
-    )
+    ) %T>% 
+  print()
 
 if (update_cal) {
   cli_alert_warning(
