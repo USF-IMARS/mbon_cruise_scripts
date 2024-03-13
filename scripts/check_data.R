@@ -92,7 +92,60 @@ read_sb_files <- function(
 }
 
 #' @rdname read_sb_files
-read_sb_files.hplc <- function(...) {
+read_sb_files.hplc <- function(
+    x, 
+    sample_type = c("default", "hplc"), 
+    col_types   = NULL, 
+    add_na      = NULL,
+    show_col_types = FALSE,  
+  ...) {
+  
+  # ---- temp ---- # 
+  na_val <- unique(c("", "NA", add_na))
+  
+  if (is.null(col_types)) {
+    col_types <- cols(.default = col_guess())
+  } else {
+    col_types <- cols(.default = col_types)
+  }
+  
+  skips <-
+    read_lines(x) %>% 
+    str_detect("end_header") %>%
+    which()
+  
+  head <-
+    read_lines(x) %>% 
+    str_detect("fields") %>%
+    which()
+  
+  col_names <-
+    read_csv(
+      x,
+      skip           = head - 1,
+      n_max          = 1,
+      col_names      = FALSE,
+      show_col_types = FALSE
+    ) %>%
+    mutate(X1 = str_remove(X1, "/fields=")) %>%
+    as.character()
+  
+  sep_pattern <- rep(c("\\S+", "\\s+"), length(col_names))
+  names(sep_pattern) <-  
+    map(col_names, \(x) c(x, NA)) %>%
+    list_c()
+  
+  x2 <- list(
+    file           = x,
+    skips          = skips,
+    col_names      = col_names,
+    show_col_types = show_col_types,
+    col_types      = col_types,
+    na_val         = na_val,
+    sep_pattern    = sep_pattern
+  )
+  
+  # ---- temp ---- # 
   x <-
   read_csv(
     file           = x2$file,
