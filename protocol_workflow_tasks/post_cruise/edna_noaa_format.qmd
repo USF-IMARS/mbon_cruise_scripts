@@ -64,7 +64,7 @@ folder within *Box*
 
 Example Structure:
 
-<cloud directoryr location on computer>/Box/mbon_imars_cruises/
+<cloud directory location on computer>/Box/mbon_imars_cruises/
 └── years
     └── 2024
         └── HG24013
