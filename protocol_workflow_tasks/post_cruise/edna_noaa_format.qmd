@@ -1,0 +1,198 @@
+---
+title: "Convert eDNA Metadata to NOAA Format"
+author: "Sebastian Di Geronimo"
+date: "2024-03-13"
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+This document takes the metadata from the cruise logsheet and converts it into
+the NOAA preferred format. This is to reduce additional steps taken by the user
+at sea to make a seamless transition.
+
+
+# 2.0 ---- Load Libraries ----
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
+librarian::shelf(
+  quiet = TRUE,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  
+  # additional
+  openxlsx2
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+
+```
+
+# 3.0 ---- eDNA Metadata ----
+
+## 3.1 Find NOAA eDNA Template
+
+The template is used to create the header for the eDNA metadata.
+
+This template is stored in:
+
+<cloud directoryr location on computer>/Box/mbon_imars_cruises/
+└── blank_sheets
+    └── edna_cruise_template_2024.xlsx <--- *this file*
+
+```{r noaa-edna-template}
+noaa_template <-
+  here(cloud_dir, "blank_sheets") %>%
+  dir_ls(regexp = "edna_.*template") %>%
+  str_subset("~", negate = TRUE) %T>% 
+  print()
+```
+
+## 3.2 Select Metadata
+
+This will have a popup to select the metadata file that contains a sheet called
+`eDNA`. This file name prefix should have `fknms_` and should be in its `cruise` 
+folder within *Box*
+
+Example Structure:
+
+<cloud directoryr location on computer>/Box/mbon_imars_cruises/
+└── years
+    └── 2024
+        └── HG24013
+            ├── above_water_radiometry
+            ├── apad
+            ├── bb3
+            ├── CDOM
+            ├── forms
+            └── metadata
+                ├── fknms_sample_logsheet_03_2024_HG24062.xlsx  <--- *this file*
+                ├── HG24062_edna_sample_locations.jpeg
+                ├── HG24062_imars_sample_locations.jpeg
+                └── HG24062_imars_sample_locations_collected.jpeg
+
+```{r select-metadata}
+# metadata
+metadata <- 
+  rstudioapi::selectFile(path = here(cloud_dir, "years")) %T>% 
+  print()
+
+# sheet name
+sheet_name <- 
+  readxl::excel_sheets(metadata) %>%
+  str_subset("eDNA$") %T>% 
+  print()
+```
+
+
+## 3.3 Load and Reformat eDNA Metadata
+
+```{r load-format-metadata}
+noaa_format <- 
+  readxl::read_xlsx(
+    metadata, 
+    sheet = sheet_name, 
+    .name_repair = janitor::make_clean_names
+  ) %>%
+  janitor::remove_empty(which = "cols") %>%
+  filter(!is.na(mm_dd_yy) & !year(mm_dd_yy) < 2000 & !is.na(vol_ml)) %>%
+  mutate(
+    .after                = time_gmt,
+    station               = str_replace(station, "LK", "21/LK"),
+    time_gmt              = hms::as_hms(time_gmt),
+    date_time             = as_datetime(paste(mm_dd_yy,time_gmt), tz = "UTC"),
+    `*collection_date`    = format_ISO8601(date_time, usetz = "Z"),
+    date_time_local       = with_tz(date_time, "America/New_York"),
+    collection_date_local = format_ISO8601(date_time_local,  usetz = TRUE),
+    collection_date_local = str_replace(collection_date_local, "(-\\d{2})00$", "\\1:00")
+  )  %T>% 
+  print() %>%
+  
+  select(
+  `*sample_name`      = sample_name,
+  serial_number       = sample,
+  cruise_id,
+  line_id,
+  line_name,
+  station,
+  ctd_bottle_no       = niskin_bottle,
+  sample_replicate,
+  notes_sampling      = notes,
+  collection_date_local,
+  `*collection_date`,
+  `*depth`            = depth_m,
+  depth_category      = depth_level,
+  `*geo_loc_name`     = geo_loc_name,
+  waterBody           = water_body,
+  `*lat_lon`          = lat_lon,
+  decimalLatitude     = lat,
+  decimalLongitude    = lon,
+  samp_vol_we_dna_ext = vol_ml
+  ) %>%
+  mutate(
+    waterBody = as.character(waterBody),
+    across(
+      c(where(is.character), waterBody), 
+      ~ na_if(.x, "0")
+      )
+    
+  ) %T>% 
+  print()
+```
+
+# 4.0 ---- Save Metadata ----
+
+## 4.1 Save Locally
+
+Save the created eDNA file locally to look for any errors.
+
+Naming convention: NOAA_eDNA_metadata_<Cruise ID>.xlsx
+
+```{r local-save}
+# extract cruise name
+cruise_name <-
+  str_extract(metadata, "[A-Z]{1,2}\\d{4,5}") %>%
+  str_c(collapse = "_")
+
+# create file name
+file_name <- 
+  here(
+    "data", "metadata", "edna_meta", "send_noaa",
+    glue("NOAA_eDNA_metadata_{cruise_name}.xlsx")
+    )
+
+# load template
+wb <- wb_load(noaa_template)
+wb_get_sheet_names(wb)
+
+# remove extra sheets
+wb <- wb_remove_worksheet(wb, sheet = "Sheet1")
+wb <- wb_remove_worksheet(wb, sheet = "Sheet2")
+
+# add data
+wb <- wb_add_data(wb, x = noaa_format, sheet = "noaa_format", na.strings = "")
+wb_get_sheet_names(wb)
+
+# save workbook and open
+wb_save(wb, file_name)
+shell.exec(file_name)
+```
+## 4.2 Copy NOAA eDNA Format to Cloud
+
+If everything looks okay, copy the eDNA metadata to the cruise folder.
+
+```{r copy-cloud}
+file_copy(
+  file_name,
+  dirname(metadata)
+)
+```
+
