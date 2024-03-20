@@ -2,7 +2,7 @@ Attending: Digna, Tylar, Ana Palacio,
 
 Here to discuss the status of data management for this cruise.
 
-Big [overview of the data flow](https://github.com/USF-IMARS/BB3_processing).
+Big [overview of the data flow]([https://github.com/USF-IMARS/BB3_processing](https://github.com/USF-IMARS/data-docs/tree/master/raw_data_collection_event_types/MBON_cruises#data-processing-pipeline)).
 
 Taxa occurrence data: 
 * Zooplankton microscopy
