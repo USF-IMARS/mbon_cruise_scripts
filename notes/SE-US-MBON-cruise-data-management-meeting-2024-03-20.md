@@ -18,6 +18,7 @@ Attending: Digna, Tylar, Ana Palacio, Lauren Showalter
   * eDNA processed by Anni Djurhuus and Enrique Montes
   * Sebastian's [phytoplankton from Pigments](https://github.com/USF-IMARS/MBON_phytoplankton_pigments)
     * TODO: put this data into OBIS
+  * Mostafa's [CTD data proceessing](https://github.com/Mostafaawada/Dissertation_code)
 
 ## Published data:
 * SEABASS link (TODO: add it here)
