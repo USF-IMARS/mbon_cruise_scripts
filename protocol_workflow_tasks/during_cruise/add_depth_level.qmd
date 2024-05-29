@@ -32,19 +32,22 @@ source(here("scripts", "misc_functions.R"))
 
 ## Cruise File Path
 ```{r}
-# hard coded
-cruise_path <- 
-  here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
-  dir_ls(regexp  = "fknms",
-         recurse = 2) %>% 
-  str_subset("~", negate = TRUE) %T>% 
-  print()
-
-# select using FileExplorer
-# cruise_path <- 
-#   here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>% 
-#   rstudioapi::selectFile(path = .) %T>% 
-#   print()
+if (str_detect(Sys.getenv("USERNAME"), "imars_cruise")) {
+  # hard coded
+  cruise_path <-
+    here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data") %>%
+    dir_ls(
+      regexp = "fknms",
+      recurse = 2
+    ) %>%
+    str_subset("~", negate = TRUE) %T>%
+    print()
+} else {
+  # select using FileExplorer
+  cruise_path <-
+    rstudioapi::selectFile() %T>%
+    print()
+}
 
 if (length(cruise_path) > 1) {
   cruise_path <- cruise_path[menu(basename(cruise_path))]
@@ -101,7 +104,7 @@ sample_collect <-
 ## eDNA
 ```{r}
 edna_collect <-
-  (readxl::excel_sheets(cruise_path)) %>% 
+  readxl::excel_sheets(cruise_path) %>% 
   str_subset("(?i)edna") %>% 
   read_excel(
     path  = cruise_path,
@@ -130,6 +133,7 @@ edna_collect <-
     collected   = str_extract(sample, "\\w{1,2}\\d{4,5}"),
     collected   = glue::glue("{collected}-{station}-{depth_level}", .na = ""),
     collected   = str_replace(collected, "LK", "21/LK"),
+    collected   = str_replace(collected, "--|-0-", "-BLANK-"),
     x = "x"
   ) %>% 
   # --- may remove if don't want number of samples taken per type
@@ -156,23 +160,41 @@ both_sheets <-
     edna_collect
     ) %>% 
   filter(!str_detect(collected, "(?i)blank")) %>% 
-  mutate(collected2 = str_replace(collected, "^(H)(\\d)", "HG\\2"), .after = 1) %T>%
+  mutate(collected = str_replace(collected, "^(H)(\\d)", "HG\\2"), .after = 1) %T>%
   print()
 ```
 
 
 # Save collected samples
+
+Formula used for sheet 2:
+=IF(ISNA(VLOOKUP($A2,'Sheet 1'!$A:$F,<2-5>,FALSE)),"",VLOOKUP($A2,'Sheet 1'!$A:$F,<2-5>,FALSE))
+
+<2-5> = depends on order of samples
+
 ```{r save-collected}
+
 overwrite <- 0
+
 cruise_id <-
   cruise_path %>% 
   str_extract("\\w{1,2}\\d{4,5}")
 
-file_name <-
-  here("C:/Users", "imars_cruise", "Documents",
-       "s_fl_cruise_data", 
-        cruise_id, "metadata", 
-        glue("imars_samples_collected_{cruise_id}.xlsx") )
+if (str_detect(Sys.getenv("USERNAME"), "imars_cruise")) {
+  file_name <-
+    here(
+      "C:/Users", "imars_cruise", "Documents",
+      "s_fl_cruise_data",
+      cruise_id, "metadata",
+      glue("imars_samples_collected_{cruise_id}.xlsx")
+    )
+} else {
+  file_name <-
+    here(
+      dirname(cruise_path),
+      glue("imars_samples_collected_{cruise_id}.xlsx")
+    )
+}
 
 if (!file_exists(file_name)) {
   cli::cli_alert_info("Location: {dirname(file_name)}")
@@ -199,15 +221,17 @@ if (overwrite == 1) {
   cli::cli_alert_info("File Name: {basename(file_name)}")
   
   openxlsx::write.xlsx(
-    x = both_sheets, 
-    file = file_name, 
-    overwrite = TRUE)
+    x         = both_sheets, 
+    file      = file_name, 
+    overwrite = TRUE
+    )
   
   shell.exec(file_name)
   shell.exec(dirname(file_name))
 }
 
 ```
+
 ## WIP: Add <cruise id>-<station>-<qualitative depth> to Older Files
 
 
