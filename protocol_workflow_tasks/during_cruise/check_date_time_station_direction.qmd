@@ -45,27 +45,32 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 
 ```
 
-```{r}
+# Select Metadata File
+
+```{r select-metadata-file}
 # select logsheet
 # meta_file <- here( CRUISE_LOGSHEET )
 meta_file <- 
   rstudioapi::selectFile(
     caption = "Select Logsheet",
+    path = cloud_dir
     # path = here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data")
     )
 ```
 
 
-```{r}
+# Read Metadata File
+
+```{r read-metadata}
 # select sheet
 # 1: field_loghsheet
 # 2: eDNA
-sheet_type <- c("(?i)field", "(?i)edna")[2] # <-- edit 1 or 2
+sheet_type <- c("field", "edna")[2] # <-- edit 1 or 2
 
 meta_dat <- 
   meta_file %>% 
   getSheetNames() %>% 
-  str_subset(sheet_type) %>% 
+  str_subset(paste0("(?i)", sheet_type)) %>% 
   read.xlsx(
     meta_file,
     sheet = .,
@@ -77,7 +82,7 @@ meta_dat <-
 meta_dat <-
   meta_dat %>%
   {
-    if (str_detect(sheet_type, "edna")) {
+    if (str_detect(paste0("(?i)", sheet_type), "edna")) {
       rename(
         .,
         "date_mm_dd_yy" = mm_dd_yy,
@@ -103,7 +108,8 @@ meta_dat <-
 
 
 # Extract Map Data 
-```{r}
+
+```{r location-extract}
 map_dat <-
   meta_dat %>%
   distinct(
@@ -245,6 +251,7 @@ imars_map <-
 imars_map
 ```
 ## Save Map
+
 ```{r save-map, fig.width=8.5, fig.height=11}
 sv_arg <-
   list(
@@ -254,23 +261,23 @@ sv_arg <-
     file_name =
       here(
         "data", "metadata", "cruise_map",
-        glue("{cruise}_imars_sample_locations_collected.jpeg")
+        glue("{cruise}_{sheet_type}_imars_sample_locations_collected.jpeg")
       )
   )
 
 if (!file_exists(sv_arg$file_name) || FALSE) {
   # create directory if doens't exist
   fs::dir_create(sv_arg$save_path)
-  
+
   cli::cli_alert_info("Creating map!")
-  
+
   # save map
   cowplot::save_plot(
-   sv_arg$file_name,
-   plot        = imars_map,
-   dpi         = 600,
-   base_width  = 8.5,
-   base_height = 11
+    sv_arg$file_name,
+    plot        = imars_map,
+    dpi         = 600,
+    base_width  = 8.5,
+    base_height = 11
   )
   shell.exec(sv_arg$file_name)
 } else {
@@ -279,16 +286,20 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
 
 if (!file_exists(here(dirname(meta_file), basename(sv_arg$file_name)))) {
   file_copy(
-        sv_arg$file_name,
-        here(dirname(meta_file)),
-        overwrite = TRUE
-      )
+    sv_arg$file_name,
+    here(dirname(meta_file)),
+    overwrite = TRUE
+  )
 } else {
   cli_alert_info("Map already copied to cruise directory!")
 }
 rm(sv_arg)
 ```
 
+# ---- STOP Here ----
+```{r}
+stop("Unless checking other cruises.\n\tNo need to continue!")
+```
 
 
 # Plot Multiple Cruises
