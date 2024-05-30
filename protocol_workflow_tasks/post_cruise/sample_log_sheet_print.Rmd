@@ -49,7 +49,6 @@ librarian::shelf(
   quiet = TRUE,
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
   # readxl, # decided openxlsx is better to create file
@@ -61,11 +60,13 @@ conflicts_prefer(
   dplyr::filter(), 
   dplyr::select()
   )
+
+if (!exists("cloud_dir")) source(here(".Rprofile"))
 ```
 
 ```{r vars}
 # loads cloud directory in .Rprofile
-source(here(".Rprofile"))
+if (!exists("cloud_dir")) source(here(".Rprofile"))
 
 
 # change if another author
@@ -76,7 +77,7 @@ author <- "Sebastian Di Geronimo"
 # 2. hplc_progress
 # 3. cdom_progress
 # "Chl-a"           "HPLC"            "CDOM"      
-sht_num <- 2 # change here to 1, 2, 3
+sht_num <- 1 # change here to 1, 2, 3
 sht_nm  <-
   switch(
     sht_num,
@@ -87,6 +88,8 @@ sht_nm  <-
 
 local_sv <- here("data", "print", sht_nm[1])
 dir_create(local_sv)
+
+cli_alert_info("Working on {.strong {sht_nm[3]}} sheet!")
 ```
 
 
@@ -96,6 +99,7 @@ This file is located in:
 box > imars_imars_cruises > imars_inventory_chl_hplc_cdom.xlsx
 
 https://usf.app.box.com/folder/179388329770?s=f6kujckfibt78al222ied0w2m6dxa529
+
 ```{r load-meta-file}
 meta <-
   here(cloud_dir) %>%
@@ -311,8 +315,13 @@ for (cruise  in unique(meta$cruise_id)) {
     )
 }
 
-activeSheet(wb) <- 1
+if (str_detect(sht_nm[1], "chl_progress")) {
+  activeSheet(wb) <- length(sheets(wb))
+} else {
+  activeSheet(wb) <- 1
+}
 ```
+
 ## Optional: Check Workbook
 
 Skip if you trust the workbook will be correct. 
@@ -323,28 +332,37 @@ if (!exists("open_file") || open_file) {
   open_file <-  TRUE
 }
 ```
+
 # Save Workbook Locally
 ```{r local-wb-sv}
 if (exists("open_file") && open_file) {
   cli_alert_danger("Re-run previous chunk because {.fun openXL} was called.")
   sv_ready <- TRUE
 } else {
-  
-  cli_alert_info(c("Saving file: {basename(prev_f)}\nLocal Path: ",
-                     "{.file {local_sv}}"))
- saveWorkbook(
-  wb,
-  file =  here(local_sv,
-               glue("{sht_nm[1]}_pres_abs_updated_",
-                    format(Sys.time(), "%Y%m%dT%H%M"),
-                    ".xlsx")),
-  overwrite = TRUE
+  cli_alert_info(
+    c(
+      "Saving file: {basename(prev_f)}\nLocal Path: ",
+      "{.file {local_sv}}"
+    )
   )
-  
+  saveWorkbook(
+    wb,
+    file = here(
+      local_sv,
+      glue(
+        "{sht_nm[1]}_pres_abs_updated_",
+        format(Sys.time(), "%Y%m%dT%H%M"),
+        ".xlsx"
+      )
+    ),
+    overwrite = TRUE
+  )
+
   sv_ready <- FALSE
   open_file <- FALSE
-
 }
+
+shell.exec(local_sv)
 ```
 
 # Save Workbook in Cloud 
@@ -353,7 +371,7 @@ to save locally.
 
 ```{r cloud-wb-sv}
 # TODO: set location
-if (T) {
+if (TRUE) {
   loc <- here(cloud_dir, "blank_sheets")
   dir_create(loc)
 } else {
@@ -366,7 +384,6 @@ if (!exists("loc")) {
   invisible(stop("\r       "))
 } 
 
-# cloud_f <- prev_f 
 # find previously saved files
 prev_f2 <-
   local_sv %>%
