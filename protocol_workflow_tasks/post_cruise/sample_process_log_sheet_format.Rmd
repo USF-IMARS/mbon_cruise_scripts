@@ -35,9 +35,10 @@ conflicts_prefer(
   dplyr::select()
   )
 
+if (!exists("cloud_dir")) source(here(".Rprofile"))
 source(here("scripts", "process_log_sheet.R"))
 
-
+# the sheets to be created
 sht_nm <- c("metadata", "Chl-a")
 ```
 
@@ -46,7 +47,7 @@ sht_nm <- c("metadata", "Chl-a")
 
 This will need to be updated over time
 Update: "2022-04-29", 0.17441, -0.501753918982416, 27.32, 200.39
-Update: "2023-03-28",
+Update: "2023-03-28", 0.177357021947293, 0.134407327675063, 27.52, 192.11
 Update: "2024-02-02", 0.17478, -0.27767397, 27.52, 191.97
 
 ```{r triology-calibration}
@@ -60,10 +61,9 @@ cal <-
     # "2024-04-01", 1, 1, 1, 11,
 
     ) %>%
-  mutate(
-    cal_date = as_date(cal_date)
-  )
-cal
+  mutate(cal_date = as_date(cal_date)) %T>% 
+  print()
+
 
 # Change to TRUE if need to update calibration for process logs
 update_cal <- FALSE 
@@ -233,6 +233,7 @@ for (i in seq(nrow(save_meta))) {
   }
 }
 
+shell.exec(arg$dir_loc)
 ```
 
 # Update Metadata
