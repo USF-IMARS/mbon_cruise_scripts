@@ -33,7 +33,7 @@ conflicts_prefer(
   dplyr::select()
   )
   
-
+if (!exists("cloud_dir")) source(here(".Rprofile"))
 ```
 
 # 3.0 ---- eDNA Metadata ----

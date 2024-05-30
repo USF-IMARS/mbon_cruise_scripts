@@ -15,14 +15,10 @@ librarian::shelf(
   quiet = TRUE,
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
-  # readxl
   openxlsx
 )
-
-# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
   dplyr::filter(), 
@@ -129,26 +125,29 @@ if (is.null(box_search) | check == 2 | check == 3) {
     print()
 }
 ```
+
 ## --- 2.3 Compare Local and Cloud
 Check the differences between the two to see if any discrepancies exists. 
 You should only need to use the `cloud_dir` location
+
+
 ```{r compare}
-stopifnot(
-  "Will not be checking between cloud and local directories. Continue!" = 
-    exists("files_filt") & exists("files_local"))
-files_local[files_local$base %in% files_filt$base, 2]
-files_filt[!files_filt$base %in% files_local$base, 2]
-files_filt[files_filt$base %in% files_local$base, 2]
-  
-  anti_join(files_all, files_local,   by = "base") # all files in cloud, not in cloud
-  anti_join(files_local, files_filt,  by = "base") # files in local, not in cloud
-  anti_join(files_filt, files_local,  by = "base") # files in cloud, not in local
-  inner_join(files_filt, files_local, by = "base") # overlap between both
-  
-  # result is ones not in the local metadata files
-  full_join(files_filt, files_local,  by = "base") %>%
-    arrange(year, base) %>%
-    filter(is.na(file_path.y)) 
+# stopifnot(
+#   "Will not be checking between cloud and local directories. Continue!" = 
+#     exists("files_filt") & exists("files_local"))
+# files_local[files_local$base %in% files_filt$base, 2]
+# files_filt[!files_filt$base %in% files_local$base, 2]
+# files_filt[files_filt$base %in% files_local$base, 2]
+#   
+#   anti_join(files_all, files_local,   by = "base") # all files in cloud, not in cloud
+#   anti_join(files_local, files_filt,  by = "base") # files in local, not in cloud
+#   anti_join(files_filt, files_local,  by = "base") # files in cloud, not in local
+#   inner_join(files_filt, files_local, by = "base") # overlap between both
+#   
+#   # result is ones not in the local metadata files
+#   full_join(files_filt, files_local,  by = "base") %>%
+#     arrange(year, base) %>%
+#     filter(is.na(file_path.y)) 
 ```
 
 # ---- 3.0 Extract sheet name and row to read ----
@@ -264,7 +263,7 @@ This ignores potential NAs using any of
 ```{r load-data}
 files <-
   files %>%
-  # filter(cruise_id == "H23138") %>%
+  # filter(cruise_id == "WS24139") %>%
   
   mutate(
     data = pmap(
