@@ -1,0 +1,208 @@
+---
+title: "Extract Chla from Process Log"
+author: "Sebastian Di Geronimo"
+date: 2024-05-31
+format: html
+editor: source
+---
+
+# 1.0 ---- Summary of Document ----
+
+Load all process logs from the IMaRS cruise cloud directory.
+
+Extract the chlorophyll-a sheet and format the master chlorophyll-a sheet.
+
+Format like: <https://usf.app.box.com/file/1408231012503>
+
+Date (UTC)
+Time (UTC)	
+Latitude (deg. N)	
+Longitude (deg. W)	
+Bottom Depth (m)	
+Sample Depth (m)	
+Station   ID	
+CruiseID	
+CruiseOrder	
+SampleID	
+ap,d(λ) process date	
+ap,d(λ) filename	
+Volume seawater (ml)
+Volume methanol (ml)
+'No Acid' Rb
+'Acid' Rb	
+'Acid' Ra	Fluorometer Calibration date	
+Fluorometer Calibration 'r'	Cal.     
+'No Acid' Low	'No Acid' Low	Cal.     
+'No Acid' High 	
+'No Acid' High	Cal.  
+'Acid' Low 	
+'Acid' Low	Cal. 
+'Acid' High 	
+'Acid' High	
+'No Acid' ratio	
+'Acid' ratio	[Chl a] (mg m-3)	 
+AVG  [Chl a] (mg m-3)	
+STDEV [Chl a] (mg m-3)
+[Chl a] (mg m-3)	
+AVG  [Chl a] (mg m-3)	
+STDEV [Chl a] (mg m-3)	
+[Pheo] (mg m-3)	 
+AVG  [Pheo] (mg m-3)	
+STDEV [Pheo] (mg m-3)	
+No Acid' [Chl a]/ 'Acid' [Chl a]	
+[Pheo]/ [Chl a]	
+No Acid' [Chl a]/ 'Acid' [Chl a]
+[Pheo]/ [Chl a]	
+Original Comments	
+Comments Digna
+
+# 2.0 ---- Setup ----
+
+
+## 2.1 Load Libraries
+
+```{r setup, include=FALSE}
+if (!nzchar(system.file(package = "librarian"))) 
+  install.packages("librarian")
+
+librarian::shelf(
+  quiet = TRUE,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  forcats, lubridate, glue, fs, magrittr, here,
+  
+  # additional
+  
+)
+
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
+  
+if (!exists("cloud_dir")) source(here(".Rprofile"))
+```
+
+## 2.2 Load Dataset
+
+```{r load-data}
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "extract_chla_process_log")
+
+file_paths <- 
+  here(cloud_dir, "process_logs") %>%
+  dir_ls() %T>%
+  print()
+```
+# 3.0 Read Process Log Files
+
+```{r read-process-log}
+# read files and filter out non-run samples
+process_data <-
+  file_paths[-1] %>%
+  map(
+    \(.x) {
+      openxlsx2::read_xlsx(
+        file         = .x,
+        sheet        = "Chl-a",
+        start_row    = 3,
+        show_formula = FALSE,
+      ) %>%
+        filter(!is.na(`Process date`)) %>%
+        mutate(Comments = as.character(Comments)) %>%
+        hablar::retype()
+    }
+  )
+
+# find empty files and remove from list
+remove_files <- vector()
+for (i in seq(process_data)) {
+  print(i)
+  
+  if (nrow(process_data[[i]]) == 0) {
+    remove_files <- c(remove_files, i)
+  }
+}
+
+# organize cruises by cruise start date
+process_data_save <- 
+  process_data[-remove_files] %>%
+  bind_rows() %>%
+  mutate(
+    .before = 1,
+    cruise = str_extract(`Sample ID`, "(.*)-(\\d{1,3})", group = 1),
+  ) %>%
+  nest(.by = cruise) %>%
+  mutate(
+    year = str_extract(cruise, "\\d{2}"),
+    year = as.numeric(year),
+    date = str_extract(cruise, "\\d{3}$"),
+    date = as.numeric(date)
+  ) %>%
+  arrange(year, date) %>%
+  unnest(data) %>%
+  mutate(
+    .before = 1,
+    cruise = str_extract(`Sample ID`, "(.*)-(\\d{1,3})", group = 1),
+    samp_num = str_extract(`Sample ID`, "-(\\d{1,3})", group = 1),
+    samp_num = as.numeric(samp_num),
+    samp_lag = dplyr::lag(samp_num),
+    samp_diff = samp_num - samp_lag
+  ) %T>%
+  print() %>%
+  select(
+    -c(samp_num, samp_lag, samp_diff, cruise, year, date)
+  ) %T>% 
+  print()
+  
+```
+
+# 4.0 Save Process Log 
+
+```{r save-process-log}
+# overwrite file if exists
+overwrite <- FALSE
+# overwrite <- TRUE
+
+# file name:
+# based on range of years and today's date
+save_file_name <-
+  here(
+    dir_data_save,
+    glue(
+      "filters_chlorophyll_",
+      paste(range(year(process_data_save[[1]])), collapse = "_"),
+      "_{Sys.Date()}.xlsx"
+    )
+  )
+
+# create directory for save
+dir_create(dir_data_save)
+
+# save file
+openxlsx2::write_xlsx(
+  x = process_data_save,
+  file = save_file_name,
+  as_table = FALSE,
+  na.strings = "",
+  overwrite = overwrite
+)
+
+# open folder to local save
+shell.exec(dir_data_save)
+```
+
+## 4.1 Copy to Cloud
+
+```{r cloud-copy}
+if (FALSE) {
+  file_copy(
+    path     = save_file_name,
+    new_path = here(cloud_dir, "Chl_filters")
+  )
+}
+```
+
+
+
+
+
