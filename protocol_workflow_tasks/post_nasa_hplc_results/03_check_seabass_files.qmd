@@ -471,7 +471,7 @@ chl
 ```
 
 
-```{r fcehck-seabass-filt-cdom-chl}
+```{r fcheck-seabass-filt-cdom-chl}
 # ---- Toggle if want to see fcheck out put or look just for errors
 verb <- FALSE
 # verb <- TRUE
