@@ -12,7 +12,7 @@ Load all process logs from the IMaRS cruise cloud directory.
 
 Extract the chlorophyll-a sheet and format the master chlorophyll-a sheet.
 
-Format like: <https://usf.app.box.com/file/1408231012503>
+Format similar to: <https://usf.app.box.com/file/1408231012503>
 
 Date (UTC)
 Time (UTC)	
