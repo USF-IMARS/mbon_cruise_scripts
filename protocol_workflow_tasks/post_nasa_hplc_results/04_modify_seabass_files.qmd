@@ -60,6 +60,13 @@ conflicts_prefer(
 
 Here is the version to change to and the comment to add to each file.
 
+Comment added:
+
+- updated ag method for R1 files
+ "Recommended by SeaBASS:,
+  - remove data <250 nm then re-calculate ag,
+  - update checklist and protocol to reflect this change"
+
 ```{r update-comment}
 version <- "R2"
 
@@ -67,9 +74,7 @@ comment_add <-
   glue(
     "\n!\n",
     "! {format(Sys.Date(), \"%B %d, %Y\")} version {version}:\n",
-    "! Recommended by SeaBASS:\n",
-    "! - remove data <250 nm then re-calculate ag\n",
-    "! - update checklist and protocol to reflect this change",
+    "! <edit comment here>",
     "\n!\n"
   ) %T>% 
   print()
