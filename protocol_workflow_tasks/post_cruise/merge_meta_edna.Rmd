@@ -5,6 +5,21 @@ date: '2022-09-13'
 output: html_document
 ---
 
+This file has been replaced by `edna_noaa_format.qmd`.
+
+```{r}
+stop(
+  c(
+    "This file is not used anymore.\n",
+    "This was replaced by:\n",
+    "`edna_noaa_format.qmd`\n\n",
+    "Please use this file after cruise!\n\n"
+  )
+)
+```
+
+
+
 # ---- Load Libraries ----
 ```{r setup}
 if (!nzchar(system.file(package = "librarian"))) 
@@ -18,8 +33,6 @@ librarian::shelf(
   # additional
   readxl, hms
 )
-
-# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
   dplyr::filter(), 
@@ -115,6 +128,7 @@ files <-
 
 ```
 # ---- Read Files ----
+
 ```{r read-meta-sheets}
 files <-
   files %>%
@@ -134,12 +148,17 @@ files <-
 files$data
 ```
 # ---- Check Mismatched Column Types or Names ----
+
+
 This will show the column that have a different type than what it should be. The
 issue arises when the column if of type "character" vs "numeric", "date", etc. 
 The ones that are diferent from "logical" vs "numeric" are fine because 
 "logical" can be converted to numeric as either a `1` or a `0`.
+
+
 ```{r mismatch}
-mismatch <- t(janitor::compare_df_cols(files$data, return = "mismatch"))        
+mismatch <- t(janitor::compare_df_cols(files$data, return = "mismatch")) 
+
 rownames(mismatch) <- c(NA, tools::file_path_sans_ext(files$base))
                          
 mismatch
