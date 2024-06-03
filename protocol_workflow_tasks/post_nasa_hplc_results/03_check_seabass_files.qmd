@@ -161,14 +161,16 @@ aCDOM = CDOM absorption
 chl   = [Chlorophyll-a]
 
 ## 4.1 Paths to Bio-optical Data
-
-
+ 
 ```{r directory-seabass-filt-cdom-chl}
 cruise_dir <- 
   # here(cloud_dir, "seabass", "testing") %>%
   here(cloud_dir, "seabass", "temp") %>%
-  dir_ls(type = "directory") %T>% print()
+  dir_ls(type = "directory") %T>% 
+  print()
 
+
+# list all cruises previously submitted
 cruise_submit <- 
   here(cloud_dir, "seabass", "submitted") %>%
   dir_ls() %T>% print()
@@ -202,7 +204,8 @@ cruise_dir %>%
     "ap Samples"            = count_ap,
     "ag Samples"            = count_ag,
     "Extracted chl Samples" = count_chl,
-  ) # %>%
+  ) %>%
+  mutate(total = `ap Samples` + `ag Samples` + `Extracted chl Samples`)
 # write_csv(file = here("files.csv"))
 
 # shell.exec(here())
@@ -480,7 +483,7 @@ cruise_dir2 <-
   cruise_dir %>%
   dir_ls(., regexp = "\\.sb") %>%
   tibble(files = .) %>%
-  mutate(cruise = str_extract(files, "\\w{1,3}\\d{4,5}")) %>%
+  mutate(cruise = str_extract(files, "\\w{1,2}\\d{4,5}")) %>%
   nest(.by = cruise) %T>% 
   print()
 
@@ -515,15 +518,7 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
               verb       = verb,
               row_check  = "end"
             ) 
-              
               }
-            # ~ sb_fcheck(
-            #   .x,
-            #   col_name   = "files",
-            #   loc_fcheck = here(),
-            #   verb       = verb,
-            #   row_check  = "end"
-            # )
           )
       )
   })
@@ -562,31 +557,31 @@ fcheck_results %>%
   unnest(dats) %$%
   list_c(fcheck2) %>%
   unique() %>%
-  str_subset(".*temp*", negate = TRUE) %>% 
+  str_subset(".*temp*|.*testing.*", negate = TRUE) %>% 
   str_remove("\\d\\)\\s+") %>%
   str_remove("^\\s+") %>%
   sort() %>% 
   cat(sep = "\n") 
 
 # ---
-fcheck_results3 %>%
-  list_c() %$%
-  list_c(fcheck2) %>%
-  unique() %>%
-  str_subset(".*testing.*", negate = TRUE) %>%
-  sort() %>% 
-  cat(sep = "\n") 
-
-
-fcheck_results3 %>%
-  list_c() %$%
-  list_c(fcheck2) %>%
-  tibble(tes = .) %>%
-  slice(
-    (19432 - 10):(19432 + 20), 
-    (22095 - 10):(22095 + 20)
-    )
-  which(str_detect(tes, "mal"))
+# fcheck_results %>%
+#   list_c() %$%
+#   list_c(fcheck2) %>%
+#   unique() %>%
+#   str_subset(".*testing.*", negate = TRUE) %>%
+#   sort() %>% 
+#   cat(sep = "\n") 
+# 
+# 
+# fcheck_results %>%
+#   list_c() %$%
+#   list_c(fcheck2) %>%
+#   tibble(tes = .) %>%
+#   slice(
+#     (19432 - 10):(19432 + 20), 
+#     (22095 - 10):(22095 + 20)
+#     )
+#   which(str_detect(tes, "mal"))
 ```
 
 
@@ -623,7 +618,7 @@ if (cont == 1) {
       
       cli_alert_info("Files amount: {length(file_to_move)}\n\n---\n\n")
       
-      new_loc     <-  here(submit_path, basename(x))
+      new_loc     <- here(submit_path, basename(x))
       new_loc_sup <- here(new_loc, "supplimental_docs")
 
       # copy files to new location
