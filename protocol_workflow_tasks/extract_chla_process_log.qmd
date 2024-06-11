@@ -80,14 +80,14 @@ conflicts_prefer(
   )
   
 if (!exists("cloud_dir")) source(here(".Rprofile"))
+
+# set location to save data and plots
+dir_data_save <- here("data", "processed", "extract_chla_process_log")
 ```
 
 ## 2.2 Load Dataset
 
 ```{r load-data}
-# set location to save data and plots
-dir_data_save <- here("data", "processed", "extract_chla_process_log")
-
 file_paths <- 
   here(cloud_dir, "process_logs") %>%
   dir_ls() %T>%
@@ -180,11 +180,11 @@ dir_create(dir_data_save)
 
 # save file
 openxlsx2::write_xlsx(
-  x = process_data_save,
-  file = save_file_name,
-  as_table = FALSE,
+  x          = process_data_save,
+  file       = save_file_name,
+  as_table   = FALSE,
   na.strings = "",
-  overwrite = overwrite
+  overwrite  = overwrite
 )
 
 # open folder to local save
@@ -205,4 +205,169 @@ if (FALSE) {
 
 
 
+
+# 5.0 Find Chlorophyll-a Data Before Sept 2019
+
+## 5.1 Search for Files
+
+removing cruise WS17030 because no data for chlorophyll or a_p
+
+```{r file-search}
+file_paths <- 
+  here(cloud_dir, "years") %>%
+  dir_ls(regexp = "WS_abs", recurse = 2)  %>%
+  str_subset("~|WS17030", negate = TRUE) %T>%
+  print()
+```
+
+## 5.2 
+
+```{r}
+chl_data <- 
+  file_paths %>%
+  tibble(files = .) %>%
+  # filter(str_detect(files, "WS18285")) %>%
+  # slice(c(1:2)) %>%
+  mutate(
+    cruise_id = dirname(files),
+    cruise_id = basename(cruise_id),
+    data = 
+      map2(
+        .x = files,
+        .y = cruise_id,
+        \(.x, .y) {
+          message(.y)
+          
+          data <- 
+          openxlsx2::read_xlsx(
+            file      = .x,
+            sheet     = "Chl-a",
+            start_row = 7,
+            na.strings = c("#N/A", "#DIV/0!")
+          ) %>%
+          janitor::clean_names()  %>%
+            
+          # View() %>%
+          mutate(
+            comments = as.character(comments),
+            ap_d_l_process_date = as_date(ap_d_l_process_date),
+            # cal_no_acid_high = as.numeric(cal_no_acid_high)
+          ) %>%
+          janitor::remove_empty("rows") %>%
+          janitor::remove_empty("cols")
+          
+          if (any(str_detect(names(data), "ap_d_l_filename_ap_ad"))) {
+            data <- 
+              data %>%
+              mutate(ap_d_l_filename_ap_ad = as.character(ap_d_l_filename_ap_ad))
+          } else if (any(str_detect(names(data), "ap_d_l_filename"))) {
+            data <- 
+              data %>%
+              rename("ap_d_l_filename_ap_ad" = ap_d_l_filename)
+          }
+          
+          
+          # if (str_detect(.y, "WS18285")) {
+          #   View(data)
+          #   browser()
+          # }
+          
+          if (any(str_detect(names(data), "time_utc"))) {
+            data <- 
+              data %>%
+              mutate(
+                .after = time_utc,
+                time_utc = str_remove(time_utc, "\\d{4}-\\d{2}-\\d{2}\\s"),
+                time_utc = str_replace(time_utc, "\\.(\\d{2})", "\\1:00"),
+                # time_utc = as_datetime(time_utc),
+                time_utc = hms::as_hms(time_utc),
+                date_time = paste(date_utc, time_utc),
+                date_time = ymd_hms(date_time)
+            )
+          } else if (any(str_detect(names(data), "time_est"))) {
+            
+            data <- 
+              data %>%
+              mutate(
+                .after = time_est,
+                time_est = str_remove(time_est, "\\d{4}-\\d{2}-\\d{2}\\s"),
+                # time_utc = hms::as_hms(time_utc, tz = "est"),
+                # time_utc2 = as_datetime(time_utc, tz = "utc"),
+                # time_utc2 = hms::as_hms(time_utc2),
+                date_time_est = paste(date_est, time_est),
+                date_time_est = ymd_hms(date_time_est, tz = "est"),
+                date_time = as_datetime(date_time_est, tz = "UTC"),
+                date_utc = as_date(date_time),
+                time_utc = hms::as_hms(date_time)
+              )
+            
+          }
+          
+          if (any(str_detect(names(data), "no_acid_chl_a_mg_m_3"))) {
+            data <- 
+              data %>%
+              rename(
+                "chl_a_mg_m_3" = no_acid_chl_a_mg_m_3,
+                "chl_a_mg_m_3_2" = acid_chl_a_mg_m_3,
+                "pheo_mg_m_3" = acid_pheo_mg_m_3
+                )
+            
+          }
+          
+          
+          
+          return(data)
+        }
+    )
+  ) 
+
+chl_unnest <- 
+  chl_data %>%
+  unnest(data) %>%
+  select(-general_location) %>%
+  relocate(
+    .after = date_time,
+    date_est,
+    time_est,
+    date_time_est
+  ) %>%
+  print()
+  
+
+```
+
+
+
+## 5.3 Save Older Chlorophyll-a Data
+
+```{r save-old-chl}
+# overwrite file if exists
+overwrite <- FALSE
+# overwrite <- TRUE
+
+
+# file name:
+# based on range of years and today's date
+save_file_name <-
+  here(
+    dir_data_save,
+    glue(
+      "filter_chlorophyll_2015_to_2019",
+      "_{Sys.Date()}.xlsx"
+    )
+  )
+
+# create directory for save
+dir_create(dir_data_save)
+openxlsx2::write_xlsx(
+  x          = chl_unnest,
+  file       = save_file_name,
+  as_table   = FALSE,
+  na.strings = "",
+  overwrite  = overwrite
+)
+
+# shell.exec(dir_data_save)
+
+```
 
