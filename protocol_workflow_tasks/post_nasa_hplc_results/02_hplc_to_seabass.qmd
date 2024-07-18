@@ -112,17 +112,17 @@ if (!nzchar(system.file(package = "librarian")))
 
 librarian::shelf(
   quiet = TRUE,
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  
   # additional
-  hms, janitor
+  hms, janitor,
+  cli
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 ```
 
 ## 2.2 Load Data
@@ -135,6 +135,8 @@ dir_ls(here("data", "processed", "hplc"),
   sort(decreasing = TRUE)  %>%
   first() |>
   load() 
+
+print(hplc_data)
 
 # hplc_data <-
 #   hplc_data %>%
@@ -740,6 +742,8 @@ rm(verb)
 ```{r save-files}
 dir_create(loc) # create dir for each day running
 
+cli::cli_alert_info("File Save Location: {.path {loc}}")
+
 # save files
 hplc_final %$%
   pwalk(list(cols, heads),
@@ -907,7 +911,7 @@ if (!arg_ls$wrt_cld) {
         dir_ls() %>%
         tibble(sb_file = .) %>%
         mutate(
-          cruise_id = str_extract(sb_file, "((WS|WB|SV)[0-9].*)(?=_p)")
+          cruise_id = str_extract(sb_file, "((WS|WB|SV|HG|H)[0-9].*)(?=_p)")
           ),
         
         # ---- extract path to cruise checklist files
