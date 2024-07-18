@@ -12,7 +12,7 @@ if (!nzchar(system.file(package = "librarian")))
 
 librarian::shelf(
   quiet = TRUE,
-  librarian, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
+  librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
   
   # additional
@@ -22,10 +22,10 @@ librarian::shelf(
   scales, hms
 )
 
-library("conflicted")
-
-conflict_prefer("filter", "dplyr")
-conflict_prefer("select", "dplyr")
+conflicts_prefer(
+  dplyr::filter(), 
+  dplyr::select()
+  )
 ```
 
 # Search for HPLC Files
@@ -36,6 +36,10 @@ M-K 10-11 part2 report.xlsx
 M-K_05-17_report.xlsx : mar16
 
 M-K_13-01_report: all 2022 cruise data
+
+Muller-Karger_13-01B_report_rev: all 2023 cruise data
+
+
 ```{r file-path}
 dir_hplc <- here("data", "raw", "hplc")
 
@@ -44,7 +48,8 @@ dir_hplc <- here("data", "raw", "hplc")
 cal_file <- 
   dir_hplc %>%
   dir_ls(regexp = "method") %>%
-  basename()
+  basename() %T>% 
+  print()
 
 # pigment files
 file_pig <-
@@ -57,7 +62,7 @@ file_pig <-
   ) %>%
   str_sort() %>%
   str_subset("M-K 10-11 part1 report.xlsx", negate = TRUE) %>%
-  str_subset("M-K_13-01", negate = FALSE) %>%
+  str_subset("Muller-Karger_13-01B", negate = FALSE) %>%
   tibble(file = ., base = basename(.)) %>%
   mutate(
     sheets =
@@ -67,7 +72,7 @@ file_pig <-
       ),
     cal_files = 
       case_when(
-        str_detect(base, "13-01") ~ str_subset(cal_file, "10032021"),
+        str_detect(base, "13-01B") ~ str_subset(cal_file, "10032021"),
         str_detect(base, "10-11") ~ str_subset(cal_file, "02062020"),
         .default = str_subset(cal_file, "06122017")
     )
@@ -83,6 +88,8 @@ file_pig <-
 ```
 
 ## Read Files and Select Variables for SeaBass
+
+
 ```{r read-file-edit}
 hplc_data <-
   file_pig %>%
@@ -211,7 +218,8 @@ hplc_data <-
       str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
-      TRUE ~ "no"
+      str_detect(cruise, "(?i)hog") ~ str_c("H", str_extract(cruise, "[0-9]+")),
+      .default = "no"
       )) %T>% 
   print()
 ```
@@ -259,18 +267,18 @@ hplc_data <-
   #   cruise_id,
   #   station,
   #   lon   = if_else(abs(lon - longitude_decimal) < 0.1 
-  #                   | is.na(longitude_decimal), 
+  #                    is.na(longitude_decimal), 
   #                   lon, longitude_decimal),
   #   lat   = if_else(abs(lat - latitude_decimal) < 0.1
-  #                   | is.na(latitude_decimal), 
+  #                    is.na(latitude_decimal), 
   #                   lat, latitude_decimal),
   #   lon = round(lon, 4),
   #   lat = round(lat, 4),
   #   date  = if_else(abs(as.double(date, date_gmt, units = "days")) <= 1
-  #                   | is.na(date_gmt), 
+  #                    is.na(date_gmt), 
   #                   date, date_gmt), 
   #   time  = if_else(abs(as.double(time - time_gmt, units = "secs")) < 600
-  #                   | is.na(time_gmt), 
+  #                    is.na(time_gmt), 
   #                   time, time_gmt),
   #   .keep = "unused"
   # ) %>%
@@ -329,7 +337,8 @@ hplc_data <-
   left_join(., precise, by = join_by(base)) %>%
   nest(precision = base:n, 
        .by = c(cruise, cruise_id)) %>%
-  left_join(hplc_data, ., by = join_by(cruise, cruise_id)) 
+  left_join(hplc_data, ., by = join_by(cruise, cruise_id)) %T>% 
+  print()
 ```
 
 # Create Checklist Files
@@ -372,9 +381,11 @@ hplc_data <-
     check_f = map_chr(
       base,
       function(x) {
-        base_num <- str_extract(x, "\\d{2}-\\d{2}")
-        chk_num  <- str_extract(chk_ls, "\\d{2}-\\d{2}")
-        chk_ls[which(base_num == chk_num)][1]
+        base_num <- str_extract(x, "\\d{2}-\\d{2}B*")
+        chk_num  <- str_detect(chk_ls, base_num)
+        chk_ls[which(chk_num)]
+        # chk_num  <- str_extract(chk_ls, "\\d{2}-\\d{2}")
+        # chk_ls[which(base_num == chk_num)][1]
       }
     ),
     rtf_file = map2_chr(
