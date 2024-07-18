@@ -78,10 +78,12 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "WS",                                   # HERE, ship acronym
-    start_dates = "May 18 2024",         # START DATE HERE, month day year
-    end_dates   = "May 24 2024",           # END DATE HERE, month day year
-    volunteer   = FALSE                      # HERE, if need volunteer paperwork
+    start_dates = "July 20 2024",         # START DATE HERE, month day year
+    end_dates   = "July 28 2024",           # END DATE HERE, month day year
+    volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
+    # cross_shelf = FALSE
+    cross_shelf = TRUE
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
@@ -173,7 +175,17 @@ loca <-
     .name_repair = janitor::make_clean_names
   ) %>% 
   select(1:contains("edna")) %>% 
-  filter(is.na(other))
+  filter(is.na(other) | str_detect(other, "Cross")) %T>% 
+  print()
+
+if (!cruise_id$cross_shelf) {
+  loca <- 
+    loca %>%
+    filter(!str_detect(other, "Cross") | is.na(other))
+} else {
+  cli_alert_info("Keeping {.emph {col_red(\"cross shelf transect station!\")}}")
+}
+
 
 # zooplankton locations
 zoo_loc <-
@@ -245,7 +257,8 @@ loca <-
       labl = glue("CHL, HPLC, {hplc_replicate}, CDOM, {edna} {depth_level}", 
                   .na = ""),
       labl = str_replace(labl, "HPLC, HPLC replicate", "HPLC (replicate)"),
-      labl = str_remove_all(labl, " ,|,\\s+$")
+      labl = str_remove_all(labl, " ,|,\\s+$"),
+      labl = if_else(!is.na(other) & str_detect(other, "Cross"), "Cross Shelf", labl)
     ) %>%
     mutate(
     .by = labl,
@@ -272,10 +285,17 @@ if (exists("base_plt")) {
   # path to base map files
   map_loc <- here("data", "map_shp")
 
+  xmin <- 
+    if_else(
+      cruise_id$cross_shelf, 
+      min(loca$lon) - 0.02,
+      -84
+      )
+  
   # spatial extent
   exnt <- 
     c(
-      xmin = -84, # West
+      xmin = xmin, # West
       xmax = -80, # East
       ymin = 24,  # South
       ymax = 28.5 # North 
@@ -381,7 +401,7 @@ imars_map <-
   # "#1B9E77" "#D95F02" "#7570B3" "#E7298A" "#66A61E"
   scale_color_manual(
     name   = "Samples",
-    values = RColorBrewer::brewer.pal(n = 5, name = "Dark2")
+    values = RColorBrewer::brewer.pal(n = length(unique(loca$labl)), name = "Dark2")
     # values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7")
     ) +
   labs(shape = "Samples") + 
@@ -461,6 +481,21 @@ rm(sv_arg)
 ```{r edna-stations}
 loca_edna <-
   loca %>%
+  mutate(
+    edna = 
+      if_else(
+        str_detect(labl, "Cross"),
+        "Cross Shelf",
+        edna
+        ),
+    depth_level = 
+      if_else(
+        str_detect(labl, "Cross"),
+        "Surf, DCM, Bot",
+        depth_level
+        ),
+         ) %>%
+          
   select(station, lon, lat, depth_level, edna) %>%
   filter(!is.na(edna)) %>%
   mutate(labl = glue("{edna} {depth_level}"))
