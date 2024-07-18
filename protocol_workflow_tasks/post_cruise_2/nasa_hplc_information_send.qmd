@@ -121,7 +121,8 @@ metadata <-
 # if you want to select by cruise, add names in `str_subset()`
 cruise_id <- 
   metadata %$% 
-  unique(cruise_id) #%>%
+  unique(cruise_id)  %T>% 
+  print() #%>%
   # July 2023 filtered cruise sent 
   # str_subset(str_c("(W[SB]|H)2[1-3]", "WS15264", "WS15320", "WS16319", sep = "|")) %>%
   # str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
@@ -135,7 +136,11 @@ metadata_filt <-
   metadata %>%
   # filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
   # September 2023
-  filter(datetime > as_date("2023-09-01"))
+  filter(datetime > as_date("2023-09-01")) %T>% 
+  print()
+
+cli::cli_alert_info("Cruises to send HPLC to NASA:\n{unique(metadata_filt$cruise_id)}")
+
 ```
 
 ## 2.4 Extract Column Locations for Grant Info
@@ -788,7 +793,8 @@ if (FALSE) { # <-- change to TRUE when ready to save
   dir_loc %>%
     dir_ls(regexp = grant_info$last_nm) %>%
     str_subset("~\\$", negate = TRUE) %>%
-    last_mod() %>%
+    last_mod() %T>%
+    print() %>%
     file_copy(
       new_path = here(cloud_dir, "hplc", "hplc_sample_info"),
       overwrite = TRUE
