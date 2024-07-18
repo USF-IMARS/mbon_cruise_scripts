@@ -240,18 +240,16 @@ chl_data <-
           
           data <- 
           openxlsx2::read_xlsx(
-            file      = .x,
-            sheet     = "Chl-a",
-            start_row = 7,
+            file       = .x,
+            sheet      = "Chl-a",
+            start_row  = 7,
             na.strings = c("#N/A", "#DIV/0!")
           ) %>%
           janitor::clean_names()  %>%
             
-          # View() %>%
           mutate(
-            comments = as.character(comments),
-            ap_d_l_process_date = as_date(ap_d_l_process_date),
-            # cal_no_acid_high = as.numeric(cal_no_acid_high)
+            comments            = as.character(comments),
+            ap_d_l_process_date = as_date(ap_d_l_process_date)
           ) %>%
           janitor::remove_empty("rows") %>%
           janitor::remove_empty("cols")
@@ -265,12 +263,6 @@ chl_data <-
               data %>%
               rename("ap_d_l_filename_ap_ad" = ap_d_l_filename)
           }
-          
-          
-          # if (str_detect(.y, "WS18285")) {
-          #   View(data)
-          #   browser()
-          # }
           
           if (any(str_detect(names(data), "time_utc"))) {
             data <- 
@@ -307,14 +299,12 @@ chl_data <-
             data <- 
               data %>%
               rename(
-                "chl_a_mg_m_3" = no_acid_chl_a_mg_m_3,
+                "chl_a_mg_m_3"   = no_acid_chl_a_mg_m_3,
                 "chl_a_mg_m_3_2" = acid_chl_a_mg_m_3,
-                "pheo_mg_m_3" = acid_pheo_mg_m_3
+                "pheo_mg_m_3"    = acid_pheo_mg_m_3
                 )
             
           }
-          
-          
           
           return(data)
         }
@@ -331,19 +321,26 @@ chl_unnest <-
     time_est,
     date_time_est
   ) %>%
+  
+  # fix station names
+  mutate(
+    station_id = str_remove_all(station_id, "\\s|~"),
+    station_id = str_to_upper(station_id),
+    station_id = str_replace(station_id, "9999", "CK")
+  ) %>%
   print()
   
-
 ```
 
 
 
-## 5.3 Save Older Chlorophyll-a Data
+
+## 5.4 Save Older Chlorophyll-a Data
 
 ```{r save-old-chl}
 # overwrite file if exists
 overwrite <- FALSE
-# overwrite <- TRUE
+overwrite <- TRUE
 
 
 # file name:
@@ -367,7 +364,7 @@ openxlsx2::write_xlsx(
   overwrite  = overwrite
 )
 
-# shell.exec(dir_data_save)
+shell.exec(dirname(dir_data_save))
 
 ```
 
