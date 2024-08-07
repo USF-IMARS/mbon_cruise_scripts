@@ -65,7 +65,7 @@ meta_file <-
 # select sheet
 # 1: field_loghsheet
 # 2: eDNA
-sheet_type <- c("field", "edna")[2] # <-- edit 1 or 2
+sheet_type <- c("field", "edna")[1] # <-- edit 1 or 2
 
 meta_dat <- 
   meta_file %>% 
@@ -102,7 +102,11 @@ meta_dat <-
     ),
     date_mm_dd_yy = as_date(date_time),
     sample_collection_time_gmt = hms::as_hms(date_time)
-  ) %T>% print()
+  ) %>%
+  filter(
+    !str_detect(station, "(?i)blank")
+  ) %T>% 
+  print()
 ```
 
 
@@ -139,10 +143,19 @@ if (exists("base_plt")) {
   # path to base map files
   map_loc <- here("data", "map_shp")
 
+   xmin <- 
+    if_else(
+      any(str_detect(meta_dat$station, glue_collapse(glue("BG{9:20}"), sep = "|"))), 
+      min(meta_dat$lon) - 0.02,
+      -84
+      )
+  
+   
+   
   # spatial extent
   exnt <- 
     c(
-      xmin = -84, # West
+      xmin = xmin, # West
       xmax = -80, # East
       ymin = 24,  # South
       ymax = 28.5 # North 

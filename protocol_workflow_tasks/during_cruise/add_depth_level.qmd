@@ -67,7 +67,8 @@ sample_collect <-
   ) %>% 
   # filter(!is.na(station)) %>%
   mutate(temp_depth = if_else(is.na(depth_m), 0, depth_m)) %>%
-  filter(!is.na(vol_ml)) %>% 
+  filter(!is.na(vol_ml)) %T>%
+  print() %>%
 # --- probably not needed
   # filter(
     # .by = c(station, temp_depth),
