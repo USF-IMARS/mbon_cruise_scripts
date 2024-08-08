@@ -7,7 +7,7 @@ output: html_document
 
 This file has been replaced by `edna_noaa_format.qmd`.
 
-```{r}
+```{r setup}
 stop(
   c(
     "This file is not used anymore.\n",
@@ -21,7 +21,7 @@ stop(
 
 
 # ---- Load Libraries ----
-```{r setup}
+```{r }
 if (!nzchar(system.file(package = "librarian"))) 
   install.packages("librarian")
 
