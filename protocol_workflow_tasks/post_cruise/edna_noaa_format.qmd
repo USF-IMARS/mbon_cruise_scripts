@@ -103,7 +103,8 @@ noaa_format <-
     .name_repair = janitor::make_clean_names
   ) %>%
   janitor::remove_empty(which = "cols") %>%
-  filter(!is.na(mm_dd_yy) & !year(mm_dd_yy) < 2000 & !is.na(vol_ml)) %>%
+  filter(!is.na(mm_dd_yy) & !year(mm_dd_yy) < 2000 & !is.na(vol_ml)) %T>% 
+  print() %>%
   mutate(
     .after                = time_gmt,
     station               = str_replace(station, "LK", "21/LK"),
@@ -135,7 +136,8 @@ noaa_format <-
   `*lat_lon`          = lat_lon,
   decimalLatitude     = lat,
   decimalLongitude    = lon,
-  samp_vol_we_dna_ext = vol_ml
+  samp_vol_we_dna_ext = vol_ml,
+  tot_depth_water_column = max_depth_m
   ) %>%
   mutate(
     waterBody = as.character(waterBody),
