@@ -130,6 +130,7 @@ noaa_format <-
   collection_date_local,
   `*collection_date`,
   `*depth`            = depth_m,
+  tot_depth_water_column = max_depth_m
   depth_category      = depth_level,
   `*geo_loc_name`     = geo_loc_name,
   waterBody           = water_body,
@@ -137,7 +138,6 @@ noaa_format <-
   decimalLatitude     = lat,
   decimalLongitude    = lon,
   samp_vol_we_dna_ext = vol_ml,
-  tot_depth_water_column = max_depth_m
   ) %>%
   mutate(
     waterBody = as.character(waterBody),
