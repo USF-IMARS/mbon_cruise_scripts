@@ -128,9 +128,12 @@ cruise_id <-
   # str_subset(str_c("WS21093", "WS21032", sep = "|"), negate = TRUE) 
   
   # Edit here: ====
-  # str_subset(str_c("<edit>", sep = "|"), negate = TRUE) 
+  # str_subset(str_c("<edit>", sep = "|"), negate = TRUE)
+```
 
+# 2.3.1 Filter Cruises Ones Not Sent
 
+```{r file-path}
 # filter metadata to match cruise IDs
 metadata_filt <-
   metadata %>%
@@ -186,6 +189,8 @@ grant_info$grant_loc <-
     ) == "Project:",
     arr.ind = TRUE
   )
+
+print(grant_info)
 ```
 
 
@@ -215,11 +220,13 @@ water_body <- list(
   ),
   "West Florida Shelf" = c(
     "Z04-068", "CBH", "NBH", "EB1",
+    
     as.vector(outer(
       c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG", "CORE-"),
       c(1:12),
       str_c
-    ))
+    )),
+    "BG13", "BG15", "BG17", "BG20"
   )
 ) %T>% print()
 ```
@@ -350,6 +357,11 @@ meta_format <-
 
 unique(meta_format$cruise)
 ```
+```{r}
+distinct(meta_format, station, name.of.water.body)
+```
+
+
 # 4.0 ---- Check Information Before Sending ----
 
 ## 4.1 Plot: Downlaod and Load Base Map
@@ -520,6 +532,7 @@ meta_format %>%
 ```
 
 ## 4.4 Check Samples are within 10 days of the Start of Cruise
+
 ```{r date-start-end, fig.width=20, fig.height=10}
 new <- new.env()
 source(here("scripts", "misc_functions.R"), local = new)
@@ -565,6 +578,86 @@ meta_format %>%
   ) %>%
   pull(plt)
 ```
+
+
+
+
+
+# 4.5 Check Volumes of Stations
+
+Check each station volumes for any outliers. Check written logs if they seem
+suspicious
+
+volfilt
+station
+
+```{r volume-check, fig.height=8, fig.width=8}
+meta_format %>%
+  mutate(
+    # .keep = "used",
+    .by = station,
+    mean_vol = mean(volfilt, na.rm = TRUE),
+    facets = case_when(
+      mean_vol < 500 ~ "< 500 ml",
+      mean_vol < 750 ~ "500 ml",
+      mean_vol < 1500 ~ "1000 ml",
+      mean_vol >= 1500 ~ ">1500 ml",
+    ),
+    facets = fct(
+      facets, 
+      levels = c("< 500 ml", "500 ml", "1000 ml", ">1500 ml")
+      )
+  ) %>%
+  nest(.by = name.of.water.body) %>%
+  mutate(
+    plt = map2(
+      .x = data,
+      .y = name.of.water.body,
+      \(.x, .y) {
+        set.seed(1234)
+        .x %>%
+          ggplot(aes(x = volfilt, y = station, color = cruise)) +
+          stat_summary(
+            fun.data = mean_cl_normal, geom = "crossbar",
+            width = .5, color = "red"
+          ) +
+          ggbeeswarm::geom_beeswarm() +
+          # geom_crossbar(
+          #   data = distinct(.x, station, mean_vol),
+          #   aes(y = station, xmin = mean_vol, xmax = mean_vol),
+          #   color = "red",
+          #   width = 0.5,
+          #   inherit.aes = FALSE
+          #   ) +
+          # geom_point(aes(x = mean_vol), color = "red") +
+          facet_wrap(~facets, scales = "free") +
+          labs(title = .y, x = NULL, y = NULL, color = NULL) +
+          scale_color_manual(values = pals::glasbey()) +
+          theme_classic() +
+          theme(
+            panel.grid.major = element_line(
+              color = "grey",
+              linetype = "dashed"
+            ),
+            legend.position = "bottom"
+            
+          )
+      }
+    )
+  ) %>%
+  pull(plt)
+
+
+```
+
+
+
+
+
+
+
+
+
 
 # 5.0 ---- Final Formatting before Saving ----
 
@@ -699,7 +792,7 @@ meta_format2 <-
 
 ## 5.3 Final Check for Missing Information and Summary of Samples
 ```{r check-na}
-print(naniar::vis_miss(select(meta_format2, -1, -2)))
+print(naniar::vis_miss(select(meta_format2, -hplc_gsfc_id, -X2, -notes)))
 count(meta_format2, name = "total number of samples")
 count(meta_format2, cruise, name = "total number per crusie")
 
@@ -770,7 +863,8 @@ if (TRUE) {
         glue(
           grant_info$last_nm,
           format(Sys.Date(), "_%Y%m%d_"),
-          str_c(cruise_id[cruise_id %in% meta_format$cruise], collapse = "_"),
+          # str_c(cruise_id[cruise_id %in% meta_format$cruise], collapse = "_"),
+          str_c(format(range(metadata_filt$date), "%b_%Y"), collapse = "_"),
           ".xlsx"
         )
       ),
