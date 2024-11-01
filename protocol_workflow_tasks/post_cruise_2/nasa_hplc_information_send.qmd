@@ -592,6 +592,7 @@ volfilt
 station
 
 ```{r volume-check, fig.height=8, fig.width=8}
+shelf(ggbeeswarm)
 meta_format %>%
   mutate(
     # .keep = "used",
@@ -622,14 +623,6 @@ meta_format %>%
             width = .5, color = "red"
           ) +
           ggbeeswarm::geom_beeswarm() +
-          # geom_crossbar(
-          #   data = distinct(.x, station, mean_vol),
-          #   aes(y = station, xmin = mean_vol, xmax = mean_vol),
-          #   color = "red",
-          #   width = 0.5,
-          #   inherit.aes = FALSE
-          #   ) +
-          # geom_point(aes(x = mean_vol), color = "red") +
           facet_wrap(~facets, scales = "free") +
           labs(title = .y, x = NULL, y = NULL, color = NULL) +
           scale_color_manual(values = pals::glasbey()) +
