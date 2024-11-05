@@ -357,8 +357,14 @@ meta_format <-
 
 unique(meta_format$cruise)
 ```
-```{r}
+
+May need to include additional stations for name of water body column
+- maybe add a file with station names and name of water body to circument this
+
+```{r check-name-of-water-body}
+
 distinct(meta_format, station, name.of.water.body)
+
 ```
 
 
