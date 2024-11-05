@@ -599,9 +599,9 @@ meta_format %>%
     .by = station,
     mean_vol = mean(volfilt, na.rm = TRUE),
     facets = case_when(
-      mean_vol < 500 ~ "< 500 ml",
-      mean_vol < 750 ~ "500 ml",
-      mean_vol < 1500 ~ "1000 ml",
+      mean_vol < 500   ~ "< 500 ml",
+      mean_vol < 750   ~ "500 ml",
+      mean_vol < 1500  ~ "1000 ml",
       mean_vol >= 1500 ~ ">1500 ml",
     ),
     facets = fct(
@@ -629,7 +629,7 @@ meta_format %>%
           theme_classic() +
           theme(
             panel.grid.major = element_line(
-              color = "grey",
+              color    = "grey",
               linetype = "dashed"
             ),
             legend.position = "bottom"
