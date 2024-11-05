@@ -78,12 +78,12 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "WS",                                   # HERE, ship acronym
-    start_dates = "July 20 2024",         # START DATE HERE, month day year
-    end_dates   = "July 28 2024",           # END DATE HERE, month day year
+    start_dates = "November 9 2024",         # START DATE HERE, month day year
+    end_dates   = "November 17 2024",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
-    # cross_shelf = FALSE
-    cross_shelf = TRUE
+    cross_shelf = FALSE
+    # cross_shelf = TRUE
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
@@ -652,6 +652,7 @@ rm(sv_arg)
 if (exists("local_dir")) {
   cli::cli_text(
     c(
+      "Copying Cruise from cloud directory to local directory\n\n",
       "Check that the path locations are correct:\n\n",
       "Cloud Location:\n",
       "{dirname(dirname(dir_path))}\n\n",
@@ -663,7 +664,7 @@ if (exists("local_dir")) {
   cont <- menu(c("Correct", "Incorrect"))
 
   if (cont == 2) {
-    cli_alert_danger("Fix directory paths above in chunk {.var cruide-id-info}!")
+    cli_alert_danger("Fix directory paths above in chunk {.var cruise-id-info}!")
   } else if (cont != 1) {
     cli_alert_warning("Skipping copying cruise directory.")
   } else if (cont == 1) {
