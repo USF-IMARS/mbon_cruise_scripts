@@ -82,8 +82,10 @@ cruise_id <-
     end_dates   = "November 17 2024",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
-    cross_shelf = FALSE
-    # cross_shelf = TRUE
+    cross_shelf = FALSE,
+    # cross_shelf = TRUE,
+    # north_stations = FALSE
+    north_stations = TRUE
     ) %>%
   mutate(
     cruise_id = parse_date(start_dates, format = "%B %d %Y"),
@@ -175,7 +177,7 @@ loca <-
     .name_repair = janitor::make_clean_names
   ) %>% 
   select(1:contains("edna")) %>% 
-  filter(is.na(other) | str_detect(other, "Cross")) %T>% 
+  filter(is.na(other) | str_detect(other, "Cross|Red")) %T>% 
   print()
 
 if (!cruise_id$cross_shelf) {
@@ -183,7 +185,15 @@ if (!cruise_id$cross_shelf) {
     loca %>%
     filter(!str_detect(other, "Cross") | is.na(other))
 } else {
-  cli_alert_info("Keeping {.emph {col_red(\"cross shelf transect station!\")}}")
+  cli_alert_info("Keeping {.emph {col_red(\"cross shelf transect stations!\")}}")
+}
+
+if (!cruise_id$north_stations) {
+  loca <- 
+    loca %>%
+    filter(!str_detect(other, "Red") | is.na(other))
+} else {
+  cli_alert_info("Keeping {.emph {col_red(\"northern red tide transect stations!\")}}")
 }
 
 
@@ -258,7 +268,8 @@ loca <-
                   .na = ""),
       labl = str_replace(labl, "HPLC, HPLC replicate", "HPLC (replicate)"),
       labl = str_remove_all(labl, " ,|,\\s+$"),
-      labl = if_else(!is.na(other) & str_detect(other, "Cross"), "Cross Shelf", labl)
+      labl = if_else(!is.na(other) & str_detect(other, "Cross"), "Cross Shelf", labl),
+      labl = if_else(!is.na(other) & str_detect(other, "Red"), "Red Tide", labl)
     ) %>%
     mutate(
     .by = labl,
@@ -291,14 +302,21 @@ if (exists("base_plt")) {
       min(loca$lon) - 0.02,
       -84
       )
+
+  ymax <- 
+    if_else(
+      cruise_id$north_stations, 
+      max(loca$lat) + 0.02,
+      28.5
+      )
   
   # spatial extent
   exnt <- 
     c(
       xmin = xmin, # West
-      xmax = -80, # East
-      ymin = 24,  # South
-      ymax = 28.5 # North 
+      xmax = -80,  # East
+      ymin = 24,   # South
+      ymax = ymax  # North 
       )
   ## ---- download topography (.nc) and coastline (.shp)
   world_download(
@@ -396,7 +414,9 @@ imars_map <-
     data   = loca,
     size   = 2.5,
     hjust  = 0,
-    family = "serif"
+    family = "serif",
+    min.segment.length = 0,
+    bg.color = "white"
   ) +
   # "#1B9E77" "#D95F02" "#7570B3" "#E7298A" "#66A61E"
   scale_color_manual(
@@ -426,6 +446,8 @@ imars_map <-
   )
 
 imars_map
+
+shadowtext::geom_shadowtext()
 ```
 ## Save Map
 
@@ -433,7 +455,9 @@ imars_map
 ```{r save-map, fig.width=8.5, fig.height=11}
 sv_arg <-
   list(
-    save_path = here("data", "metadata", "cruise_map")
+    save_path = here("data", "metadata", "cruise_map"),
+    # overwrite = FALSE
+    overwrite = TRUE
   ) %>%
   c(
     file_name =
@@ -443,11 +467,13 @@ sv_arg <-
       )
   )
 
-if (!file_exists(sv_arg$file_name) || FALSE) {
+if (!file_exists(sv_arg$file_name) || sv_arg$overwrite) {
+  cli_alert_info("Saving map to local: {.path {sv_arg$save_path}}")
+  
   # create directory if doens't exist
   fs::dir_create(sv_arg$save_path)
   
-  cli::cli_alert_info("Creating map!")
+  # cli::cli_alert_info("Creating map!")
   
   # save map
   cowplot::save_plot(
@@ -461,7 +487,9 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
   cli::cli_alert_info("Map already exists, not overwriting!")
 }
 
-if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name)))) {
+if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name))) || sv_arg$overwrite) {
+  cli_alert_info("Copying map to cloud: {.path {dirname(dir_path)}}")
+  
   file_copy(
         sv_arg$file_name,
         here(dirname(dir_path)),
@@ -488,6 +516,12 @@ loca_edna <-
         "Cross Shelf",
         edna
         ),
+    edna = 
+      if_else(
+        str_detect(labl, "Red"),
+        "Red Tide",
+        edna
+        ),
     depth_level = 
       if_else(
         str_detect(labl, "Cross"),
@@ -498,7 +532,7 @@ loca_edna <-
           
   select(station, lon, lat, depth_level, edna) %>%
   filter(!is.na(edna)) %>%
-  mutate(labl = glue("{edna} {depth_level}"))
+  mutate(labl = glue("{edna} {depth_level}", .na = ""))
 
 # stations not sampling eDNA
 cli_alert("Stations not sampling for eDNA")
@@ -586,7 +620,9 @@ edna_map <-
     data   = loca_edna,
     size   = 2.5,
     hjust  = 0,
-    family = "serif"
+    family = "serif",
+    min.segment.length = 0,
+    bg.color = "white"
   ) +
 
   scale_color_manual(
@@ -608,7 +644,9 @@ edna_map
 ```{r save-edna-map, fig.width=8.5, fig.height=11}
 sv_arg <-
   list(
-    save_path = here("data", "metadata", "cruise_map")
+    save_path = here("data", "metadata", "cruise_map"),
+    overwrite = TRUE
+    # overwrite = FALSE
   ) %>%
   c(
     file_name =
@@ -619,7 +657,9 @@ sv_arg <-
       )
   )
 
-if (!file_exists(sv_arg$file_name) || FALSE) {
+if (!file_exists(sv_arg$file_name) || sv_arg$overwrite) {
+  cli_alert_info("Saving map to local: {.path {sv_arg$save_path}}")
+  
   # create directory if doens't exist
   fs::dir_create(sv_arg$save_path)
   
@@ -631,9 +671,13 @@ if (!file_exists(sv_arg$file_name) || FALSE) {
    base_width  = 8.5,
    base_height = 11
   )
+} else {
+    cli::cli_alert_info("Map already exists, not overwriting!")
 } 
 
-if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name)))) {
+if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name))) || sv_arg$overwrite) {
+  cli_alert_info("Copying map to cloud: {.path {dirname(dir_path)}}")
+
   file_copy(
         sv_arg$file_name,
         here(dirname(dir_path)),
