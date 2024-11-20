@@ -149,16 +149,21 @@ if (exists("base_plt")) {
       min(meta_dat$lon) - 0.02,
       -84
       )
-  
-   
+
+    ymax <- 
+    if_else(
+      max(meta_dat$lat) > 28.5, 
+      max(meta_dat$lat) + 0.02,
+      28.5
+      ) 
    
   # spatial extent
   exnt <- 
     c(
       xmin = xmin, # West
-      xmax = -80, # East
-      ymin = 24,  # South
-      ymax = 28.5 # North 
+      xmax = -80,  # East
+      ymin = 24,   # South
+      ymax = ymax  # North 
       )
   ## ---- download topography (.nc) and coastline (.shp)
   world_download(
@@ -192,6 +197,11 @@ if (exists("base_plt")) {
 ```{r add-stations, fig.width=8.5, fig.height=11}
 set.seed(123)
 cruise <- str_extract(meta_file, "(WS|H|WB|HG)\\d{4,5}")
+
+map_title <- 
+  glue("Post Cruise {sheet_type} Sample Collection:\n\n{cruise} (IMaRS)") %>%
+  str_remove("field ")
+
 imars_map <-
   base_plt +
   # ---- Cruise ID
@@ -199,8 +209,7 @@ imars_map <-
     geom        = "richtext",
     x           = -81.5,
     y           = 28,
-    label       = glue("Post Cruise Sample Collection:\n
-                       {cruise} (IMaRS)"),
+    label       = map_title,
     size        = 6,
     fontface    = "bold",
     fill        = NA,
@@ -216,7 +225,8 @@ imars_map <-
     data   = map_dat,
     size   = 2.5,
     hjust  = 0,
-    family = "serif"
+    family = "serif",
+    min.segment.length = 0
   ) +
   
   geom_arrowsegment(
@@ -397,7 +407,8 @@ map_dat <-
             data = x,
             size = 2.5,
             hjust = 0,
-            family = "serif"
+            family = "serif",
+            min.segment.length = 0
           ) +
           labs(
             title = y,
@@ -561,7 +572,8 @@ left_join(
     data   = x,
     size   = 2.5,
     hjust  = 0,
-    family = "serif"
+    family = "serif",
+    min.segment.length = 0
   ) +
   labs(
     title = y,
