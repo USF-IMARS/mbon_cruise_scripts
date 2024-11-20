@@ -180,7 +180,8 @@ prev_cruise_id <-
 
 files <- 
   files %>%
-  filter(!cruise_id %in% prev_cruise_id)
+  filter(!cruise_id %in% prev_cruise_id &
+         !str_detect(cruise_id, "CORE_2"))
   # filter(str_detect(cruise_id, "WS21093"))
 
 files <- get_sheet_info(files)
@@ -396,7 +397,7 @@ meta_list$cruise_summary <-
   summarise(
     .by  = cruise_id,
     date = min(date_mm_dd_yy, na.rm = TRUE),
-    across(chl_a:cdom, sum, na.rm = TRUE)
+    across(chl_a:cdom, \(.x) sum(.x, na.rm = TRUE))
     ) %>%
   mutate(
     date   = as_date(date),
