@@ -81,15 +81,18 @@ Example Structure:
 
 ```{r select-metadata}
 # metadata
-metadata <- 
-  rstudioapi::selectFile(path = here(cloud_dir, "years")) %T>% 
+metadata <-
+  rstudioapi::selectFile(path = here(cloud_dir, "years")) %T>%
   print()
 
 # sheet name
 sheet_name <- 
   readxl::excel_sheets(metadata) %>%
   str_subset("eDNA$") %T>% 
-  print()
+  {
+    glue("Sheet Name: {.}") %>%
+    print()
+  }
 ```
 
 
@@ -201,5 +204,42 @@ file_copy(
   file_name,
   dirname(metadata)
 )
+```
+
+# 5.0 Create Raw eDNA File 
+
+This basically copies the eDNA sheet from the original log sheet to send to 
+NOAA for their records
+
+edna_imars_raw_{cruise ID}.xlsx
+
+```{r raw-metadata}
+file_name_raw <-
+  here(
+    dirname(metadata),
+    glue(
+      "edna_imars_raw_{cruise_name}.xlsx"
+    )
+  ) %T>% 
+  print()
+
+wb_raw <- read_xlsx(metadata, sheet = sheet_name) 
+
+wb_names <- names(wb_raw)[-which(is.na(names(wb_raw)))]
+
+wb_raw <- 
+  wb_raw %>%
+  janitor::clean_names() %>%
+  select(!matches("^na_?")) %>%
+  filter(!is.na(vol_ml)) %>%
+  mutate(
+    time_gmt = hms::as_hms(time_gmt),
+    water_body = NA
+  ) %>%
+  rlang::set_names(wb_names) %T>%
+  print()
+
+
+write_xlsx(wb_raw, file_name_raw, na.strings = "")
 ```
 
