@@ -226,7 +226,7 @@ water_body <- list(
       c(1:12),
       str_c
     )),
-    "BG13", "BG15", "BG17", "BG20"
+    "BG13", "BG15", "BG17", "BG20", "AC1", "AC4", "AC6", "HB1", "HB4", "HB6"
   )
 ) %T>% print()
 ```
@@ -395,12 +395,24 @@ if (exists("base_plt")) {
   # path to base map files
   map_loc <- here("data", "map_shp")
 
+  xmin <- if_else(
+    min(meta_format$lon) < -84,
+    min(meta_format$lon) - 0.02,
+    -84
+  )
+  
+  ymax <- if_else(
+    max(meta_format$lat) > 28.5,
+    max(meta_format$lat) + 0.02,
+    28.5
+  )
+  
   # spatial extent
   exnt <- c(
-    xmin = -84, # West
-    xmax = -80, # East
-    ymin = 24, # South
-    ymax = 28.5 # North
+    xmin = xmin, # West
+    xmax = -80,  # East
+    ymin = 24,   # South
+    ymax = ymax  # North
   )
 
   # download topography (.nc) and coastline (.shp)
