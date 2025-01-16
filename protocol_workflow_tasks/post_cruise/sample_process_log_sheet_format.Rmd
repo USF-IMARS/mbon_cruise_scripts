@@ -50,13 +50,7 @@ Update: "2022-04-29", 0.17441, -0.501753918982416, 27.32, 200.39
 Update: "2023-03-28", 0.177357021947293, 0.134407327675063, 27.52, 192.11
 Update: "2024-02-02", 0.17478, -0.27767397, 27.52, 191.97
 Update: "2025-01-15", 0.16845, 2.90144, 26.48, 190.52
-'No Acid' blank = 0.20
-'No Acid' Slope = 0.16845
-'No Acid' y-int = 2.90144
 
-Secondary Solid Standard:
-Cal. 'No Acid' Low = 26.48
-Cal. 'No Acid' High = 190.52
 ```{r triology-calibration}
 cal <- 
   tribble(
