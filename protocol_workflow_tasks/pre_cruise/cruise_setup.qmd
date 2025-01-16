@@ -78,8 +78,8 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "WS",                                   # HERE, ship acronym
-    start_dates = "January 11 2025",         # START DATE HERE, month day year
-    end_dates   = "January 17 2025",           # END DATE HERE, month day year
+    start_dates = "January 25 2025",         # START DATE HERE, month day year
+    end_dates   = "January 31 2025",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
