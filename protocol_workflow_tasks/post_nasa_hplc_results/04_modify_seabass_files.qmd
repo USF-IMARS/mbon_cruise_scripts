@@ -208,7 +208,7 @@ if (all(map_lgl(parallel_pkgs, ~ nzchar(system.file(package = .x))))) {
   unshelf(parallel_pkgs)
 } else {
   
-  # if dont have accessto `future` and `furrr` packages
+  # if dont have access to `future` and `furrr` packages
   cli::cli_alert_warning(
     c(
       "The packages {.pkg {parallel_pkgs}} ",
