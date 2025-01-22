@@ -57,7 +57,7 @@ CRUISE_ID=\"\"
 cat(
 "------------------\n",
 "Welcome to MBON Cruise Prep Project!\n",
-"Navigate to the protocol_workflow_tasks folder and select which process you are doing.\n",
+"Navigate to the `protocol_workflow_tasks` folder and select which process you are doing.\n",
 "The options are:",
 paste0("\t", fs::dir_ls(here::here("protocol_workflow_tasks"), 
                         type = "directory") |> 
