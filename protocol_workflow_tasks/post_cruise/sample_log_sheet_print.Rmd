@@ -162,7 +162,8 @@ prev_f <-
   file_info(prev_f) %>%
   arrange(desc(birth_time))  %>%
   pull(path) %>%
-  first()
+  first() %T>% 
+  print()
 
 ```
 
