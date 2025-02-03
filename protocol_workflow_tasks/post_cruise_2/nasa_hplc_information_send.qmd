@@ -131,12 +131,22 @@ cruise_id <-
 
 # 2.3.1 Filter Cruises Ones Not Sent
 
-```{r file-path}
+Samples sent up to
+- September 2023, sample sent September 2023
+- December 2024, sent sample January 27
+
+
+NOTE: update filter to be after last batch of samples sent.
+
+```{r filter-cruise}
 # filter metadata to match cruise IDs
 metadata_filt <-
   metadata %>%
-  # filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
-  # September 2023
+  # all cruises
+  # filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|")))
+  
+  # select cruises
+  # current: after January 1 2025
   filter(datetime > as_date("2025-01-01")) %T>% 
   print()
 
