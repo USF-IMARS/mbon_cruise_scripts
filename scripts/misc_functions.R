@@ -210,6 +210,13 @@ read_logsheets <- function(
           cruises    = "cruise_id"
         )
       )
+    ) %>%
+    mutate(
+      date_mm_dd_yy = if_else(date_mm_dd_yy == 0, NA, date_mm_dd_yy),
+      sample_collection_time_gmt = if_else(
+        sample_collection_time_gmt == 0, 
+        NA, 
+        sample_collection_time_gmt)
     )
 
   # make sure the identifiers contain: FK, WS, SV or WB
@@ -291,6 +298,7 @@ read_logsheets <- function(
     temp <- temp %>%
       mutate(
         date_mm_dd_yy = str_replace(date_mm_dd_yy, "//", "/"),
+        # date_mm_dd_yy = if_else(date_mm_dd_yy == 0, NA, date_mm_dd_yy),
         date_mm_dd_yy = map_chr(
           date_mm_dd_yy,
           function(.x) {
@@ -909,7 +917,7 @@ cruise_setup <- function(
   }
   
   
-  # ---- Copying Blank Logsheet
+  # ---- Copying Blank Logsheet ---- #
   
   # blank name
   blk_logsheet_file <- str_subset(blank_files, "sample_logsheet")
@@ -945,7 +953,7 @@ cruise_setup <- function(
     )
   }
   
-  # ---- Copying Blank USF Self-insurance
+  # ---- Copying Blank USF Self-insurance ---- #
   # blank name
   blk_slf_insur_file <- str_subset(blank_files, "USF_letter_of_self_insurance")
   
@@ -982,7 +990,7 @@ cruise_setup <- function(
     )
     }
   
-  # ---- Volunteer Paperwork
+  # ---- Volunteer Paperwork ---- #
   if (volunteer) {
     cli::cli_alert_warning("Volunteer paperwork is requested!")
     
@@ -1023,9 +1031,9 @@ cruise_setup <- function(
   }
   
   
-  # ---- Copy Map to Directory
+  # ---- Copy Map to Directory ---- #
   if (is.null(map_file)) {
-    cli::cli_alert_info("No map file given.")
+    cli::cli_alert_info("No map file given.\n\n")
   } else {
     if (file_exists(here(cruise_dir, "metadata", basename(map_file)))) {
       cli::cli_alert_info(
@@ -1047,7 +1055,44 @@ cruise_setup <- function(
     }
   }
   
+  # ---- Copying sample_id_creation_blank ---- #
+
+  # blank name
+  blk_logsheet_file <- 
+  blk_sample_id <- 
+    here(blank_location, "..") %>%
+    dir_ls(type = "file") %>%
+    str_subset("sample_id_creation_blank")
+  
+  # new name
+  new_sample_id <- 
+    basename(blk_sample_id) %>%
+    str_replace("blank", cruise_id) %>%
+    here(cruise_dir, "metadata", .)
+  
+  
+  if (!file_exists(new_sample_id)) {
+    cli::cli_alert_info(
+      c("Copying sample ID file:\n",
+        "Location:  {.path {dirname(blk_sample_id)}}\n",
+        "File Name: {.path {basename(blk_sample_id)}}\n\n")
+    )
+    
+    file_copy(
+      blk_sample_id,
+      new_sample_id
+    )
+    
+  } else {
+    cli::cli_alert_info(
+      c("Sample ID file exists:\n",
+        "Location:  {.path {dirname(blk_sample_id)}}\n",
+        "File Name: {.path {basename(blk_sample_id)}}\n\n")
+    )
+  }
+  
+  
   if (return_path) return(cruise_dir)
   
-  # ---- end of function
+  # ---- end of function ---- #
 }
