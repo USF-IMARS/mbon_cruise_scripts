@@ -25,13 +25,11 @@ librarian::shelf(
   quiet = TRUE,
   librarian, conflicted, ggplot2, tibble, tidyr, readr, purrr, dplyr, stringr,
   forcats, lubridate, glue, fs, magrittr, here,
-  # broom # optional
   
   # additional
   openxlsx, hms, janitor
 )
 
-# shelf(conflicted) # may be needed if won't allow loading of certain packages
 
 conflicts_prefer(
   dplyr::filter(), 
@@ -139,7 +137,7 @@ metadata_filt <-
   metadata %>%
   # filter(str_detect(.data$cruise_id, str_c(.env$cruise_id, collapse = "|"))) 
   # September 2023
-  filter(datetime > as_date("2023-09-01")) %T>% 
+  filter(datetime > as_date("2025-01-01")) %T>% 
   print()
 
 cli::cli_alert_info("Cruises to send HPLC to NASA:\n{unique(metadata_filt$cruise_id)}")
