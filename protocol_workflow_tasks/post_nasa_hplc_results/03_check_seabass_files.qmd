@@ -164,8 +164,8 @@ chl   = [Chlorophyll-a]
  
 ```{r directory-seabass-filt-cdom-chl}
 cruise_dir <- 
-  # here(cloud_dir, "seabass", "testing") %>%
-  here(cloud_dir, "seabass", "temp") %>%
+  here(cloud_dir, "seabass", "testing") %>%
+  # here(cloud_dir, "seabass", "temp") %>%
   dir_ls(type = "directory") %T>% 
   print()
 
@@ -553,15 +553,36 @@ Update to match the folder with the data loaded:
 - testing
 
 ```{r fcehck-seabass-filt-cdom-chl}
+# FCHECK rows to ignore for unique issues
+ignore_char <- 
+  str_c(
+    "\\d errors \\(\\d unique\\) and \\d{1,4} warnings \\(\\d unique\\) were found.",
+    "comma_separator_preferred\\[\\d*\\]\\(\\d*\\), field_out_of_bounds\\[\\d*\\]\\(\\d*\\), optional_header_not_found\\[\\d*\\]\\(\\d*\\),",
+    "comma_separator_preferred\\[\\d*\\]\\(\\d*\\), field_out_of_bounds\\[\\d*\\]\\(\\d*\\), optional_header_not_found\\[\\d*\\]\\(\\d*\\)",
+    sep = "|"
+  ) %T>% 
+  print()
+
 fcheck_results %>%
   unnest(dats) %$%
   list_c(fcheck2) %>%
   unique() %>%
-  str_subset(".*temp*|.*testing.*", negate = TRUE) %>% 
+  str_subset(".*temp*|.*testing.*", negate = TRUE) %>% # remove file names
   str_remove("\\d\\)\\s+") %>%
   str_remove("^\\s+") %>%
   sort() %>% 
+  str_subset(
+    ., 
+    ignore_char,
+    negate = TRUE
+  ) %>%
+  unique() %>%
   cat(sep = "\n") 
+
+fcheck_results %>%
+  unnest(dats) %>%
+  unnest(fcheck2) %>%
+  filter(str_detect(fcheck2, "bincount"))
 
 # ---
 # fcheck_results %>%
@@ -584,7 +605,6 @@ fcheck_results %>%
 #   which(str_detect(tes, "mal"))
 ```
 
-
 # 5.0 ---- Move ap, aph and aCDOM Files ----
 
 After ap, aCDOM, chl files pass the `FCHECK`, they can be moved to `temp` for 
@@ -596,6 +616,8 @@ After successful submission, the files in `temp` can be moved to submitted.
     - `R1`
     - `R2`
     - `R3`
+
+
 
 ## 5.1 Move Files to Temporary Directory
 
@@ -611,26 +633,29 @@ After successful submission, the files in `temp` can be moved to submitted.
 
 ```{r mv-files-to-temp}
 # search `testing` for cruises and associated files
-testing_files <- 
-  here(cloud_dir, "seabass", "testing") %>%
-  dir_ls(type = "directory") %T>% 
-  print()
 
 {
+  testing_files <-
+    here(cloud_dir, "seabass", "testing") %>%
+    dir_ls(type = "directory") %T>%
+    print()
+
   cli::cli_text(
     c(
       "Check that all SeaBASS files pass the {.emph FCHECK}
       {col_red(\"before\")} proceeding!"
     )
   )
-  
+
   cont <- menu(c("Correct", "Incorrect"))
+}
+if (cont == 2) {
+  cli_abort(c("x" = "Skipping moving of SeaBASS directory."))
 }
 
 if (cont == 1) {
 
   testing_files %>%
-  .[1:3] %>%
   # str_subset("", negate = TRUE) %>%
   # str_subset("", negate = FALSE) %>%
   walk2(
