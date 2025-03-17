@@ -585,10 +585,37 @@ fcheck_results %>%
 ```
 
 
-## X.0 ---- Move Files to Temporary Directory ----
+# 5.0 ---- Move ap, aph and aCDOM Files ----
 
+After ap, aCDOM, chl files pass the `FCHECK`, they can be moved to `temp` for 
+submission to SeaBASS.
+
+After successful submission, the files in `temp` can be moved to submitted. 
+  Each cruise folder will have a version folder inside as well
+  - ex: `SV18067` has folders for each version submitted
+    - `R1`
+    - `R2`
+    - `R3`
+
+## 5.1 Move Files to Temporary Directory
+
+1. Search `testing` directory for all cruises
+2. Copy entire cruise directory to `temp`
+  - this is a holding location to submit files to SeaBASS
+  - moves `.sb` and any other files
+3. If any files exist that do not end with `.sb`, these files will be moved to
+  `supplemental_docs`
+  - i.e `checklist_<info>.txt` would be moved to `supplemental_docs`
+
+4. Manually delete directories once moved
 
 ```{r mv-files-to-temp}
+# search `testing` for cruises and associated files
+testing_files <- 
+  here(cloud_dir, "seabass", "testing") %>%
+  dir_ls(type = "directory") %T>% 
+  print()
+
 {
   cli::cli_text(
     c(
@@ -602,7 +629,8 @@ fcheck_results %>%
 
 if (cont == 1) {
 
-  cruise_dir %>%
+  testing_files %>%
+  .[1:3] %>%
   # str_subset("", negate = TRUE) %>%
   # str_subset("", negate = FALSE) %>%
   walk2(
@@ -613,35 +641,146 @@ if (cont == 1) {
     \(x, row, submit_path, num) {
       
       cli::cli_alert_info("Cruise: {basename(x)} ({row} of {num})")
-      
+
       file_to_move <- dir_ls(x)
-      
+
       cli_alert_info("Files amount: {length(file_to_move)}\n\n---\n\n")
-      
+
       new_loc     <- here(submit_path, basename(x))
-      new_loc_sup <- here(new_loc, "supplimental_docs")
+      new_loc_sup <- here(new_loc, "supplemental_docs")
 
       # copy files to new location
       dir_copy(x, new_loc)
 
       # move non-seabass files (not .sb) to supplemental docs
+      # NOTE: these files would already by in `temp` directory
       dir_create(new_loc_sup)
 
       dir_ls(new_loc, type = "file") %>%
       str_subset("\\.sb$", negate = TRUE) %>%
       file_move(new_loc_sup)
 
-      }
-    
+    }
   )
-
+  
 } else {
   cli_alert_warning("Skipping moving of SeaBASS directory.")
 }
 
-
-
 ```
+## 5.2 Move Files From Temporary to Submitted
+
+After successful entry of files in SeaBASS, move the files to the submitted
+directory within the `mbon_imars_cruises > seabass`
+
+
+```{r mv-files-to-submit}
+{
+  temp_files <-
+    here(cloud_dir, "seabass", "temp") %>%
+    dir_ls(type = "directory") %T>%
+    print()
+
+  cli::cli_text(
+    c(
+      "\n\n\nCheck that all SeaBASS files are ready to be moved to {.file submitted}
+      {col_red(\"before\")} proceeding!"
+    )
+  )
+
+  cont <- menu(c("Move files", "Don't move files"))
+}
+
+if (cont == 2) {
+  cli_abort(c("x" = "Not moving files to {.file submitted}."))
+}
+
+
+
+temp_files %>%
+  walk2(
+    .x = .,
+    .y = row_number(.),
+    submit_path = here(cloud_dir, "seabass", "submitted"),
+    # submit_path = here("data", "seabass", "submitted"),
+    num = length(.),
+    \(.x, .y, submit_path, num) {
+      cat("\n----\n\n")
+      cli::cli_alert_info("Cruise: {basename(.x)} ({.y} of {num})\n\n")
+
+      # add new file path
+      new_path <- dir_ls(.x, recurse = 1, type = "file") %>%
+        tibble(file = .) %>%
+        mutate(
+          cruise = str_extract(file, "temp/(.{1,3}\\d{4,5})", group = 1),
+          version = str_extract(file, "_(R\\d{1,10})\\.sb", group = 1),
+        ) %>%
+        tidyr::fill(version, .direction = "down") %>%
+        mutate(
+          new_dir = paste(submit_path, cruise, version, basename(file), sep = "/")
+        )
+      # skip if no files exist
+      if (nrow(new_path) == 0) {
+        cli::cli_alert("Cruise contains no files.\nSkipping")
+        return()
+      }
+
+      # create new version folder within cruise
+      new_dir <- 
+        dirname(new_path$new_dir) %>%
+        unique()
+      new_dir_supp <- here(new_dir, "supplemental_docs")
+      
+      cli::cli_alert_info(
+        c("Moving {nrow(new_path)} file(s) to {.file {new_dir}}\n",
+          "and {.file {basename(new_dir_supp)}}\n\n"
+          )
+        )
+
+      dir_create(new_dir)
+
+      # move files from `temp` to `submitted`
+      new_path %$%
+        walk2(
+          file,
+          new_dir,
+          \(old_path, new_path) {
+            cli::cli_alert_success("{.file {basename(old_path)}}")
+            file_move(old_path, new_path)
+          }
+        )
+
+      # move non-seabass files (not .sb) to supplemental docs
+      # NOTE: these files would already by in `temp` directory
+      dir_create(new_dir_supp)
+
+      dir_ls(new_dir, type = "file") %>%
+      str_subset("\\.sb$", negate = TRUE) %>%
+      file_move(new_dir_supp)
+      
+      
+    }
+  )
+
+# delete empty folders
+cli_alert_info("Deleting Empty Folder in {.file {here(cloud_dir, 'seabass', 'temp')}}")
+temp_files %>%
+  walk(
+    .x = .,
+    \(.x) {
+      if (is_empty(dir_ls(.x, type = "file"))) {
+        cli::cli_alert_info("{.file {basename(.x)}} is empty. Deleting folder!\n\n")
+        dir_delete(.x)
+      } else {
+        
+        cli::cli_alert_info("{.file {basename(.x)}} is not empty. Keeping folder!\n\n")
+      }
+      
+      }
+  )
+```
+
+
 
 
 # X.0 ---- Load Bio-optical Data ----
