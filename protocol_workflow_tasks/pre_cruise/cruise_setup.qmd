@@ -583,7 +583,7 @@ edna_map <-
   # ) +
   # ---- NOAA Locations
   geom_point(
-    data = filter(noaa_loc, !(station %in% loca$station)),
+    data = filter(noaa_loc, !(station %in% loca_edna$station)),
     aes(
       x = lon,
       y = lat
@@ -594,7 +594,7 @@ edna_map <-
   ) +
   # # add labels for all none sampled locations
   # geom_text_repel(
-  #   data = filter(noaa_loc, !(station %in% loca$station)), 
+  #   data = filter(noaa_loc, !(station %in% loca_edna$station)), 
   #   aes(x = lon, y = lat, label = station),
   #   size = 2,
   #   # hjust = -1,
