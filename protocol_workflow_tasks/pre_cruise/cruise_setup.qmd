@@ -472,8 +472,6 @@ if (!file_exists(sv_arg$file_name) || sv_arg$overwrite) {
   # create directory if doens't exist
   fs::dir_create(sv_arg$save_path)
   
-  # cli::cli_alert_info("Creating map!")
-  
   # save map
   cowplot::save_plot(
    sv_arg$file_name,
