@@ -439,15 +439,14 @@ imars_map <-
   ) +
   labs(color = "Zooplankton Mesh Size") +
   theme(
-    legend.position = c(0.2, 0.14),
-    legend.text     = element_text(size = 10),
-    legend.title    = element_text(size = 15),
-    legend.background = element_rect(color = "black")
+    legend.position        = "inside",
+    legend.position.inside = c(0.2, 0.14),
+    legend.text            = element_text(size = 10),
+    legend.title           = element_text(size = 15),
+    legend.background      = element_rect(color = "black")
   )
 
 imars_map
-
-shadowtext::geom_shadowtext()
 ```
 ## Save Map
 
@@ -456,8 +455,8 @@ shadowtext::geom_shadowtext()
 sv_arg <-
   list(
     save_path = here("data", "metadata", "cruise_map"),
-    # overwrite = FALSE
-    overwrite = TRUE
+    overwrite = FALSE
+    # overwrite = TRUE
   ) %>%
   c(
     file_name =
@@ -631,10 +630,11 @@ edna_map <-
   ) +
 
   theme(
-    legend.position = c(0.2, 0.14),
-    legend.text     = element_text(size = 10),
-    legend.title    = element_text(size = 15),
-    legend.background = element_rect(color = "black")
+    legend.position        = "inside",
+    legend.position.inside = c(0.2, 0.14),
+    legend.text            = element_text(size = 10),
+    legend.title           = element_text(size = 15),
+    legend.background      = element_rect(color = "black")
   )
 
 edna_map
@@ -645,8 +645,8 @@ edna_map
 sv_arg <-
   list(
     save_path = here("data", "metadata", "cruise_map"),
-    overwrite = TRUE
-    # overwrite = FALSE
+    overwrite = FALSE
+    # overwrite = TRUE
   ) %>%
   c(
     file_name =
