@@ -202,7 +202,8 @@ If everything looks okay, copy the eDNA metadata to the cruise folder.
 ```{r copy-cloud}
 file_copy(
   file_name,
-  dirname(metadata)
+  dirname(metadata),
+  overwrite = TRUE
 )
 ```
 
@@ -217,6 +218,7 @@ edna_imars_raw_{cruise ID}.xlsx
 file_name_raw <-
   here(
     dirname(metadata),
+    # "data", "metadata", "edna_meta", "raw",
     glue(
       "edna_imars_raw_{cruise_name}.xlsx"
     )
