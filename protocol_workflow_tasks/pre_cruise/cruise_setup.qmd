@@ -77,9 +77,9 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "March 24 2025",         # START DATE HERE, month day year
-    end_dates   = "MArch 30 2025",           # END DATE HERE, month day year
+    ship        = "WS",                                   # HERE, ship acronym
+    start_dates = "May 10 2025",         # START DATE HERE, month day year
+    end_dates   = "May 17 2025",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -689,6 +689,10 @@ rm(sv_arg)
 ```
 
 # ---- Copy files from Cloud to Local
+
+This is used for the cruise laptop. 
+
+This will copy the folder in the cloud storage into a local folder.
 
 ```{r copy-cloud-local}
 if (exists("local_dir")) {
