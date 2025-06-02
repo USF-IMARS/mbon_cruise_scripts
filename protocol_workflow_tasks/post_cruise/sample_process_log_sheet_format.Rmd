@@ -112,6 +112,9 @@ if (update_cal) {
   cli_alert_warning(
     "You've set update_cal = {update_cal}. You will be updating the log!"
   )
+} else if (nrow(meta_all) != 0) {
+  message(sprintf("%s need a process log.\n", unique(meta_all$cruise_id)))
+
 } else {
   stopifnot("No files need creating!" = nrow(meta_all) > 1)
 }
