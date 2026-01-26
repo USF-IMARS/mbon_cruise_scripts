@@ -77,9 +77,9 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "WS",                                   # HERE, ship acronym
-    start_dates = "May 10 2025",         # START DATE HERE, month day year
-    end_dates   = "May 17 2025",           # END DATE HERE, month day year
+    ship        = "HG",                                   # HERE, ship acronym
+    start_dates = "December 7 2025",         # START DATE HERE, month day year
+    end_dates   = "December 13 2025",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -215,8 +215,18 @@ zoo_loc <-
     labs = paste(mesh_size_um, collapse = ", ")
   ) %>%
   mutate(
-    labs = str_replace(labs, " /", ","),
-    labs = str_replace(labs, "64$", "64 (only)")
+    # labs = str_replace(labs, " /", ","),
+    # labs = str_replace(labs, "^64$", "64 (only)"),
+    labs = case_when(
+      str_detect(labs, "500") & str_detect(labs, "64") ~ "64, 200, 500",
+      str_detect(labs, "64") ~ "64 (only)",
+      .default = labs
+    ),
+    labs = case_when(
+      str_detect(station, "MR|LK|WS") ~ "64, 200, 500",
+      str_detect(labs, "64") ~ "64 (only)",
+      .default = labs
+    )
   )
 
 # NOAA locations
@@ -237,6 +247,8 @@ noaa_loc <-
       ),
     lon = parzer::parse_lon(lon),
     lat = parzer::parse_lat(lat), 
+    lon = if_else(is.na(lon), longitude_decimal_degree, lon),
+    lat = if_else(is.na(lat), latitude_decimal_degree, lat),
     .before = 2
     )
 
@@ -257,6 +269,14 @@ Labels:
 
 
 ```{r data-manipulation}
+# include L line?
+if (!askYesNo("Include L Line")) {
+  loca <-
+    loca %>%
+    filter(!str_detect(station, "^L\\d{1,2}")) %T>% 
+    print()
+}
+
 # define labels for map
 loca <-
   loca %>%
@@ -269,16 +289,19 @@ loca <-
       labl = str_replace(labl, "HPLC, HPLC replicate", "HPLC (replicate)"),
       labl = str_remove_all(labl, " ,|,\\s+$"),
       labl = if_else(!is.na(other) & str_detect(other, "Cross"), "Cross Shelf", labl),
-      labl = if_else(!is.na(other) & str_detect(other, "Red"), "Red Tide", labl)
+      labl = if_else(!is.na(other) & str_detect(other, "Red"), "Red Tide", labl),
+      labl = if_else(str_detect(station, paste0(paste0("BG", c(seq(9, 17, 2), 20)), collapse = "|")),
+                      "CHL, HPLC, CDOM, eDNA ", labl),
+      labl = if_else(str_detect(labl, "Cross"), NA, labl)
     ) %>%
-    mutate(
+  filter(!is.na(labl)) %>%
+  mutate(
     .by = labl,
     station,
     lon, lat,
     labl = glue("{labl} ({n()})")
   ) %T>% 
  print()
-
 ```
 
 # ---- Base Map Data ----
@@ -321,7 +344,7 @@ if (exists("base_plt")) {
   ## ---- download topography (.nc) and coastline (.shp)
   world_download(
     path_land  = map_loc,
-    path_topo  = map_loc,
+    path_topo  = here(map_loc, "flracepv"),
     extent     = exnt,
     use_suffix = NULL
   )
@@ -332,7 +355,7 @@ if (exists("base_plt")) {
     load_map_obj(
       .map_coast = map_loc,
       .map_state = NULL,
-      .map_bath  = map_loc,
+      .map_bath  = here(map_loc, "flracepv"),
       .map_file  = "etopo1.nc",
       .extent    = exnt
     )
@@ -358,7 +381,7 @@ imars_map <-
   base_plt +
   # ---- Cruise ID
   annotate(
-    geom        = "richtext", 
+    geom        = "richtext",
     x           = -81.5,
     y           = 28,
     label       = glue("{cruise_id$cruise_id[1]} (IMaRS)"),
@@ -370,9 +393,9 @@ imars_map <-
   ) +
   # ---- Cruise Dates
   annotate(
-    geom        = "richtext", 
+    geom        = "richtext",
     x           = -81.5,
-    y           = 27.85, 
+    y           = 27.85,
     label       = cruise_id$label[1],
     size        = 7,
     fontface    = "bold",
@@ -507,29 +530,45 @@ rm(sv_arg)
 loca_edna <-
   loca %>%
   mutate(
-    edna = 
+    edna =
       if_else(
         str_detect(labl, "Cross"),
         "Cross Shelf",
         edna
-        ),
-    edna = 
+        # "eDNA"
+      ),
+    edna =
       if_else(
         str_detect(labl, "Red"),
         "Red Tide",
         edna
-        ),
-    depth_level = 
+      ),
+    edna =
+      if_else(
+        str_detect(labl, "(?i)edna"),
+        "eDNA",
+        edna
+      ),
+    depth_level =
       if_else(
         str_detect(labl, "Cross"),
         "Surf, DCM, Bot",
         depth_level
-        ),
-         ) %>%
-          
+      ),
+    depth_level =
+      case_when(
+        str_detect(station, "BG9|BG11") ~ "surf and bot",
+        str_detect(station, "BG1[357]|BG20") ~ "surf, DCM, bot",
+        .default = depth_level
+      ),
+  ) %>%
   select(station, lon, lat, depth_level, edna) %>%
   filter(!is.na(edna)) %>%
-  mutate(labl = glue("{edna} {depth_level}", .na = ""))
+  
+  mutate(
+    .by = depth_level,
+    labl = glue("{edna} {depth_level} ({n()})", .na = "")) %T>% 
+  print()
 
 # stations not sampling eDNA
 cli_alert("Stations not sampling for eDNA")
@@ -671,8 +710,11 @@ if (!file_exists(sv_arg$file_name) || sv_arg$overwrite) {
   )
 } else {
     cli::cli_alert_info("Map already exists, not overwriting!")
-} 
+}
+```
 
+
+```{r save-edna-map, fig.width=8.5, fig.height=11}
 if (!file_exists(here(dirname(dir_path), basename(sv_arg$file_name))) || sv_arg$overwrite) {
   cli_alert_info("Copying map to cloud: {.path {dirname(dir_path)}}")
 
