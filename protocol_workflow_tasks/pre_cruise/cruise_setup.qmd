@@ -78,8 +78,8 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "December 7 2025",         # START DATE HERE, month day year
-    end_dates   = "December 13 2025",           # END DATE HERE, month day year
+    start_dates = "February 2 2026",         # START DATE HERE, month day year
+    end_dates   = "February 9 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -198,36 +198,49 @@ if (!cruise_id$north_stations) {
 
 
 # zooplankton locations
-zoo_loc <-
-  readxl::read_excel(
-    dir_path,
-    sheet = "zooplankton",
-    range = cellranger::cell_rows(c(13, 13 + 8)),
-    .name_repair = janitor::make_clean_names
-  ) %>%
-  select(station,
-    "lat" = lat_in,
-    "lon" = lon_in,
-    mesh_size_um
-  ) %>%
-  summarise(
-    .by = c(station, lat, lon),
-    labs = paste(mesh_size_um, collapse = ", ")
-  ) %>%
-  mutate(
-    # labs = str_replace(labs, " /", ","),
-    # labs = str_replace(labs, "^64$", "64 (only)"),
-    labs = case_when(
-      str_detect(labs, "500") & str_detect(labs, "64") ~ "64, 200, 500",
-      str_detect(labs, "64") ~ "64 (only)",
-      .default = labs
-    ),
-    labs = case_when(
-      str_detect(station, "MR|LK|WS") ~ "64, 200, 500",
-      str_detect(labs, "64") ~ "64 (only)",
-      .default = labs
+if (str_extract(dir_path, "\\d{4}") > 2026) {
+  # update 2026, to use rows 5 - 10 to get lat, lon, labs
+  zoo_loc <-
+    readxl::read_excel(
+      dir_path,
+      sheet = "zooplankton",
+      range = cellranger::cell_rows(c(5, 10)),
+      .name_repair = janitor::make_clean_names
+    ) %>%
+    select(station, lat, lon, labs)
+} else {
+  # prior to 2026
+  zoo_loc <-
+    readxl::read_excel(
+      dir_path,
+      sheet = "zooplankton",
+      range = cellranger::cell_rows(c(13, 13 + 8)),
+      .name_repair = janitor::make_clean_names
+    ) %>%
+    select(station,
+      "lat" = lat_in,
+      "lon" = lon_in,
+      mesh_size_um
+    ) %>%
+    summarise(
+      .by = c(station, lat, lon),
+      labs = paste(mesh_size_um, collapse = ", ")
+    ) %>%
+    mutate(
+      # labs = str_replace(labs, " /", ","),
+      # labs = str_replace(labs, "^64$", "64 (only)"),
+      labs = case_when(
+        str_detect(labs, "500") & str_detect(labs, "64") ~ "64, 200, 500",
+        str_detect(labs, "64") ~ "64 (only)",
+        .default = labs
+      ),
+      labs = case_when(
+        str_detect(station, "MR|LK|WS") ~ "64, 200, 500",
+        str_detect(labs, "64") ~ "64 (only)",
+        .default = labs
+      )
     )
-  )
+}
 
 # NOAA locations
 noaa_loc <-
