@@ -31,6 +31,9 @@ source(here("scripts", "misc_functions.R"))
 
 
 ## Cruise File Path
+
+Select file containing: `fknms_sample_logsheet_xx_xxxx_xxxxxx`
+
 ```{r}
 if (str_detect(Sys.getenv("USERNAME"), "imars_cruise")) {
   # hard coded
@@ -153,7 +156,10 @@ edna_collect <-
   print()
 ```
 
+
 ## Join Both Sheets
+
+
 ```{r}
 both_sheets <- 
   full_join(
