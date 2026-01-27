@@ -135,8 +135,8 @@ process_log_sheet <- function(
     )
   
   meta <-  tryCatch({
-    
-      unnest(meta, c(chl_a, cdom, hplc))
+      # unnest(meta, c(chl_a, cdom, hplc))
+      unnest(meta, (which(names(meta) == "station") + 1):last_col() )
     }, error = function(e) {
       # will stop if cannot unnest
       # this will usually happen if there are more than 2 chl-a sample IDs
@@ -153,8 +153,10 @@ process_log_sheet <- function(
     meta %>%
     mutate(
       .by   = c(station, depth_m),
+      # replace duplicated sample IDs with NA
       cdom  = replace(cdom, duplicated(cdom), NA),
       hplc  = replace(hplc, duplicated(hplc), NA),
+      # order by chla/ap sample
       ranks = str_remove(chl_a, ".*-"),
       ranks = str_remove_all(ranks, "[:alpha:]"),
       ranks = as.numeric(ranks)
@@ -363,7 +365,7 @@ process_log_sheet <- function(
   
   return(wb)
   
-  # ---- end of function process_log_sheet
+  # ---- end of function process_log_sheet ---- #
   }
 
 # ============================================================================ #
@@ -421,7 +423,7 @@ style_formatting <- function() {
                                 borderStyle = "dotted")
   ) 
   
-    # ---- end of function style_formatting
+    # ---- end of function style_formatting ---- #
 }
 
 ##%######################################################%##
@@ -453,7 +455,7 @@ format_styles <- function(
   class(wb) <- type
   
   UseMethod("format_styles", wb)
-  # ---- end of function format_styles
+  # ---- end of function format_styles ---- #
   }
 
 
@@ -487,24 +489,29 @@ format_styles.meta_col_wh <- function(
     ...) {
   
   # ----  Width and Heights
+  # set header height
   setRowHeights(
     wb, 
     sheet   = sht_nm[1], 
     rows    = 1, 
     heights = 73.2)
   
+  # set 'comments' column width
   setColWidths(
     wb, 
     sheet  = sht_nm[1], 
-    cols   = cols$cdom[length(cols$cdom)] + 1, 
+    # cols   = cols$cdom[length(cols$cdom)] + 1, 
+    cols   = which(str_detect(meta_names, "(?i)^comments")),
     widths = 39.56)
   
+  # set 'hplc' column widths
   setColWidths(
     wb, 
     sheet  = sht_nm[1], 
     cols   = cols$hplc, 
     widths = 15.67)
   
+  # set 'ap', 'cdom', and 'chla' sample widths
   setColWidths(
     wb, 
     sheet  = sht_nm[1], 
@@ -514,6 +521,7 @@ format_styles.meta_col_wh <- function(
       ), 
     widths = 12.89)
 
+  # set instrument widths
   setColWidths(
     wb, 
     sheet  = sht_nm[1], 
@@ -523,7 +531,7 @@ format_styles.meta_col_wh <- function(
       ), 
     widths = 12.22)
   
-  # ---- end of function format_styles.meta_col_wh
+  # ---- end of function format_styles.meta_col_wh ---- #
 }
 
 ##%######################################################%##
@@ -565,7 +573,7 @@ format_styles.chl_col_wh <- function(
   setColWidths(wb, sheet = sht_nm[2], cols = comm_col, widths = 40.56)
   setColWidths(wb, sheet = sht_nm[2], cols = sample_col, widths = 12)
   
-  # ---- end of function format_styles.chl_col_wh
+  # ---- end of function format_styles.chl_col_wh ---- #
 }
 
 
@@ -681,7 +689,7 @@ format_styles.meta <- function(
     gridExpand = TRUE, 
     stack      = TRUE)
   
-  # add black line to end
+  # add black line to right side of table and center comments column 
   addStyle(
     wb, 
     sheet = sht_nm[1],
@@ -690,6 +698,7 @@ format_styles.meta <- function(
     style = sstyles$styl_brd_head,
     stack = TRUE)
   
+  # add black line to bottom of table
   addStyle(
     wb, 
     sheet      = sht_nm[1], 
@@ -699,15 +708,18 @@ format_styles.meta <- function(
     gridExpand = TRUE, 
     stack      = TRUE)
   
+  # center all columns except for comments col
   addStyle(
     wb, 
     sheet      = sht_nm[1], 
     style      = sstyles$styl_align,
-    cols       = 1:19,
+    # cols       = 1:19,
+    cols       = 1:(which(str_detect(names_meta, "(?i)comments")) - 1),
     rows       = 1:dim_meta[1] + 1,
     gridExpand = TRUE, 
     stack      = TRUE)
   
+  # add dotted lines between sample ID and file name
   addStyle(
     wb, 
     sht_nm[1], 
@@ -722,7 +734,7 @@ format_styles.meta <- function(
   # ---- Freeze Pane
   freezePane(wb, sht_nm[1], firstRow = TRUE)
   
-  # ---- end of function format_styles.meta
+  # ---- end of function format_styles.meta ---- #
 }
 
 ##%######################################################%##
@@ -762,6 +774,7 @@ format_styles.chl_a <- function(
   options(openxlsx.dateFormat = "mm/dd/yy")
   
   # ---- styles 
+  # style date column
   addStyle(
     wb, 
     sht_nm[2],
@@ -771,6 +784,7 @@ format_styles.chl_a <- function(
     gridExpand = TRUE,
     stack      = TRUE)
   
+  # style 'Fluorometer Calibration date' col
   addStyle(
     wb, 
     sht_nm[2],
@@ -780,6 +794,7 @@ format_styles.chl_a <- function(
     gridExpand = TRUE,
     stack      = TRUE)
   
+  # style time column
   addStyle(
     wb, 
     sht_nm[2],
@@ -789,7 +804,7 @@ format_styles.chl_a <- function(
     gridExpand = TRUE,
     stack      = TRUE)
   
-  
+  # add color to Trilogy columns
   addStyle(
     wb, 
     sht_nm[2],
@@ -800,6 +815,7 @@ format_styles.chl_a <- function(
     gridExpand = TRUE
   )
   
+  # add borders to each section
   addStyle(
     wb, 
     sht_nm[2], 
@@ -809,6 +825,7 @@ format_styles.chl_a <- function(
     stack      = TRUE,
     gridExpand = TRUE)
   
+  # add dashed border between 'No Acid' High and	'No Acid' ratio
   addStyle(
     wb, 
     sht_nm[2], 
@@ -818,6 +835,7 @@ format_styles.chl_a <- function(
     stack      = TRUE,
     gridExpand = TRUE)
   
+  # add bottom border to end of table
   addStyle(
     wb, 
     sht_nm[2], 
@@ -826,6 +844,7 @@ format_styles.chl_a <- function(
     cols       = 1:dim_chl[2], 
     stack      = TRUE)
   
+  # add depth number format
   addStyle(
     wb, 
     sht_nm[2],
@@ -838,7 +857,7 @@ format_styles.chl_a <- function(
   # ---- Freeze Pane
   freezePane(wb, sht_nm[2], firstActiveRow = 4)
   
-  # ---- end of function format_syles.chl_a
+  # ---- end of function format_syles.chl_a ---- #
 }
 
 
@@ -918,6 +937,7 @@ add_info.header <- function(
     openxlsx, hms, janitor, cli
   )
   
+  # ---- Add Large 'Trilogy' Header
   mergeCells(wb, sht_nm[2], cols = 9:24, rows = 1)
   
   writeData(
@@ -957,10 +977,8 @@ add_info.header <- function(
     startRow = 2, 
     colNames = FALSE)
   
-    # ---- end of function add_info.headers
+    # ---- end of function add_info.headers ---- #
 }
-
-
 
 ##%######################################################%##
 #                                                          #
@@ -1001,8 +1019,8 @@ add_info.formula <- function(
     group_by(station, depth) %>%
     
     mutate(
-      rows = as.numeric(rows) + 3,
-      grp_num = n(),
+      rows     = as.numeric(rows) + 3,
+      grp_num  = n(),
       grp_rows = max(rows),
       # =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
       no_acid_ratio =
@@ -1043,13 +1061,14 @@ add_info.formula <- function(
   one_sample_taken <- filter(formulas, n() == 1) %$% rows
 
   # ---- column locations for formulas
-  na_ratio  <- which(str_detect(chl_names, "(?i)^'No Acid' ratio"))
-  chl_conc  <- which(str_detect(chl_names, "(?i)^\\[Chl a\\]"))
-  avg_chl   <- which(str_detect(chl_names, "(?i)^AVG"))
-  std_chl   <- which(str_detect(chl_names, "(?i)^STDEV"))
+  na_ratio <- which(str_detect(chl_names, "(?i)^'No Acid' ratio"))
+  chl_conc <- which(str_detect(chl_names, "(?i)^\\[Chl a\\]"))
+  avg_chl  <- which(str_detect(chl_names, "(?i)^AVG"))
+  std_chl  <- which(str_detect(chl_names, "(?i)^STDEV"))
   
 
   # ---- add formulas
+  # acid ratio
   writeFormula(
     wb, 
     sht_nm[2],
@@ -1057,6 +1076,7 @@ add_info.formula <- function(
     startCol = na_ratio,
     startRow = 4)
   
+  # chla calc
   writeFormula(
     wb, 
     sht_nm[2],
@@ -1064,6 +1084,7 @@ add_info.formula <- function(
     startCol = chl_conc,
     startRow = 4)
   
+  # avg chla
   writeFormula(
     wb, 
     sht_nm[2],
@@ -1071,6 +1092,7 @@ add_info.formula <- function(
     startCol = avg_chl,
     startRow = 4)
   
+  # std dev chla
   writeFormula(
     wb, 
     sht_nm[2],
@@ -1114,7 +1136,7 @@ add_info.formula <- function(
     )
   }
   
-  # ---- end of function add_info.formula
+  # ---- end of function add_info.formula ---- #
 }
 
 
@@ -1172,7 +1194,7 @@ add_info.comment <- function(
   writeComment(wb, sht_nm[2], col = na_low, row = 3, comment = comm$low_read)
   writeComment(wb, sht_nm[2], col = na_hi,  row = 3, comment = comm$high_read)
   
-  # ---- end of function add_info.comment
+  # ---- end of function add_info.comment ---- #
 }
 
 
