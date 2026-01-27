@@ -157,7 +157,7 @@ save_meta <-
 } else if (update_cal) {
   save_meta <- 
     crs_log_exst %>%
-    # if need to udpate a specific cruise
+    # if need to update a specific cruise
     # filter(str_detect(cruise_id, "<cruise ID>")) %>%
     mutate(
       sheets = map(
