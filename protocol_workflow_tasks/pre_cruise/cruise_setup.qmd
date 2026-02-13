@@ -78,8 +78,8 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "February 2 2026",         # START DATE HERE, month day year
-    end_dates   = "February 9 2026",           # END DATE HERE, month day year
+    start_dates = "February 14 2026",         # START DATE HERE, month day year
+    end_dates   = "February 20 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -198,7 +198,7 @@ if (!cruise_id$north_stations) {
 
 
 # zooplankton locations
-if (str_extract(dir_path, "\\d{4}") > 2026) {
+if (str_extract(dir_path, "\\d{4}") >= 2026) {
   # update 2026, to use rows 5 - 10 to get lat, lon, labs
   zoo_loc <-
     readxl::read_excel(
