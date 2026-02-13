@@ -99,58 +99,101 @@ sheet_name <-
 ## 3.3 Load and Reformat eDNA Metadata
 
 ```{r load-format-metadata}
-noaa_format <- 
+noaa_format <-
   readxl::read_xlsx(
-    metadata, 
-    sheet = sheet_name, 
+    metadata,
+    sheet = sheet_name,
     .name_repair = janitor::make_clean_names
   ) %>%
   janitor::remove_empty(which = "cols") %>%
-  filter(!is.na(mm_dd_yy) & !year(mm_dd_yy) < 2000 & !is.na(vol_ml)) %T>% 
+  filter(!is.na(mm_dd_yy) & !year(mm_dd_yy) < 2000 & !is.na(vol_ml)) %T>%
   print() %>%
   mutate(
-    .after                = time_gmt,
-    station               = str_replace(station, "LK", "21/LK"),
-    time_gmt              = hms::as_hms(time_gmt),
-    date_time             = as_datetime(paste(mm_dd_yy,time_gmt), tz = "UTC"),
-    `*collection_date`    = format_ISO8601(date_time, usetz = "Z"),
-    date_time_local       = with_tz(date_time, "America/New_York"),
-    collection_date_local = format_ISO8601(date_time_local,  usetz = TRUE),
-    collection_date_local = str_replace(collection_date_local, "(-\\d{2})00$", "\\1:00")
-  )  %T>% 
+    .after         = time_gmt,
+    station        = str_replace(station, "LK", "21/LK"),
+    time_gmt       = hms::as_hms(time_gmt),
+    date_time      = as_datetime(paste(mm_dd_yy, time_gmt), tz = "UTC"),
+    "eventDate"    = format_ISO8601(date_time, usetz = "Z"),
+    samp_size_unit = "mL"
+  ) %>%
+  # replace zeros with NA
+  mutate(
+    across(is.character, ~ if_else(.x == "0", NA, .x)),
+    across(is.numeric, ~ if_else(.x == 0, NA, .x)),
+    sample_name = str_replace(sample_name, "_0?_", "_BLANK_")
+    ) %T>%
   print() %>%
   
+  # final select of names
   select(
-  `*sample_name`      = sample_name,
-  serial_number       = sample,
-  cruise_id,
-  line_id,
-  line_name,
-  station,
-  ctd_bottle_no       = niskin_bottle,
-  sample_replicate,
-  notes_sampling      = notes,
-  collection_date_local,
-  `*collection_date`,
-  `*depth`            = depth_m,
-  tot_depth_water_column = max_depth_m,
-  depth_category      = depth_level,
-  `*geo_loc_name`     = geo_loc_name,
-  waterBody           = water_body,
-  `*lat_lon`          = lat_lon,
-  decimalLatitude     = lat,
-  decimalLongitude    = lon,
-  samp_vol_we_dna_ext = vol_ml,
-  ) %>%
-  mutate(
-    waterBody = as.character(waterBody),
-    across(
-      c(where(is.character), waterBody), 
-      ~ na_if(.x, "0")
-      )
-    
-  ) %T>% 
+    "*samp_name"           = sample_name,
+    "serial_number"        = sample,
+    cruise_id,
+    line_id,
+    line_name,
+    "station_id"           = station,
+    "ctd_bottle_no"        = niskin_bottle,
+    sample_replicate,
+    "samp_collect_notes"   = notes,
+    "decimalLatitude"      = lat,
+    "decimalLongitude"     = lon,
+    geo_loc_name,
+    "eventDate",
+    "verbatimEventDate"    = mm_dd_yy,
+    "verbatimEventTime"    = time_gmt,
+    "samp_size"            = vol_ml,
+    samp_size_unit,
+    "depth_category"       = depth_level,
+    "minimumDepthInMeters" = depth_m,
+    "maximumDepthInMeters" = depth_m,
+    "tot_depth_water_col"  = max_depth_m,
+  ) %T>%
   print()
+
+# 2024 version
+  # mutate(
+  #   .after                = time_gmt,
+  #   station               = str_replace(station, "LK", "21/LK"),
+  #   time_gmt              = hms::as_hms(time_gmt),
+  #   date_time             = as_datetime(paste(mm_dd_yy,time_gmt), tz = "UTC"),
+  #   `*collection_date`    = format_ISO8601(date_time, usetz = "Z"),
+  #   date_time_local       = with_tz(date_time, "America/New_York"),
+  #   collection_date_local = format_ISO8601(date_time_local,  usetz = TRUE),
+  #   collection_date_local = str_replace(collection_date_local, "(-\\d{2})00$", "\\1:00")
+  # )  %T>% 
+  # print() %>%
+  # 
+  # select(
+  # `*sample_name`      = sample_name,
+  # serial_number       = sample,
+  # cruise_id,
+  # line_id,
+  # line_name,
+  # station,
+  # ctd_bottle_no       = niskin_bottle,
+  # sample_replicate,
+  # notes_sampling      = notes,
+  # collection_date_local,
+  # `*collection_date`,
+  # `*depth`            = depth_m,
+  # tot_depth_water_column = max_depth_m,
+  # depth_category      = depth_level,
+  # `*geo_loc_name`     = geo_loc_name,
+  # waterBody           = water_body,
+  # `*lat_lon`          = lat_lon,
+  # decimalLatitude     = lat,
+  # decimalLongitude    = lon,
+  # samp_vol_we_dna_ext = vol_ml,
+  # ) %>%
+  # mutate(
+  #   waterBody = as.character(waterBody),
+  #   across(
+  #     c(where(is.character), waterBody), 
+  #     ~ na_if(.x, "0")
+  #     )
+  #   
+  # ) %T>% 
+  # print()
 ```
 
 # 4.0 ---- Save Metadata ----
@@ -176,20 +219,30 @@ dir_create(local_dir)
 file_name <- 
   here(
     local_dir,
-    glue("NOAA_eDNA_metadata_{cruise_name}.xlsx")
+    glue("NOAA_eDNA_metadata_{cruise_name}B.xlsx")
     )
 
 # load template
-wb <- wb_load(noaa_template)
-wb_get_sheet_names(wb)
+wb <- wb_load(noaa_template, sheet = "noaa_format")
 
-# remove extra sheets
-wb <- wb_remove_worksheet(wb, sheet = "Sheet1")
-wb <- wb_remove_worksheet(wb, sheet = "Sheet2")
+# remove extra sheets (NOT noaa_format)
+for (i in wb_get_sheet_names(wb)) {
+  if (str_detect(i, "noaa_format")) next
+  message(paste("Removing Sheet:", i))
+  wb <- wb_remove_worksheet(wb, sheet = i)
+}
 
 # add data
-wb <- wb_add_data(wb, x = noaa_format, sheet = "noaa_format", na.strings = "")
-wb_get_sheet_names(wb)
+wb <- wb_add_data(
+  wb, x = noaa_format, sheet = "noaa_format", na.strings = "",
+  col_names = FALSE, start_row = 2)
+
+# format verbatimEventDate to mm/dd/yyyy
+wb <- wb_add_numfmt(
+  wb, 
+  dims = wb_dims(x = noaa_format, cols = "verbatimEventDate"), 
+  numfmt = "mm/dd/yyyy"
+  )
 
 # save workbook and open
 wb_save(wb, file_name)
