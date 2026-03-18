@@ -1011,8 +1011,22 @@ add_info.formula <- function(
   meta_sub,
   ...) {
   
-
-  # ---- Formulas for Chlor-a Sheet
+  # ---- column locations for formulas ---- #
+  vol      <- LETTERS[which(str_detect(chl_names, "Volume"))]
+  na       <- LETTERS[which(str_detect(chl_names, "'No Acid' Rb"))]
+  na_blk   <- LETTERS[which(str_detect(chl_names, "'No Acid' blank"))]
+  na_s     <- LETTERS[which(str_detect(chl_names, "'No Acid' Slope"))]
+  na_int   <- LETTERS[which(str_detect(chl_names, "'No Acid' y-int"))]
+  low_na   <- LETTERS[which(str_detect(chl_names, "'No Acid' Low"))]
+  hi_na    <- LETTERS[which(str_detect(chl_names, "'No Acid' High"))]
+  na_ratio <- which(str_detect(chl_names, "(?i)^'No Acid' ratio"))
+  na_r     <- LETTERS[na_ratio]
+  chl_conc <- which(str_detect(chl_names, "(?i)^\\[Chl a\\]"))
+  chl_c    <- LETTERS[chl_conc]
+  avg_chl  <- which(str_detect(chl_names, "(?i)^AVG"))
+  std_chl  <- which(str_detect(chl_names, "(?i)^STDEV"))
+  
+  # ---- Formulas for Chlor-a Sheet ---- #
   formulas <-
     meta_sub  %>%
     rownames_to_column("rows") %>%
@@ -1023,29 +1037,44 @@ add_info.formula <- function(
       grp_num  = n(),
       grp_rows = max(rows),
       # =IF(R4>0,((Q4/R4)+(S4/T4))/2,-999)
+      # no_acid_ratio =
+      #   glue(
+      #     "IF(R{rows}>0,",
+      #     "((Q{rows}/R{rows})+(S{rows}/T{rows}))/2,", 
+      #     "-999)"
+      #   ),
       no_acid_ratio =
         glue(
-          "IF(R{rows}>0,",
-          "((Q{rows}/R{rows})+(S{rows}/T{rows}))/2,", 
+          "IF({low_na[2]}{rows}>0,",
+          "(({low_na[1]}{rows}/{low_na[2]}{rows})+({hi_na[1]}{rows}/{hi_na[2]}{rows}))/2,", 
           "-999)"
         ),
-      
       # V =+IF(L4>0,(O4*((L4-N4)*U4)+P4)*K4/J4,-999)
+      # chla_conc =
+      #   glue(
+      #     "+IF(L{rows}>0,",
+      #     "(O{rows}*((L{rows}-N{rows})*U{rows})+P{rows})*K{rows}/J{rows},",
+      #     "-999)"
+      #   ),
       chla_conc =
         glue(
-          "+IF(L{rows}>0,",
-          "(O{rows}*((L{rows}-N{rows})*U{rows})+P{rows})*K{rows}/J{rows},",
+          "+IF({na}{rows}>0,",
+          "({na_s}{rows}*(({na}{rows}-{na_blk}{rows})*{na_r}{rows})+{na_int}{rows})*{vol[2]}{rows}/{vol[1]}{rows},",
           "-999)"
         ),
       
-      avg = glue("V{min(rows)}:V{max(rows)}"),
+      # avg = glue("W{min(rows)}:W{max(rows)}"),
+      avg = glue("{chl_c}{min(rows)}:{chl_c}{max(rows)}"),
+      avg1 = glue("AND({chl_c}{min(rows)}>=0,{chl_c}{max(rows)}>=0)"),
       
       # X =STDEV(V4:V5)
-      stdev = glue("IF(AND({avg}>=0), STDEV({avg}),-999)"),
+      # stdev = glue("IF(AND({avg}>=0), STDEV({avg}),-999)"),
+      stdev = glue("IF({avg1}, STDEV({avg}),-999)"),
       
       # W =AVERAGE(V4:V5)
-      avg = glue("IF(AND({avg}>=0), AVERAGE({avg}),-999)"),
-
+      # avg = glue("IF(AND({avg}>=0), AVERAGE({avg}),-999)"),
+      avg = glue("IF({avg1}, AVERAGE({avg}),-999)"),
+      
       across(
         c(avg, stdev),
         ~ case_when(
@@ -1060,14 +1089,14 @@ add_info.formula <- function(
 
   one_sample_taken <- filter(formulas, n() == 1) %$% rows
 
-  # ---- column locations for formulas
-  na_ratio <- which(str_detect(chl_names, "(?i)^'No Acid' ratio"))
-  chl_conc <- which(str_detect(chl_names, "(?i)^\\[Chl a\\]"))
-  avg_chl  <- which(str_detect(chl_names, "(?i)^AVG"))
-  std_chl  <- which(str_detect(chl_names, "(?i)^STDEV"))
+  # # ---- column locations for formulas
+  # na_ratio <- which(str_detect(chl_names, "(?i)^'No Acid' ratio"))
+  # chl_conc <- which(str_detect(chl_names, "(?i)^\\[Chl a\\]"))
+  # avg_chl  <- which(str_detect(chl_names, "(?i)^AVG"))
+  # std_chl  <- which(str_detect(chl_names, "(?i)^STDEV"))
   
 
-  # ---- add formulas
+  # ---- add formulas ---- #
   # acid ratio
   writeFormula(
     wb, 
@@ -1100,7 +1129,7 @@ add_info.formula <- function(
     startCol = std_chl,
     startRow = 4)
   
-  # ---- comment if only one sample was taken at a station
+  # ---- comment if only one sample was taken at a station ---- #
   if (!rlang::is_empty(one_sample_taken)) {
     one_sample_comm <-
       createComment(
