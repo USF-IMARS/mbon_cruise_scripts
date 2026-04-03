@@ -219,7 +219,7 @@ dir_create(local_dir)
 file_name <- 
   here(
     local_dir,
-    glue("NOAA_eDNA_metadata_{cruise_name}B.xlsx")
+    glue("NOAA_eDNA_metadata_{cruise_name}.xlsx")
     )
 
 # load template
