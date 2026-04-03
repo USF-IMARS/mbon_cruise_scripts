@@ -78,8 +78,8 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "February 14 2026",         # START DATE HERE, month day year
-    end_dates   = "February 20 2026",           # END DATE HERE, month day year
+    start_dates = "March 22 2026",         # START DATE HERE, month day year
+    end_dates   = "March 28 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -207,7 +207,8 @@ if (str_extract(dir_path, "\\d{4}") >= 2026) {
       range = cellranger::cell_rows(c(5, 10)),
       .name_repair = janitor::make_clean_names
     ) %>%
-    select(station, lat, lon, labs)
+    select(station, lat, lon, labs) %T>% 
+    print()
 } else {
   # prior to 2026
   zoo_loc <-
