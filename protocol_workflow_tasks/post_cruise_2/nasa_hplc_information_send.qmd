@@ -234,7 +234,8 @@ water_body <- list(
       c(1:12),
       str_c
     )),
-    "BG13", "BG15", "BG17", "BG20", "AC1", "AC4", "AC6", "HB1", "HB4", "HB6"
+    "BG13", "BG15", "BG17", "BG20", "AC1", "AC4", "AC6", "HB1", "HB4", "HB6",
+    "REDTIDE", "BloomHG26045", "PN_1", "ROGE5"
   )
 ) %T>% print()
 ```
@@ -371,8 +372,11 @@ May need to include additional stations for name of water body column
 
 ```{r check-name-of-water-body}
 
-distinct(meta_format, station, name.of.water.body)
-
+distinct(meta_format, station, name.of.water.body) %T>% 
+  {
+    filter(., is.na(name.of.water.body)) %>%
+    print()
+  }
 ```
 
 
@@ -534,6 +538,7 @@ meta_format %>%
   theme_bw())
 ```
 
+
 ## 4.3 Plot: Interactive Map to Verify Stations
 
 ```{r check-spatial, fig.height=15, fig.width=20}
@@ -577,7 +582,7 @@ cruise_event <-
       parse_date_time(start_date, orders = "yj"),
     ),
     
-    end_date = start_date + 9
+    end_date = start_date + days(9)
     
   ) %>%
   filter(
@@ -634,7 +639,8 @@ meta_format %>%
       facets, 
       levels = c("< 500 ml", "500 ml", "1000 ml", ">1500 ml")
       )
-  ) %>%
+  ) %T>%
+  print() %>%
   nest(.by = name.of.water.body) %>%
   mutate(
     plt = map2(
@@ -652,6 +658,7 @@ meta_format %>%
           facet_wrap(~facets, scales = "free") +
           labs(title = .y, x = NULL, y = NULL, color = NULL) +
           scale_color_manual(values = pals::glasbey()) +
+          # coord_cartesian(xlim = c(0, 4500)) +
           theme_classic() +
           theme(
             panel.grid.major = element_line(
@@ -675,9 +682,6 @@ meta_format %>%
 
 
 
-
-
-
 # 5.0 ---- Final Formatting before Saving ----
 
 ## 5.1 Final Format and Physical Sample Check
@@ -694,10 +698,12 @@ prev_f <-
 
   dir_ls(regexp = glue("^[^~]*hplc.*\\.xlsx$"))
 
-getSheetNames(prev_f)[-c(1, 5:12)]
+getSheetNames(prev_f)[-c(1, 5:12)] %>%
+  str_subset("(HG|WS)(25|26)")   # <--- edit here to select which sheets to use
 
 hplc_check <-
-  getSheetNames(prev_f)[-c(1, 5:12)] %>%
+  getSheetNames(prev_f)[-c(1, 5:12)]  %>%
+  str_subset("(HG|WS)(25|26)") %>%      # <--- edit here to select which sheets to use
   map(., ~ read.xlsx(prev_f, sheet = .x, startRow = 2) %>%
   mutate(
     sheet = .x,
@@ -891,6 +897,8 @@ if (TRUE) {
     )
   }
 }
+
+shell.exec(dir_loc)
 ```
 
 
@@ -905,7 +913,7 @@ Current save location in Box: mbon_imars_cruises/hplc/hplc_sample_info
 if (FALSE) { # <-- change to TRUE when ready to save
   dir_loc %>%
     dir_ls(regexp = grant_info$last_nm) %>%
-    str_subset("~\\$", negate = TRUE) %>%
+    str_subset("~", negate = TRUE) %>%
     last_mod() %T>%
     print() %>%
     file_copy(
