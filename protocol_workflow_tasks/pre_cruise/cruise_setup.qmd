@@ -78,8 +78,8 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "March 22 2026",         # START DATE HERE, month day year
-    end_dates   = "March 28 2026",           # END DATE HERE, month day year
+    start_dates = "May 17 2026",         # START DATE HERE, month day year
+    end_dates   = "May 23 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -177,7 +177,8 @@ loca <-
     .name_repair = janitor::make_clean_names
   ) %>% 
   select(1:contains("edna")) %>% 
-  filter(is.na(other) | str_detect(other, "Cross|Red")) %T>% 
+  # filter(is.na(other) | str_detect(other, "Cross|Red")) %T>% 
+  filter(is.na(other) | (str_detect(other, "Cross|Red") | str_detect(station, "^(4|13|24)$"))) %T>%
   print()
 
 if (!cruise_id$cross_shelf) {
@@ -306,6 +307,7 @@ loca <-
       labl = if_else(!is.na(other) & str_detect(other, "Red"), "Red Tide", labl),
       labl = if_else(str_detect(station, paste0(paste0("BG", c(seq(9, 17, 2), 20)), collapse = "|")),
                       "CHL, HPLC, CDOM, eDNA ", labl),
+      labl = if_else(str_detect(station, "^(4|13|24)$"), "Optional", labl),
       labl = if_else(str_detect(labl, "Cross"), NA, labl)
     ) %>%
   filter(!is.na(labl)) %>%
