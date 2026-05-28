@@ -218,17 +218,6 @@ imars_map <-
   ) +
 
   # ---- Sample Locations
-  geom_text_repel(
-    aes(x = lon, 
-        y = lat, 
-        label = station),
-    data   = map_dat,
-    size   = 2.5,
-    hjust  = 0,
-    family = "serif",
-    min.segment.length = 0
-  ) +
-  
   geom_arrowsegment(
     data = map_dat,
     aes(x = lon, 
@@ -245,6 +234,16 @@ imars_map <-
     data = map_dat,
     aes(x = lon, 
         y = lat),
+  ) +
+  geom_text_repel(
+    aes(x = lon, 
+        y = lat, 
+        label = station),
+    data   = map_dat,
+    size   = 2.5,
+    hjust  = 0,
+    family = "serif",
+    min.segment.length = 0
   ) +
   labs(color = "Days of Coverage") +
   # scale_color_manual(
