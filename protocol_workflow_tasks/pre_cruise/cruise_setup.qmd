@@ -77,9 +77,9 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "May 17 2026",         # START DATE HERE, month day year
-    end_dates   = "May 23 2026",           # END DATE HERE, month day year
+    ship        = "WB",                                   # HERE, ship acronym
+    start_dates = "June 17 2026",         # START DATE HERE, month day year
+    end_dates   = "June 21 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -174,7 +174,8 @@ loca <-
   readxl::read_excel(
     dir_path,
     sheet = "lat_lon",
-    .name_repair = janitor::make_clean_names
+    .name_repair = janitor::make_clean_names,
+    # skip = 174 
   ) %>% 
   select(1:contains("edna")) %>% 
   # filter(is.na(other) | str_detect(other, "Cross|Red")) %T>% 
@@ -318,6 +319,7 @@ loca <-
     labl = glue("{labl} ({n()})")
   ) %T>% 
  print()
+
 ```
 
 # ---- Base Map Data ----
@@ -788,5 +790,148 @@ if (exists("local_dir")) {
       "Skipping cruise copying directory."))
 }
 
+```
+
+
+
+# BIOMETS
+
+```{r base-map}
+if (exists("base_plt")) {
+  
+  cli::cli_alert_info("{.var base_plot} is already loaded!")
+  
+} else {
+  # path to base map files
+  map_loc <- here("data", "map_shp")
+
+  xmin <- 
+    if_else(
+      cruise_id$cross_shelf, 
+      min(loca$lon) - 0.02,
+      -84
+      )
+
+  ymax <- 
+    if_else(
+      cruise_id$north_stations, 
+      max(loca$lat) + 0.02,
+      28.5
+      )
+  
+  # spatial extent
+  exnt <- 
+    c(
+      xmin = xmin, # West
+      xmax = -80,  # East
+      ymin = 25,   # South
+      ymax = ymax  # North 
+      )
+  ## ---- download topography (.nc) and coastline (.shp)
+  world_download(
+    path_land  = map_loc,
+    path_topo  = here(map_loc, "flracepv"),
+    extent     = exnt,
+    use_suffix = NULL
+  )
+  
+  ## ---- Load Base Maps for Plotting
+  # select and read coastline file from GSHHS then crop
+  map_obj <-
+    load_map_obj(
+      .map_coast = map_loc,
+      .map_state = NULL,
+      .map_bath  = here(map_loc, "flracepv"),
+      .map_file  = "etopo1.nc",
+      .extent    = exnt
+    )
+
+  ## ---- Plot Base Map
+  base_plt <-
+    base_map_plot(map_obj$coast_topo, .bathy = map_obj$bathy, exnt)
+  base_plt
+}
+```
+
+```{r sample-locations}
+# loca <- 
+#   loca %>%
+#   rename("labl" = label) %>%
+#   mutate(
+#     .by = labl,
+#     station,
+#     lon, lat,
+#     labl = glue("{labl} ({n()})")
+#   ) %T>% 
+#  print()
+```
+
+
+```{r add-stations, fig.width=8.5, fig.height=11}
+# edit NOAA cruise plus colors
+
+set.seed(123)
+imars_map <-
+  base_plt +
+  # ---- Cruise ID
+  annotate(
+    geom        = "richtext",
+    x           = -81.5,
+    y           = 28,
+    label       = glue("{cruise_id$cruise_id[1]} (IMaRS)"),
+    size        = 10,
+    fontface    = "bold",
+    fill        = NA,
+    label.color = NA,
+    family      = "serif"
+  ) +
+  # ---- Cruise Dates
+  annotate(
+    geom        = "richtext",
+    x           = -81.5,
+    y           = 27.85,
+    label       = cruise_id$label[1],
+    size        = 7,
+    fontface    = "bold",
+    fill        = NA,
+    label.color = NA,
+    family      = "serif"
+  ) +
+
+  # ---- Sample Locations
+  geom_point(
+    data = loca,
+    aes(x = lon, 
+        y = lat, 
+        color = labl,
+        shape = labl),
+  ) +
+  geom_text_repel(
+    aes(x = lon, 
+        y = lat, 
+        label = station),
+    data   = loca,
+    size   = 2.5,
+    hjust  = 0,
+    family = "serif",
+    min.segment.length = 0,
+    bg.color = "white"
+  ) +
+  # "#1B9E77" "#D95F02" "#7570B3" "#E7298A" "#66A61E"
+  scale_color_manual(
+    name   = "Samples",
+    values = RColorBrewer::brewer.pal(n = length(unique(loca$labl)), name = "Dark2")
+    # values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7")
+    ) +
+  labs(shape = "Samples") + 
+  theme(
+    legend.position        = "inside",
+    legend.position.inside = c(0.77, 0.18),
+    legend.text            = element_text(size = 10),
+    legend.title           = element_text(size = 15),
+    legend.background      = element_rect(color = "black")
+  )
+
+imars_map
 ```
 
