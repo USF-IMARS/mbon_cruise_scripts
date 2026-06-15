@@ -796,6 +796,26 @@ if (exists("local_dir")) {
 
 # BIOMETS
 
+```{r sample-locations}
+# sample locations
+loca <-
+  readxl::read_excel(
+    dir_path,
+    sheet = "lat_lon",
+    .name_repair = janitor::make_clean_names,
+    skip = 174
+  ) %>%
+  rename("labl" = label) %>%
+  select(1:labl) %>%
+  mutate(
+    .by = labl,
+    station,
+    lon, lat,
+    labl = glue("{labl} ({n()})")
+  ) %T>%
+ print()
+```
+
 ```{r base-map}
 if (exists("base_plt")) {
   
@@ -805,27 +825,15 @@ if (exists("base_plt")) {
   # path to base map files
   map_loc <- here("data", "map_shp")
 
-  xmin <- 
-    if_else(
-      cruise_id$cross_shelf, 
-      min(loca$lon) - 0.02,
-      -84
-      )
+  xmin <- min(loca$lon) - 0.05
 
-  ymax <- 
-    if_else(
-      cruise_id$north_stations, 
-      max(loca$lat) + 0.02,
-      28.5
-      )
-  
   # spatial extent
   exnt <- 
     c(
       xmin = xmin, # West
       xmax = -80,  # East
       ymin = 25,   # South
-      ymax = ymax  # North 
+      ymax = 28.5  # North 
       )
   ## ---- download topography (.nc) and coastline (.shp)
   world_download(
@@ -853,18 +861,7 @@ if (exists("base_plt")) {
 }
 ```
 
-```{r sample-locations}
-# loca <- 
-#   loca %>%
-#   rename("labl" = label) %>%
-#   mutate(
-#     .by = labl,
-#     station,
-#     lon, lat,
-#     labl = glue("{labl} ({n()})")
-#   ) %T>% 
-#  print()
-```
+
 
 
 ```{r add-stations, fig.width=8.5, fig.height=11}
