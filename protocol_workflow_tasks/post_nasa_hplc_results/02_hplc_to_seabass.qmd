@@ -224,15 +224,14 @@ if (!str_detect(hd_def$suffix, "R1")) {
 
 <https://seabass.gsfc.nasa.gov/wiki/stdfields>
 
-```{r}
+```{r field-names-from-seabass}
 shelf(rvest)
 field_names <- read_html("https://seabass.gsfc.nasa.gov/wiki/stdfields") %>%
   html_table()
 
-field_names[[1]] %>%
-  janitor::clean_names()
-field_names[[2]]
-field_names[[3]]
+field_names[[1]] # field names
+field_names[[2]] # suffix
+field_names[[3]] # modifiers
 
 if (FALSE) {
   field_names <-
@@ -409,7 +408,7 @@ hplc_data <- hplc_data2 <-
 ```
 
 
-```{r}
+```{r show-names}
 hplc_data2 %>%
   pull(data)
 hplc_data2 %>%
