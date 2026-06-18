@@ -29,6 +29,15 @@ conflicts_prefer(
 ```
 
 # Search for HPLC Files
+
+Copy over the files to be sent to SeaBASS from the cloud to the local in:
+data > raw > hplc
+- include 
+  - xlsx data files
+  - method file
+  - checklist
+
+* first data sent
 M-K 06-12 report.xlsx : may and sept 2016
 M-K 09-02 report.xlsx : nov16, mar17 jun17 oct17 jan18
 M-K 10-11 part1 report.xlsx
@@ -39,16 +48,20 @@ M-K_13-01_report: all 2022 cruise data
 
 Muller-Karger_13-01B_report_rev: all 2023 cruise data
 
+* June 2026 to be sent
+M-K_13-01c_report
+MBON_14-17_report_Sep_2023_Mar_2024
+MBON_14-43_report_2024_all
 
 ```{r file-path}
 dir_hplc <- here("data", "raw", "hplc")
-
 
 # cal files
 cal_file <- 
   dir_hplc %>%
   dir_ls(regexp = "method") %>%
-  basename() %T>% 
+  basename() %>%
+  str_subset("ignore", negate = TRUE) %T>% 
   print()
 
 # pigment files
@@ -61,8 +74,8 @@ file_pig <-
     regexp = "^[^~]*\\.xlsx$"
   ) %>%
   str_sort() %>%
-  str_subset("M-K 10-11 part1 report.xlsx", negate = TRUE) %>%
-  str_subset("Muller-Karger_13-01B", negate = FALSE) %>%
+  # str_subset("M-K 10-11 part1 report.xlsx", negate = TRUE) %>%
+  # str_subset("Muller-Karger_13-01B", negate = FALSE) %>%
   tibble(file = ., base = basename(.)) %>%
   mutate(
     sheets =
@@ -72,9 +85,10 @@ file_pig <-
       ),
     cal_files = 
       case_when(
-        str_detect(base, "13-01B") ~ str_subset(cal_file, "10032021"),
-        str_detect(base, "10-11") ~ str_subset(cal_file, "02062020"),
-        .default = str_subset(cal_file, "06122017")
+        str_detect(base, "14-17_repor|14-43_report") ~ str_subset(cal_file, "01122026"),
+        str_detect(base, "13-01B|13-01c_report") ~ str_subset(cal_file, "10032021"),
+        # str_detect(base, "10-11") ~ str_subset(cal_file, "02062020"),
+        # .default = str_subset(cal_file, "06122017")
     )
   ) %>%
   unnest(sheets) %>%
@@ -137,7 +151,8 @@ hplc_data <-
               time         = "gmt_time",
               volfilt      = "volume_filtered_ml",
               water_depth  = "total_water_depth_meters",
-              year         = "year_of_sample"
+              year         = "year_of_sample",
+              tchla_tpg   = "tchl_a_tpg"
               )
             )
           ) %>%
@@ -214,15 +229,72 @@ hplc_data <-
   unnest(data) %>%
   
   # add cruise ID
-  mutate(cruise_id = case_when(
+  mutate(
+    cruise_id = case_when(
       str_detect(cruise, "(?i)wal") ~ str_c("WS", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)sav") ~ str_c("SV", str_extract(cruise, "[0-9]+")),
       str_detect(cruise, "(?i)wea") ~ str_c("WB", str_extract(cruise, "[0-9]+")),
-      str_detect(cruise, "(?i)hog") ~ str_c("H", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)hog") ~ str_c("HG", str_extract(cruise, "[0-9]+")),
+      str_detect(cruise, "(?i)CMS Collaborative") ~ "CORE1",
+      
       .default = "no"
-      )) %T>% 
+      ),
+    
+    # fix any cruise names that done match NOAA SFER
+    cruise_id = case_when(
+      str_detect(cruise_id, "WS21277") ~ "WS21278",
+      
+      .default = cruise_id
+    ),
+    cruise = case_when(
+      str_detect(cruise, "21277") ~ "Walton Smith 21278",
+      
+      .default = cruise
+    )   
+      ) %T>% 
   print()
 ```
+
+# Filter Out Bad Samples
+
+The identifiers come from `hplc_gsfc_id` column
+
+MBON_14-17_report_Sep_2023_Mar_2024
+* From Crystal: Some of the filter dropped during sonication and acetone % is 
+  slightly lower. Precision with rep filter is not particularly poor, but I 
+  still recommend only using this sample qualitatively and NOT reporting it to 
+  SeaBASS.
+  - 14-1512
+  
+MBON_14-43_report_2024_all
+* labeled as duplicates but don't have similar pigments so will be removed
+  - 14-2905
+  - 14-2906
+
+M-K_13-01c_report
+* Reps don’t look like each other. 
+  - 13-2298
+  - 13-2299
+  - 13-2270
+  - 13-2271
+  - 13-2226
+  - 13-2227
+
+```{r rm-bad-samples}
+hplc_data <- 
+  hplc_data %T>% 
+  print() %>% 
+  filter(
+    # MBON_14-17_report_Sep_2023_Mar_2024 
+    !str_detect(hplc_gsfc_id, "14-1512"),
+    # MBON_14-43_report_2024_all
+    !str_detect(hplc_gsfc_id, "14-2905|14-2906"),
+    # M-K_13-01c_report
+    !str_detect(hplc_gsfc_id, "13-2298|13-2299|13-2270|13-2271|13-2226|13-2227") 
+    ) %T>% 
+  print()
+```
+
 
 
 ```{r aoml-check}
@@ -266,39 +338,78 @@ hplc_data <-
   # mutate(
   #   cruise_id,
   #   station,
-  #   lon   = if_else(abs(lon - longitude_decimal) < 0.1 
-  #                    is.na(longitude_decimal), 
+  #   lon   = if_else(abs(lon - longitude_decimal) < 0.1
+  #                    is.na(longitude_decimal),
   #                   lon, longitude_decimal),
   #   lat   = if_else(abs(lat - latitude_decimal) < 0.1
-  #                    is.na(latitude_decimal), 
+  #                    is.na(latitude_decimal),
   #                   lat, latitude_decimal),
   #   lon = round(lon, 4),
   #   lat = round(lat, 4),
   #   date  = if_else(abs(as.double(date, date_gmt, units = "days")) <= 1
-  #                    is.na(date_gmt), 
-  #                   date, date_gmt), 
+  #                    is.na(date_gmt),
+  #                   date, date_gmt),
   #   time  = if_else(abs(as.double(time - time_gmt, units = "secs")) < 600
-  #                    is.na(time_gmt), 
+  #                    is.na(time_gmt),
   #                   time, time_gmt),
   #   .keep = "unused"
   # ) %>%
   nest(.by = c(cruise, cruise_id)) %>%
   mutate(
-    data  = map(.x = data,
-                ~ remove_empty(.x, which = "cols")),
-    names = map(.x = data,
-                (\(x) 
-                 select(x, contains("Tot_Chl_a"):last_col())  %>%
-                 names()  %>%
-                 tibble(param_name = .))),
-    
-    base  = map(.x = data, \(x) pull(x, base) %>% unique())
-    )
+    data = map(
+      .x = data,
+      \(.x) remove_empty(.x, which = "cols")
+    ),
+    names = map(
+      .x = data,
+      (\(x)
+      select(x, contains("Tot_Chl_a"):last_col()) %>%
+        names() %>%
+        tibble(param_name = .))
+    ),
+    base = map(.x = data, \(x) pull(x, base) %>% unique())
+  ) %>%
+  unnest(base) %T>%
+  print()
+   
 ```
 
 
 ```{r precision}
 precise <-
+  mutate(
+    .data = file_pig,
+    .keep = "none",
+    base,
+    precison = map2(
+      .x = file,
+      .y = analysis_precision,
+      (\(.x, .y) 
+       read_xlsx(
+         path  = .x,
+         sheet = .y,
+         range = cellranger::cell_limits(c(1,1), c(3,3)),
+         na    = "-9999",
+         col_names    = FALSE,
+         .name_repair = make_clean_names)))
+  ) %>%
+  unnest(precison, keep_empty = TRUE) %>%
+  mutate(
+    x_2 = str_remove(x_2, " ="),
+    x   = case_when(is.na(x_2) ~ "no replicates",
+                    .default = x)) %>%
+  fill(x) %>%
+  pivot_wider(
+    names_from   = x_2, 
+    values_from  = x_3, 
+    names_sep    = "_",
+    names_repair = make_clean_names) %>%
+  
+   remove_empty(which = "cols") %>%
+   mutate(across(c(t_chl_a, ppig), ~ scales::percent(., 0.01))) %T>% 
+  print()
+
+duplicates <-
   mutate(
     .data = file_pig,
     .keep = "none",
@@ -315,7 +426,6 @@ precise <-
          col_names    = FALSE,
          .name_repair = make_clean_names)))
   ) %>%
-  
   unnest(precison, keep_empty = TRUE) %>%
   mutate(
     x_2 = str_remove(x_2, " ="),
@@ -329,17 +439,28 @@ precise <-
     names_repair = make_clean_names) %>%
   
    remove_empty(which = "cols") %>%
-   mutate(across(c(t_chl_a, ppig), ~ scales::percent(., 0.01)))
-
-hplc_data <- 
-  hplc_data %>%
-  unnest(base)   %>%
-  left_join(., precise, by = join_by(base)) %>%
-  nest(precision = base:n, 
-       .by = c(cruise, cruise_id)) %>%
-  left_join(hplc_data, ., by = join_by(cruise, cruise_id)) %T>% 
+   mutate(across(c(t_chl_a, ppig), ~ scales::percent(., 0.01))) %T>% 
   print()
+
+hplc_data <-
+  hplc_data %>%
+  left_join(., nest(precise, .by = base, "precision" = base:n), by = join_by(base)) %>%
+  # left_join(., nest(duplicates, .by = base, "dup_precision" = base:n), by = join_by(base)) %T>%
+  print()
+
+# hplc_data <-
+  # hplc_data %>%
+  # unnest(base) %>%
+  # left_join(., precise, by = join_by(base)) %>%
+  # nest(precision = base:n,
+  #      .by = c(cruise, cruise_id)) %>%
+  # left_join(hplc_data, ., by = join_by(cruise, cruise_id)) %T>%
+  # print()
+  
 ```
+
+
+
 
 # Create Checklist Files
 Experiment Name
@@ -368,8 +489,8 @@ srch_terms <-
                                      ~ search, ~info,
                             "Experiment Name", "SFMBON",
                                 "Cruise Name", NA,
-                     "Filter type/pore size:", "Whatman GF/F, 0.7 um",
-                           "Vacuum pressure:", "< 5 atm??",
+                     "Filter type/pore size:", "Whatman GF/F, 0.7 um", 
+                           "Vacuum pressure:", "< 5 mm Hg",
         "Replicates collected \\(# or no\\):", NA,
              "Flash frozen in L/N \\(y/n\\):", "y",
   "Long term storage conditions/temperature:", "-80 deg C Freezer"
@@ -398,7 +519,7 @@ hplc_data <-
             dir_hplc, "checklist",
             glue(
               str_extract(basename(x), "check.*hplc"),
-              "_", y, ".rtf"
+              "_", y, ".", tools::file_ext(x)#".rtf"
             )
           )
         } else {
@@ -407,9 +528,11 @@ hplc_data <-
       }
     ),
     map_file = glue("{cruise_id}_sample_map.jpeg")
-  )
+  ) %T>% 
+  print()
 
 hplc_rtf <- hplc_data
+
 ```
 
 
@@ -534,7 +657,8 @@ world_download(
 map_obj <- load_map_obj(
   .map_coast = map_loc,
   .map_state = map_loc,
-  .map_bath  = map_loc,
+  # .map_bath  = map_loc,
+  .map_bath  = NULL,
   .map_file  = "etopo1.nc",
   .extent    = c(
           xmin = -90, # West
@@ -554,9 +678,9 @@ hplc_gps <-
   mutate(
     plt = pmap(
       list(data, cruise_id, map_title, extnt_cr),
-      .f = map_plot,
+      .f        = map_plot,
       .base_plt = base_plt,
-      .inset = hplc_inset_map
+      .inset    = hplc_inset_map
     )
   )
 
@@ -598,13 +722,15 @@ hplc_data <-
   mutate(rtf_file = basename(rtf_file))
 
 save(hplc_data,
-      file =  here("data", "processed", "hplc", 
-                   glue("consolidated_HPLC_{Sys.Date()}.RData")
-                   )
-     )
+  file = here(
+    "data", "processed", "hplc",
+    glue("consolidated_HPLC_{Sys.Date()}.RData")
+  )
+)
 ```
 
-## Write New Checklist files (.rtf)
+## Write New Checklist files (.rtf/.docx)
+
 ```{r write-checklist}
 ovrwrt <- FALSE
 # ovrwrt <- TRUE
@@ -630,54 +756,114 @@ for (i in seq(nrow(hplc_rtf))) {
   }
 }
 
-hplc_rtf %>% 
-  filter(!is.na(rtf_file) &
-         !rtf_file %in% ignore_files) %>%
+hplc_rtf %>%
   mutate(
-    .keep = "used",
-    cruise_id,
-    rtf_file,
-    text = map(
-      .x = rtf_file,
-      ~ readLines(.x) %>%
-        tibble(text = .)
-    ),
+    # text = map(
+    #   .x = rtf_file,
+    #   ~ readLines(.x) %>%
+    #     tibble(text = .)
+    # ),
     text = pmap(
-      list(text, cruise_id, rtf_file, data),
-      (function(x, y, z, dat) {  
-       cat(y)
-         dupes <- 
+      # list(text, cruise_id, rtf_file, data),
+      list(cruise_id, rtf_file, data),
+      # (function(x, y, z, dat) {
+      (function(y, z, dat) {
+        cat(y, sep = "\n")
+        dupes <-
           dat %>%
-          summarise(.by = c(station, depth),
-                    counts = n() > 1) %>%
-          summarise(dups = sum(counts))  %>%
+          summarise(
+            .by = c(station, depth),
+            counts = n() > 1
+          ) %>%
+          summarise(dups = sum(counts)) %>%
           as.vector()
-       
-       x %>%
-        mutate(
-          text = str_replace(text, srch_terms$search[[1]], 
-                             glue("\\0: {srch_terms$info[1]}")),
-          text = str_replace(text, srch_terms$search[[2]], 
-                             glue("\\0: {y}")),
-          text = str_replace(text, srch_terms$search[[3]], 
-                             glue("\\0 {srch_terms$info[3]}")),
-          text = str_replace(text, srch_terms$search[[4]], 
-                             glue("\\0 {srch_terms$info[4]}")),
-          text = str_replace(text, srch_terms$search[[5]], 
-                             glue("\\0 {if_else(dupes != 0, as.character(dupes), 
-                                        'no')}")),
-          text = str_replace(text, srch_terms$search[[6]], 
-                             glue("\\0 {srch_terms$info[6]}")),
-          text = str_replace(text, srch_terms$search[[7]], 
-                             glue("\\0 {srch_terms$info[7]}"))
-    ) %T>% 
-    r2rtf::write_rtf(., z)
-    }))
+        
+        
+        if (str_detect(z, "rtf")) {
+          message(glue("Using `.rtf. file: {y}"))
+        x <- readLines(z) %>%
+                tibble(text = .)
+          x %>%
+          mutate(
+            text = str_replace(
+              text, srch_terms$search[[1]],
+              glue("\\0: {srch_terms$info[1]}")
+            ),
+            text = str_replace(
+              text, srch_terms$search[[2]],
+              glue("\\0: {y}")
+            ),
+            text = str_replace(
+              text, srch_terms$search[[3]],
+              glue("\\0 {srch_terms$info[3]}")
+            ),
+            text = str_replace(
+              text, srch_terms$search[[4]],
+              glue("\\0 {srch_terms$info[4]}")
+            ),
+            text = str_replace(
+              text, srch_terms$search[[5]],
+              glue("\\0 {if_else(dupes != 0, as.character(dupes),
+                                        'no')}")
+            ),
+            text = str_replace(
+              text, srch_terms$search[[6]],
+              glue("\\0 {srch_terms$info[6]}")
+            ),
+            text = str_replace(
+              text, srch_terms$search[[7]],
+              glue("\\0 {srch_terms$info[7]}")
+            )
+          ) %T>% 
+          r2rtf::write_rtf(z)
+        } else {
+          
+        message(glue("Using `.docx file: {y}"))
+        
+        docx_txt <- officer::read_docx(z)
+
+        docx_txt <-
+          docx_txt %>%
+          officer::body_replace_all_text(
+            srch_terms$search[1],
+            glue("{srch_terms$search[1]} {srch_terms$info[1]}")
+            ) %>%
+          officer::body_replace_all_text(
+            srch_terms$search[2],
+            glue("{srch_terms$search[2]} {y}")
+            ) %>%
+          officer::body_replace_all_text(
+            srch_terms$search[3],
+            glue("{srch_terms$search[3]} {srch_terms$info[3]}")
+            ) %>%
+          officer::body_replace_all_text(
+            srch_terms$search[4],
+            glue("{srch_terms$search[4]} {srch_terms$info[4]}")
+            ) %>%
+          officer::body_replace_all_text(
+            srch_terms$search[5],
+            glue("{srch_terms$search[5]} {if_else(dupes != 0, as.character(dupes), 'no')}")
+            ) %>%
+          officer::body_replace_all_text(
+            srch_terms$search[6],
+            glue("{srch_terms$search[6]} {srch_terms$info[6]}")
+            ) %>%
+          officer::body_replace_all_text(
+            srch_terms$search[7],
+            glue("{srch_terms$search[7]} {srch_terms$info[7]}")
+            ) 
+              
+        print(docx_txt, target = str_replace(z, "\\.docx", ".docx"))
+        }
+      })
+    )
   )
+
 ```
 
 
 # Extract Comments from Sheets
+
 ```{r comments}
 shelf(openxlsx)
 for (i in seq(nrow(file_pig))) {
@@ -712,7 +898,7 @@ for (i in seq(nrow(file_pig))) {
   }
  
   # combine info to comment
-  temp <- 
+  temp <-
     tibble(
       file = temp_file,
       base = basename(temp_file),
@@ -720,8 +906,13 @@ for (i in seq(nrow(file_pig))) {
       auth = sapply(wb$comments[[sht]], "[[", "author" ), 
       comm = comm
       ) %>%
-    unnest(comm)  %>%
-    filter(!str_detect(comm, "Thread"))
+    unnest(comm) %>%
+    mutate(
+      comm = str_remove(comm, "\\[Thread[\\s\\S]*Comment:\\s*"),
+      comm = str_replace_all(comm, "\\n", " ")
+      ) %T>% 
+    print()
+    # filter(!str_detect(comm, "Thread"))
   
   # add comments to previous file
   if (!exists("xlsx_comm") | i == 1) {
@@ -740,7 +931,7 @@ xlsx_comm %>%
     comm = str_replace(comm, ",", ";")
   ) %>%
   
-  {if (FALSE) {
+  {if (T) {
   write_csv(., file = here("data", "processed", "hplc", 
                         glue("comments_report_{Sys.Date()}.csv")))
   } else {.}
