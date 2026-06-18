@@ -223,6 +223,9 @@ if (!str_detect(hd_def$suffix, "R1")) {
 ## 3.2 All SeaBass Standard Fields 
 
 <https://seabass.gsfc.nasa.gov/wiki/stdfields>
+* field names - column names
+* units       - units for each column
+* description - describes column
 
 ```{r field-names-from-seabass}
 shelf(rvest)
@@ -242,15 +245,15 @@ if (FALSE) {
     )
 }
 
-# sb_field <-
-#   field_names[[1]] %>%
-#   janitor::clean_names() %>%
-#   mutate(
-#     .after   = 1,
-#     low_name = str_to_lower(field_name),
-#     low_name = str_replace_all(low_name, "-", "_")
-#     ) %T>% 
-#   print()
+sb_field <-
+  field_names[[1]] %>%
+  janitor::clean_names() %>%
+  mutate(
+    .after   = 1,
+    low_name = str_to_lower(field_name),
+    low_name = str_replace_all(low_name, "-", "_")
+    ) %T>%
+  print()
 
 # find overlap between names from HPLC data and current SeaBASS names
 sb_names <-
