@@ -149,17 +149,17 @@ loc <-
 
 # 3.0
 
-## 3.1
+## 3.1 ---- Edit Header Information Here -----------------------
 
----- Edit Header Information Here -----------------------
+
 ```{r edit-chunk}
 prepared_by <- 
   list(
     name  = "Sebastian Di Geronimo",
     email = "sebastian15@usf.edu"
   )
-                    
-contacts    <-
+
+contacts <-
   tribble(
     ~invest,               ~email,             ~affil,
     "Frank Muller-Karger", "carib@usf.edu",    "University of South_Florida",
@@ -196,7 +196,7 @@ hd_def <- list()
 hd_def$suffix <- "R1"
 
 ## version notes:
-## if verion is R2 or above, add version notes if need to resubmit
+## if version is R2 or above, add version notes if need to resubmit
 ## general application:
 ## add to all submissions or add specific info to cruise ids
   # glue("\n! <date of change> version RX")
@@ -224,45 +224,97 @@ if (!str_detect(hd_def$suffix, "R1")) {
 
 <https://seabass.gsfc.nasa.gov/wiki/stdfields>
 
-```{r std-fields}
-sb_field <- 
-  read_tsv(here("data", "metadata", "seabass_standard_fields_all.txt"),
-           show_col_types = FALSE,
-           name_repair    = make_clean_names) %>%
-  mutate(
-    .after   = 1,
-    low_name = str_to_lower(field_name),
-    low_name = str_replace_all(low_name, "-", "_")
-         )
+```{r}
+shelf(rvest)
+field_names <- read_html("https://seabass.gsfc.nasa.gov/wiki/stdfields") %>%
+  html_table()
 
+field_names[[1]] %>%
+  janitor::clean_names()
+field_names[[2]]
+field_names[[3]]
+
+if (FALSE) {
+  field_names <-
+    here("data", "metadata", "seabass_standard_fields_all.txt") %>%
+    read_tsv(
+      show_col_types = FALSE,
+      name_repair    = make_clean_names
+    )
+}
+
+# sb_field <-
+#   field_names[[1]] %>%
+#   janitor::clean_names() %>%
+#   mutate(
+#     .after   = 1,
+#     low_name = str_to_lower(field_name),
+#     low_name = str_replace_all(low_name, "-", "_")
+#     ) %T>% 
+#   print()
+
+# find overlap between names from HPLC data and current SeaBASS names
+sb_names <-
+  hplc_data %>%
+  pull(names) %>%
+  bind_rows() %>%
+  distinct() %>%
+  left_join(
+    sb_field, by = c("param_name" = "low_name")
+  ) %T>% 
+  print()
+```
+
+
+
+```{r std-fields}
 # extract all field names from data and map to SeaBass standard names
-hplc_data <- hplc_data2 <- 
-  hplc_data %>% 
+hplc_data <- hplc_data2 <-
+  hplc_data %>%
   mutate(
     # edit old names from previous report to match current SeaBass
+    # sb_name = map(
+    #   .x = names,
+    #   \(x) {
+    #     x %>%
+    #     mutate(
+    #       low_name = str_replace(param_name, "(?i)t_caro", "tcar"),
+    #       low_name = str_replace(low_name, "t_pg|t_pig", "tpg"),
+    #       low_name = case_when(
+    #         str_detect(low_name, "chl_c12") ~ "chl_c1c2",
+    #         str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
+    #         str_detect(low_name, "t_chl_a_tpg") ~ "tchla_tpg",
+    #         str_detect(low_name, "tchl_a") ~ str_replace(
+    #           low_name,
+    #           "tchl_a", "tchla"
+    #         ),
+    #         str_detect(low_name, "^t_chl") ~ str_replace(
+    #           low_name,
+    #           "t_chl", "tchl"
+    #         ),
+    #         str_detect(low_name, "t_acc") ~ str_replace(
+    #           low_name,
+    #           "t_acc", "tacc"
+    #         ),
+    #         .default = low_name
+    #       )
+    #     ) %>%
+    #     left_join(.env$sb_field, by = c("low_name"))
+    #     }
+    #   
+    # ),
+    
+     # edit old names from previous report to match current SeaBass
     sb_name = map(
       .x = names,
-      (\(x) 
-            x  %>%
-            mutate(
-              low_name = str_replace(param_name, "(?i)t_caro", "tcar"),
-              low_name = str_replace(low_name, "t_pg|t_pig", "tpg"),
-              low_name = case_when(
-                str_detect(low_name, "chl_c12") ~ "chl_c1c2",
-                str_detect(low_name, "ppc_tpig") ~ "ppc_tpg",
-                str_detect(low_name, "t_chl_a_tpg") ~ "tchla_tpg",
-                str_detect(low_name, "tchl_a") ~ str_replace(low_name, 
-                                                             "tchl_a", "tchla"),
-                str_detect(low_name, "^t_chl") ~ str_replace(low_name, 
-                                                             "t_chl", "tchl"),
-                str_detect(low_name, "t_acc") ~ str_replace(low_name, 
-                                                            "t_acc", "tacc"),
-                .default = low_name)
-              ) %>%
-              left_join(.env$sb_field, by = c("low_name")))
-      ),
-    
-    # calc duplicate info ----
+      \(x) {
+        x %>%
+        left_join(.env$sb_names, by = c("param_name"))
+        }
+      
+    ),
+
+    # ---- calc duplicate info ---- #
     data_reps = map2(
       data,
       sb_name,
@@ -289,8 +341,8 @@ hplc_data <- hplc_data2 <-
           select(-where(~ all(. == 1 | . == -9999, na.rm = TRUE))) %>%
           ungroup() %>%
           select(-depth, -station)
-  
-        # create replicate and bincount field names 
+
+        # create replicate and bincount field names
         if (ncol(x) > 2) {
           rep_names <-
             tibble(param_name = names(x)) %>%
@@ -300,29 +352,35 @@ hplc_data <- hplc_data2 <-
               patterns = c(
                 "rep_name" = ".*",
                 "seps" = "_.*"
-              )
+                )
             ) %>%
-            
             left_join(y, ., by = join_by("param_name" == "rep_name")) %>%
-           unite("field_name",
-             field_name, seps,
-             sep = "",
-             na.rm = TRUE,
-             remove = FALSE
-           ) %>%
-             unite("param_name",
-              param_name, seps,
-              sep = "",
+            unite(
+              "field_name",
+              field_name, 
+              seps,
+              sep    = "",
+              na.rm  = TRUE,
+              remove = FALSE
+            ) %>%
+            unite(
+              "param_name",
+              param_name, 
+              seps,
+              sep   = "",
               na.rm = TRUE
             ) %>%
             mutate(
               units = if_else(
-                str_detect(param_name, "bincount"), "none", units),
-              )
-          
+                str_detect(param_name, "bincount"), 
+                "none", 
+                units
+                )
+            )
         } else {
+          # when no replicates exist
           rep_names <- NULL
-          x <- NULL
+          x         <- NULL
         }
 
         return(
@@ -336,16 +394,26 @@ hplc_data <- hplc_data2 <-
   ) %>%
   unnest_wider(data_reps) %>%
   mutate(
-    data = map2(data, 
-               reps,
-               (\(x, y) bind_cols(x, y))
-               ),
-    sb_name = map2(sb_name, 
-               rep_names,
-               (\(x, y) bind_rows(x, y))
-               )
-  ) 
+    data = map2(
+      data,
+      reps,
+      (\(x, y) bind_cols(x, y))
+    ),
+    sb_name = map2(
+      sb_name,
+      rep_names,
+      (\(x, y) bind_rows(x, y))
+    )
+  )
 
+```
+
+
+```{r}
+hplc_data2 %>%
+  pull(data)
+hplc_data2 %>%
+  pull(sb_name)
 ```
 
 
@@ -524,7 +592,8 @@ hplc_data <-
           "!",
           "! Values of -8888 represent measurements below detection limits (LOD),",
           "! this represents pigments not detected or pigments present with",
-          "! concentrations less than 0.0005 mg/m^3."
+          "! concentrations less than 0.0005 mg/m^3.",
+          .null = "!"
         )
       })
     ),
@@ -813,12 +882,12 @@ if (arg_ls$dt_rng) {
     ) %>%
     arrange(date_max) %>%
     mutate(
-      .before = date_max,
-      date_diff = date_max - date_min,
+      .before     = date_max,
+      date_diff   = date_max - date_min,
       date_min_cr = str_extract(cruise, "\\d+"),
       date_min_cr = as_date(date_min_cr, format = "%y%j"),
       date_min_cr = format(date_min_cr, "%b %d"),
-      date_max = format(date_max, "%b %d %Y"),
+      date_max    = format(date_max, "%b %d %Y"),
       ) %>%
     unite(col = "date_range", date_min_cr, date_max, sep = " - ") %>%
     relocate(date_diff, .after = date_range) %>%
@@ -853,12 +922,12 @@ source(here(".Rprofile"))
 arg_ls <- 
   list(
     # select location to save data
-    cloud_loc = here(cloud_dir, "hplc", "seabass_submit"),
-    # cloud_loc = here("data", "test"), # for testing of experimental change
+    # cloud_loc = here(cloud_dir, "hplc", "seabass_submit"),
+    cloud_loc = here("data", "test"), # for testing of experimental change
     
     # select if want to write data to cloud and overwrite cloud directory data 
-    wrt_cld = FALSE, # write data to cloud
-    # wrt_cld = TRUE, # write data to cloud
+    # wrt_cld = FALSE, # write data to cloud
+    wrt_cld = TRUE, # write data to cloud
     ovrwrt  = FALSE # overwrite if data exists
     # ovrwrt  = TRUE # overwrite if data exists
   )
@@ -880,6 +949,7 @@ if (!arg_ls$wrt_cld) {
                        "overwriting data in the cloud."))
     
     cli_text("\n\n")
+    cli_alert_warning(c("Save location: ", arg_ls$cloud_loc))
     cli_alert_warning("You might be overwriting previsouly saved data.")
     cli_alert_warning(c("Currently, {col_red(\"arg_ls$ovrwrt\")} = ",
                         "{.var {col_red(arg_ls$ovrwrt)}}{meaning}"))
@@ -890,7 +960,7 @@ if (!arg_ls$wrt_cld) {
              {col_red(\"\\\"esc\\\"\")} to escape and correct.")
     invisible(readline(""))
     
-    # ---- pushing files to cloud directory
+    # ---- pushing files to cloud directory ---- #
     reduce(
       .f = left_join, 
       by = join_by(cruise_id),
@@ -911,7 +981,7 @@ if (!arg_ls$wrt_cld) {
         dir_ls() %>%
         tibble(sb_file = .) %>%
         mutate(
-          cruise_id = str_extract(sb_file, "((WS|WB|SV|HG|H)[0-9].*)(?=_p)")
+          cruise_id = str_extract(sb_file, "((WS|WB|SV|HG|H|CORE)[0-9].*)(?=_p)")
           ),
         
         # ---- extract path to cruise checklist files
@@ -919,7 +989,7 @@ if (!arg_ls$wrt_cld) {
           dir_ls() %>%
           tibble(chk_file = .) %>%
         mutate(
-          cruise_id = str_extract(chk_file, "((WS|WB|SV)[0-9].*)(?=\\.)")
+          cruise_id = str_extract(chk_file, "((WS|WB|SV|HG|H|CORE)[0-9].*)(?=\\.)")
           ),
         
         # ---- extract path to map files
@@ -930,12 +1000,12 @@ if (!arg_ls$wrt_cld) {
          dir_ls() %>%
          tibble(map_file = .) %>%
          mutate(
-           cruise_id = str_extract(map_file, "((WS|WB|SV|H|HG)[0-9].*)(?=_s)")
+           cruise_id = str_extract(map_file, "((WS|WB|SV|HG|H|CORE)[0-9].*)(?=_s)")
            )
         )
       ) %>%
     
-      # ---- add cloud directory for each cruise
+      # ---- add cloud directory for each cruise ---- #
       mutate(cloud_dir = here(arg_ls$cloud_loc, cruise_id)) %>%
       
       nest(.by = c(cruise_id, cloud_dir)) %$%
@@ -947,9 +1017,9 @@ if (!arg_ls$wrt_cld) {
               y <- 
                 pivot_longer(
                   data      = y,
-                  cols      = everything(),  # columns to pivot long,
-                  names_to  = "file_type", # desired name for category column
-                  values_to = "file_path", # desired name for value column
+                  cols      = everything(),
+                  names_to  = "file_type",
+                  values_to = "file_path",
                   )  %>%
                 filter(!is.na(file_path)) 
               
@@ -990,8 +1060,8 @@ arg_ls <-
   list(
     run   = FALSE,
     # run   = TRUE,
-    local = FALSE,
-    # local = TRUE,
+    # local = FALSE,
+    local = TRUE,
     cloud = FALSE
     # cloud = TRUE
   )
@@ -1004,51 +1074,63 @@ if (arg_ls$local | arg_ls$cloud | arg_ls$run) {
         .x = data,
         .y = sb_name,
         function(x, y) {
-          
           x <- select(x, !contains(c("file", "base", "cal_files")))
-          
-          new_names <- tibble(og_names = names(x))  %>%
-          left_join(y, by = join_by(og_names == param_name)) %>%
-          mutate(
-            field_name = if_else(is.na(field_name), og_names, field_name)
-          )
-          
+
+          new_names <- tibble(og_names = names(x)) %>%
+            left_join(y, by = join_by(og_names == param_name)) %>%
+            mutate(
+              field_name = if_else(is.na(field_name), og_names, field_name)
+            )
+
           new_names$field_name
-        
+
           names(x) <- new_names$field_name
           return(x)
-          }
-        
-        )
+        }
+      )
     ) %>%
     select(1:3) %>%
-    unnest(data) 
-  
-  
+    unnest(data)
+
+
   if (arg_ls$local) {
     # save to local
     cli_alert_info("Saving consolidated HPLC to local")
-    write_csv(hplc_filt,
-              here("data", "processed", "hplc",
-                   glue("hplc_consolidate_select_vars_",
-                        "{Sys.Date()}",
-                        ".csv")))
-    }
-  
+    write_csv(
+      hplc_filt,
+      na = "",
+      here(
+        "data", "processed", "hplc",
+        glue(
+          "hplc_consolidate_select_vars_",
+          "{Sys.Date()}",
+          ".csv"
+        )
+      )
+    )
+  }
+
   # save to cloud
   if (arg_ls$cloud) {
     cli_alert_info("Saving consolidated HPLC to cloud")
-    write_csv(hplc_filt,
-              here(cloud_dir, "hplc",
-                   glue("hplc_consolidate_select_vars_",
-                        ".csv")))
-    }
+    write_csv(
+      hplc_filt,
+      na = "",
+      here(
+        cloud_dir, "hplc",
+        glue(
+          "hplc_consolidate_select_vars_",
+          ".csv"
+        )
+      )
+    )
   }
+}
 rm(arg_ls)
 ```
 
 
-example documents from collin roesler:
+# example documents from collin roesler:
 /documents=
 checklist_hplc_EXPORTS-EXPORTSNA_SR1812.rtf,
 EXPORTS_Roesler_08-06_report_rev2.xlsx,
