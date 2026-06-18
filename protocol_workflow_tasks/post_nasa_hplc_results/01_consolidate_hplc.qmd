@@ -298,39 +298,39 @@ hplc_data <-
 
 
 ```{r aoml-check}
-aoml <-
-  (here("data", "raw") %>%
-  dir_ls(regexp = "WSMasterSampleLog",
-         recurse = TRUE))[1] %>%
-  read_xlsx(
-    guess_max = 7000,
-    na = "Skip too shallow",
-    .name_repair = make_clean_names
-    ) %>% 
-  select(cruise, station, contains(c("gmt", "decimal"))) %>% 
-  mutate(
-    time_gmt = as_hms(time_gmt),
-    station  = case_when(str_detect(station, "(?i)naples") ~ "NBH",
-                         str_detect(station, "(?i)casey")  ~ "CBH",
-                         .default = station),
-    station = str_replace(station, " |-", "_"),
-    station = if_else(str_detect(station, "LK|^21$"), "LK", station),
-    station = if_else(str_detect(cruise, "WS19210") 
-                      & str_detect(station, "9.5"), "9B", station),
-    
-    cruise = str_replace(cruise, "SAV", "SV"),
-    cruise = case_when(str_detect(cruise, "WS18120") 
-                       & date_gmt > as_date("2018-08-01") ~ "WS18218",
-                       str_detect(cruise, "WS20231")      ~ "WS20230",
-                       str_detect(cruise, "SV1803")       ~ "SV18067",
-                       .default = cruise),
-
-    longitude_decimal = if_else(longitude_decimal > 0, 
-                                -1 * longitude_decimal, # TRUE
-                                longitude_decimal       # FALSE
-                                )) %>%
-  filter(cruise %in% hplc_data$cruise_id) %>%
-  distinct(cruise, station, .keep_all = TRUE)
+# aoml <-
+#   (here("data", "raw") %>%
+#   dir_ls(regexp = "WSMasterSampleLog",
+#          recurse = TRUE))[1] %>%
+#   read_xlsx(
+#     guess_max = 7000,
+#     na = "Skip too shallow",
+#     .name_repair = make_clean_names
+#     ) %>% 
+#   select(cruise, station, contains(c("gmt", "decimal"))) %>% 
+#   mutate(
+#     time_gmt = as_hms(time_gmt),
+#     station  = case_when(str_detect(station, "(?i)naples") ~ "NBH",
+#                          str_detect(station, "(?i)casey")  ~ "CBH",
+#                          .default = station),
+#     station = str_replace(station, " |-", "_"),
+#     station = if_else(str_detect(station, "LK|^21$"), "LK", station),
+#     station = if_else(str_detect(cruise, "WS19210") 
+#                       & str_detect(station, "9.5"), "9B", station),
+#     
+#     cruise = str_replace(cruise, "SAV", "SV"),
+#     cruise = case_when(str_detect(cruise, "WS18120") 
+#                        & date_gmt > as_date("2018-08-01") ~ "WS18218",
+#                        str_detect(cruise, "WS20231")      ~ "WS20230",
+#                        str_detect(cruise, "SV1803")       ~ "SV18067",
+#                        .default = cruise),
+# 
+#     longitude_decimal = if_else(longitude_decimal > 0, 
+#                                 -1 * longitude_decimal, # TRUE
+#                                 longitude_decimal       # FALSE
+#                                 )) %>%
+#   filter(cruise %in% hplc_data$cruise_id) %>%
+#   distinct(cruise, station, .keep_all = TRUE)
 
 hplc_data <-
   hplc_data %>%
@@ -376,7 +376,7 @@ hplc_data <-
 
 
 ```{r precision}
-precise <-
+analysis_precise <-
   mutate(
     .data = file_pig,
     .keep = "none",
@@ -409,7 +409,8 @@ precise <-
    mutate(across(c(t_chl_a, ppig), ~ scales::percent(., 0.01))) %T>% 
   print()
 
-duplicates <-
+
+precise <-
   mutate(
     .data = file_pig,
     .keep = "none",
@@ -445,7 +446,7 @@ duplicates <-
 hplc_data <-
   hplc_data %>%
   left_join(., nest(precise, .by = base, "precision" = base:n), by = join_by(base)) %>%
-  # left_join(., nest(duplicates, .by = base, "dup_precision" = base:n), by = join_by(base)) %T>%
+  # left_join(., nest(duplicates, .by = base, "analysis_precise" = base:n), by = join_by(base)) %T>%
   print()
 
 # hplc_data <-
