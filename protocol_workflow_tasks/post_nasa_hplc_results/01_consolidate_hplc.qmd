@@ -758,15 +758,8 @@ for (i in seq(nrow(hplc_rtf))) {
 
 hplc_rtf %>%
   mutate(
-    # text = map(
-    #   .x = rtf_file,
-    #   ~ readLines(.x) %>%
-    #     tibble(text = .)
-    # ),
     text = pmap(
-      # list(text, cruise_id, rtf_file, data),
       list(cruise_id, rtf_file, data),
-      # (function(x, y, z, dat) {
       (function(y, z, dat) {
         cat(y, sep = "\n")
         dupes <-
@@ -930,11 +923,16 @@ xlsx_comm %>%
     comm = str_replace(comm, "\n", " "),
     comm = str_replace(comm, ",", ";")
   ) %>%
-  
-  {if (T) {
-  write_csv(., file = here("data", "processed", "hplc", 
-                        glue("comments_report_{Sys.Date()}.csv")))
-  } else {.}
+  {
+    if (FALSE) {
+      write_csv(., file = here(
+        "data", "processed", "hplc",
+        glue("comments_report_{Sys.Date()}.csv")
+      ))
+    } else {
+      message("Not saving comments file")
+      .
     }
+  }
 ```
 
