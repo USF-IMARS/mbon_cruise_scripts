@@ -175,15 +175,30 @@ contacts <-
 
 acknowledge <-
   str_c("! ",
+    # c(
+    # "ACKNOWLEDGMENTS",
+    # "Observations were contributed by the South Florida Marine Biodiversity",
+    # "Observation Network (SFMBON) and the Southeast US Marine Biodiversity",
+    # "Observation Network (SEUSMBON). This research was funded by the National",
+    # "Oceanic and Atmospheric Administration (NOAA grant No. NA19NOS0120199);",
+    # "National Oceanic and Atmospheric Administration and Gulf of Mexico Coastal",
+    # "Ocean Observing System (NOAA-GCOOS Cooperative Agreement No. NA16NOS0120018);",
+    # "National Aeronautics and Space Administration (NASA grants No. NNX14AP62A,",
+    # "80NSSC20K0017, and 80NSSC22K1779)."
+    # ),
+
+    # update June 2026
     c(
     "ACKNOWLEDGMENTS",
-    "Observations were contributed by the South Florida Marine Biodiversity",
-    "Observation Network (SFMBON) and the Southeast US Marine Biodiversity",
-    "Observation Network (SEUSMBON). This research was funded by the National",
-    "Oceanic and Atmospheric Administration (NOAA grant No. NA19NOS0120199);",
-    "National Oceanic and Atmospheric Administration and Gulf of Mexico Coastal",
-    "Ocean Observing System (NOAA-GCOOS Cooperative Agreement No. NA16NOS0120018);",
-    "National Aeronautics and Space Administration (NASA grants No. NNX14AP62A,",
+    "Observations were contributed by the South Florida Marine Biodiversity Observation",
+    "Network (SFMBON), the Southeast US Marine Biodiversity Observation Network",
+    "(SEUSMBON), and the FRESCA project (Characterizing and forecasting coastal",
+    "ecosystem responses to multiple stressors for management applications in",
+    "South Florida). This research was funded by the National Oceanic and",
+    "Atmospheric Administration (NOAA grants No. NA19NOS0120199;",
+    "NA23NOS4780271-T1-01); Gulf of America Coastal Ocean Observing System",
+    "(NOAA-GCOOS Cooperative Agreement No. NA16NOS0120018); and the National",
+    "Aeronautics and Space Administration (NASA grants No. NNX14AP62A,",
     "80NSSC20K0017, and 80NSSC22K1779)."
     ),
     collapse = "\n"
@@ -738,7 +753,7 @@ hplc_w_head
 ```{r create-header-info}
 # if want to see header output, set to true
 verb <- FALSE
-verb <- TRUE
+# verb <- TRUE
 
 # cruise data header_info cruise_id 
 hplc_final <-
@@ -809,7 +824,8 @@ hplc_final <-
 rm(verb)
 ```
 
-## Saving Files in SeaBass Format
+# 4.0 Saving Files in SeaBass Format
+
 ```{r save-files}
 dir_create(loc) # create dir for each day running
 
@@ -860,59 +876,67 @@ hplc_final %$%
 
 ## Get Date Range of Each Cruise
 Was useful for an email.
-```{r date-range}
-arg_ls <- 
-  list(
-    dt_rng = FALSE,
-    dt_sv  = FALSE
-  )
 
-if (arg_ls$dt_rng) {
-  dt_rng <-
-    sb_data %>%
-    mutate(
-      .keep = "none",
-      cruise   = str_extract(sample, "\\w{2,3}\\d{4,5}"),
-      date     = as_date(date),
-    ) %>%
-    summarise(
-      .by = cruise,
-      num = n(),
-      # date_min = as_date(date_min, format = ""),
-      date_max = max(date),
-      date_min = min(date)
-    ) %>%
-    arrange(date_max) %>%
-    mutate(
-      .before     = date_max,
-      date_diff   = date_max - date_min,
-      date_min_cr = str_extract(cruise, "\\d+"),
-      date_min_cr = as_date(date_min_cr, format = "%y%j"),
-      date_min_cr = format(date_min_cr, "%b %d"),
-      date_max    = format(date_max, "%b %d %Y"),
+Needs `sb_data` from another file?
+```{r date-range}
+if (FALSE) {
+  arg_ls <-
+    list(
+      dt_rng = FALSE,
+      dt_sv  = FALSE
+    )
+
+  if (arg_ls$dt_rng) {
+    dt_rng <-
+      sb_data %>%
+      mutate(
+        .keep = "none",
+        cruise = str_extract(sample, "\\w{2,3}\\d{4,5}"),
+        date = as_date(date),
       ) %>%
-    unite(col = "date_range", date_min_cr, date_max, sep = " - ") %>%
-    relocate(date_diff, .after = date_range) %>%
-    rename("date_min_of_samples" = date_min)
-  
-  dt_rng
-  
-  if (arg_ls$dt_sv) {
-    write_csv(
-      dt_rng,
-      file  = here("date_range.csv"),
-      quote = "none")
+      summarise(
+        .by = cruise,
+        num = n(),
+        # date_min = as_date(date_min, format = ""),
+        date_max = max(date),
+        date_min = min(date)
+      ) %>%
+      arrange(date_max) %>%
+      mutate(
+        .before     = date_max,
+        date_diff   = date_max - date_min,
+        date_min_cr = str_extract(cruise, "\\d+"),
+        date_min_cr = as_date(date_min_cr, format = "%y%j"),
+        date_min_cr = format(date_min_cr, "%b %d"),
+        date_max    = format(date_max, "%b %d %Y"),
+      ) %>%
+      unite(col = "date_range", date_min_cr, date_max, sep = " - ") %>%
+      relocate(date_diff, .after = date_range) %>%
+      rename("date_min_of_samples" = date_min)
+
+    dt_rng
+
+    if (arg_ls$dt_sv) {
+      write_csv(
+        dt_rng,
+        file  = here("date_range.csv"),
+        quote = "none"
+      )
     }
   } else {
     cli_alert_info(
-      glue_col("Removing `{red arg_ls}` because ",
-               "`{red arg_ls$dt_rng}` = `{red {arg_ls$dt_rng}}`"))
+      glue_col(
+        "Removing `{red arg_ls}` because ",
+        "`{red arg_ls$dt_rng}` = `{red {arg_ls$dt_rng}}`"
+      )
+    )
     rm(arg_ls)
   }
+}
 ```
 
 
-## Copy files to box
+## 4.1 Copy files to box
 If you want to copy files from local to cloud directory, you may run this
 chunk. 
 
@@ -925,7 +949,7 @@ arg_ls <-
   list(
     # select location to save data
     # cloud_loc = here(cloud_dir, "hplc", "seabass_submit"),
-    cloud_loc = here("data", "test"), # for testing of experimental change
+    cloud_loc = here("data", "processed", "hplc", "info_by_cruise"), # for testing of experimental change
     
     # select if want to write data to cloud and overwrite cloud directory data 
     # wrt_cld = FALSE, # write data to cloud
@@ -1054,9 +1078,10 @@ if (!arg_ls$wrt_cld) {
 rm(arg_ls)
 ```
 
-## Save Consolidated Info and Select Variables
+## 4.2 Save Consolidated Info and Select Variables
 If want to save a consolidated HPLC data file with the selected variables as a 
 `.csv` file.
+
 ```{r sv-consolidated}
 arg_ls <- 
   list(
