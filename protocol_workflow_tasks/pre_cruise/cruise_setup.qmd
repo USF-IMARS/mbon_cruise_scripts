@@ -24,8 +24,11 @@ librarian::shelf(
   ggrepel, ggtext, readxl, ggnewscale, cli,
   
   # idk if needed
-  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot, anytime, 
-  parzer
+  # fields, raster, rerddap, 
+  sf, metR, cowplot, 
+  parzer,
+  
+  # rgdal, ncdf4, anytime,
 )
 
 conflicts_prefer(
@@ -77,9 +80,9 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 # ---- Edit Cruise Info ----
 cruise_id <-
   tibble(
-    ship        = "WB",                                   # HERE, ship acronym
-    start_dates = "June 17 2026",         # START DATE HERE, month day year
-    end_dates   = "June 21 2026",           # END DATE HERE, month day year
+    ship        = "HG",                                   # HERE, ship acronym
+    start_dates = "July 12 2026",         # START DATE HERE, month day year
+    end_dates   = "July 18 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
