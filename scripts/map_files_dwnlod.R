@@ -579,6 +579,7 @@ map_plot <- function(
         label = station),
     size  = 2.5,
     hjust = 0,
+    max.overlaps = 50
   ) +
   labs(title = .title) +
   scale_color_manual(
