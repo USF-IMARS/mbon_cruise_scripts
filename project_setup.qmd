@@ -51,20 +51,20 @@ cat(glue::glue("cloud_dir <- \"{cloud_dir}\"\nlocal_dir <- \"{local_dir}\""),
 
 
 cat(
-'
+  '
 CRUISE_ID=\"\"
-
+  
 cat(
-"------------------\n",
-"Welcome to MBON Cruise Prep Project!\n",
-"Navigate to the `protocol_workflow_tasks` folder and select which process you are doing.\n",
-"The options are:",
-paste0("\t", fs::dir_ls(here::here("protocol_workflow_tasks"), 
-                        type = "directory") |> 
-  stringr::str_subset("old", negate = TRUE) |> 
-  basename() |> sort(decreasing = TRUE)),
-"\n------------------\n",
-sep = "\n"
+  "------------------\\n",
+  "Welcome to MBON Cruise Prep Project!\\n",
+  "Navigate to the `protocol_workflow_tasks` folder and select which process you are doing.\\n",
+  "The options are:",
+  paste0("\t", fs::dir_ls(here::here("protocol_workflow_tasks"), 
+                          type = "directory") |> 
+    stringr::str_subset("old", negate = TRUE) |> 
+    basename() |> sort(decreasing = TRUE)),
+  "\\n------------------\\n",
+  sep = "\\n"
 )',
 file = here::here(".Rprofile"),
 append = TRUE
