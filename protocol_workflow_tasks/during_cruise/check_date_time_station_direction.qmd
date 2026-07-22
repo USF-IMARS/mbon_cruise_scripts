@@ -50,12 +50,15 @@ na_skip <- c("#N/A", "NA", "Skipped", "skipped", "na", "n/a", "n./a", "n.a",
 ```{r select-metadata-file}
 # select logsheet
 # meta_file <- here( CRUISE_LOGSHEET )
+if (!exists("cloud_dir")) cloud_dir <- here()
+
 meta_file <- 
   rstudioapi::selectFile(
     caption = "Select Logsheet",
     path = cloud_dir
     # path = here("C:/Users", "imars_cruise", "Documents", "s_fl_cruise_data")
-    )
+    ) %T>% 
+  print()
 ```
 
 
@@ -107,6 +110,8 @@ meta_dat <-
     !str_detect(station, "(?i)blank")
   ) %T>% 
   print()
+
+meta_dat
 ```
 
 
@@ -125,6 +130,8 @@ map_dat <-
     lon_lag = dplyr::lead(lon),
     lat_lag = dplyr::lead(lat),
     ) %T>% print()
+
+map_dat
 ```
 
 
