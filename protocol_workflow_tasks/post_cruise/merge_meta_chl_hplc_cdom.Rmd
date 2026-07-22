@@ -382,6 +382,8 @@ meta_list$station_summary <-
     ) %>%
   ungroup() %T>%
   print()
+
+meta_list$station_summary
 ```
 
 ## --- 6.3 Cruise Summary
@@ -397,7 +399,7 @@ meta_list$cruise_summary <-
   summarise(
     .by  = cruise_id,
     date = min(date_mm_dd_yy, na.rm = TRUE),
-    across(chl_a:cdom, \(.x) sum(.x, na.rm = TRUE))
+    across(chl_a:last_col(), \(.x) sum(.x, na.rm = TRUE))
     ) %>%
   mutate(
     date   = as_date(date),
@@ -425,6 +427,7 @@ meta_list$temp <-
     collected_by      = collector,
     ) %>%
   nest(.by = sample_type) %>% 
+  filter(!str_detect(sample_type, "chla_only")) %>%
   mutate(
     name_list = case_match(
       sample_type,
