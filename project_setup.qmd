@@ -25,7 +25,7 @@ librarian::shelf(
   ggrepel, ggtext, readxl, ggnewscale, cli,
   
   # idk if needed
-  fields, raster, rerddap, rgdal, ncdf4, sf, metR, cowplot, anytime, 
+  fields, raster, rerddap, ncdf4, sf, metR, cowplot, anytime, 
   parzer, openxlsx2, ggthemes, 
 )
 ```
