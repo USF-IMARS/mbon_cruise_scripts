@@ -243,7 +243,10 @@ wb <- wb_add_numfmt(
   dims = wb_dims(x = noaa_format, cols = "verbatimEventDate"), 
   numfmt = "mm/dd/yyyy"
   )
+```
 
+
+```{r local-save}
 # save workbook and open
 wb_save(wb, file_name)
 shell.exec(file_name)
