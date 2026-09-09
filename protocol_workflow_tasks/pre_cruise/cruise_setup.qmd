@@ -81,8 +81,8 @@ cruise_folder_path <- here(cloud_dir, "years") # cloud directory
 cruise_id <-
   tibble(
     ship        = "HG",                                   # HERE, ship acronym
-    start_dates = "July 12 2026",         # START DATE HERE, month day year
-    end_dates   = "July 18 2026",           # END DATE HERE, month day year
+    start_dates = "September 12 2026",         # START DATE HERE, month day year
+    end_dates   = "September 19 2026",           # END DATE HERE, month day year
     volunteer   = FALSE,                      # HERE, if need volunteer paperwork
     # volunteer   = TRUE                      # HERE, if need volunteer paperwork
     cross_shelf = FALSE,
@@ -295,7 +295,17 @@ if (!askYesNo("Include L Line")) {
     filter(!str_detect(station, "^L\\d{1,2}")) %T>% 
     print()
 }
+```
+Uncomment if want to filter out specific stations
 
+```{r}
+# loca <-
+#   loca %>%
+#   filter(!str_detect(station, "")) %T>% 
+#     print()
+```
+
+```{r data-manipulation}
 # define labels for map
 loca <-
   loca %>%
@@ -309,10 +319,10 @@ loca <-
       labl = str_remove_all(labl, " ,|,\\s+$"),
       labl = if_else(!is.na(other) & str_detect(other, "Cross"), "Cross Shelf", labl),
       labl = if_else(!is.na(other) & str_detect(other, "Red"), "Red Tide", labl),
-      labl = if_else(str_detect(station, paste0(paste0("BG", c(seq(9, 17, 2), 20)), collapse = "|")),
-                      "CHL, HPLC, CDOM, eDNA ", labl),
-      labl = if_else(str_detect(station, "^(4|13|24)$"), "Optional", labl),
-      labl = if_else(str_detect(labl, "Cross"), NA, labl)
+      # labl = if_else(str_detect(station, paste0(paste0("BG", c(seq(9, 17, 2), 20)), collapse = "|")),
+                      # "CHL, HPLC, CDOM, eDNA ", labl),
+      # labl = if_else(str_detect(station, "^(4|13|24)$"), "Optional", labl),
+      # labl = if_else(str_detect(labl, "Cross"), NA, labl)
     ) %>%
   filter(!is.na(labl)) %>%
   mutate(
@@ -389,6 +399,7 @@ if (exists("base_plt")) {
 ```
 
 # ---- Map Sample Locations ----
+
 
 ## Plot Map
 
