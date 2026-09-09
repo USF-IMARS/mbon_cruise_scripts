@@ -24,11 +24,9 @@ librarian::shelf(
   ggrepel, ggtext, readxl, ggnewscale, cli,
   
   # idk if needed
-  # fields, raster, rerddap, 
   sf, metR, cowplot, 
   parzer,
-  
-  # rgdal, ncdf4, anytime,
+
 )
 
 conflicts_prefer(
@@ -473,11 +471,9 @@ imars_map <-
     min.segment.length = 0,
     bg.color = "white"
   ) +
-  # "#1B9E77" "#D95F02" "#7570B3" "#E7298A" "#66A61E"
   scale_color_manual(
     name   = "Samples",
     values = RColorBrewer::brewer.pal(n = length(unique(loca$labl)), name = "Dark2")
-    # values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#CC79A7")
     ) +
   labs(shape = "Samples") + 
   # ---- Zooplankton
