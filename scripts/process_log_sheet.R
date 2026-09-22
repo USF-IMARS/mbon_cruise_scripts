@@ -105,6 +105,10 @@ process_log_sheet <- function(
   # ---- Filter Most Recent Cal Date
   cal <- cal[which(cal[,1][[1]] == max(cal[,1][[1]])),]
   
+  if (min(.meta$date_mm_dd_yy, na.rm = TRUE) > as_date("2026-01-01")) {
+    cal <- mutate(cal, cal_no_acid_low = NA)
+  }
+  
   .meta <- 
     .meta %>%
     select(-1, -sample_number) %>%
@@ -1026,6 +1030,23 @@ add_info.formula <- function(
   avg_chl  <- which(str_detect(chl_names, "(?i)^AVG"))
   std_chl  <- which(str_detect(chl_names, "(?i)^STDEV"))
   
+  if (min(janitor::excel_numeric_to_date(openxlsx::read.xlsx(wb)[,1])) < as_date("2026-01-01")) {
+    
+    no_acid_ratio_eq <- expression(glue(
+      # "IF({low_na[2]}{rows}>0,",
+      "IF({hi_na[2]}{rows}>0,",
+      "(({low_na[1]}{rows}/{low_na[2]}{rows})+({hi_na[1]}{rows}/{hi_na[2]}{rows}))/2,", 
+      "-999)"
+    ))
+  } else {
+    no_acid_ratio_eq <- expression(glue(
+      "IF({hi_na[2]}{rows}>0,",
+      "{hi_na[1]}{rows}/{hi_na[2]}{rows},", 
+      "-999)"
+    ))
+    
+  }
+  
   # ---- Formulas for Chlor-a Sheet ---- #
   formulas <-
     meta_sub  %>%
@@ -1293,6 +1314,9 @@ update_proc_log.cal <- function(x, cal, ...) {
       detectDates = TRUE,
       sep.names   = " ") 
   
+  # check if min date is before 2026 that includes both low and hi standard
+  add_hi_twice <- min(update$`Date (UTC)`) < as_date("2026-01-01")
+  
   if (!lubridate::is.Date(update$`Process date`)) {
     update <- mutate(update, `Process date` =  as_date(`Process date`))
   }
@@ -1364,13 +1388,17 @@ update_proc_log.cal <- function(x, cal, ...) {
   )
   
   # `Cal. 'No Acid' Low`
-  writeData(
-    wb,
-    sheet    = "Chl-a",
-    startRow = 4,
-    startCol = 17,
-    x        = update[[names(cal)[4]]]
-  )
+  if (add_hi_twice) {
+    # because lost low acid, this is no longer needed but will be kept for older 
+    # logs
+    writeData(
+      wb,
+      sheet    = "Chl-a",
+      startRow = 4,
+      startCol = 17,
+      x        = update[[names(cal)[4]]]
+    )
+  }
   
   # `Cal. 'No Acid' High`
   writeData(
