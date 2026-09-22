@@ -399,7 +399,7 @@ meta_list$cruise_summary <-
   summarise(
     .by  = cruise_id,
     date = min(date_mm_dd_yy, na.rm = TRUE),
-    across(chl_a:last_col(), \(.x) sum(.x, na.rm = TRUE))
+    across(chl_a:cdom, \(.x) sum(.x, na.rm = TRUE))
     ) %>%
   mutate(
     date   = as_date(date),
@@ -429,7 +429,8 @@ meta_list$temp <-
   nest(.by = sample_type) %>% 
   filter(!str_detect(sample_type, "chla_only")) %>%
   mutate(
-    name_list = case_match(
+    # name_list = case_match(
+    name_list = recode_values(
       sample_type,
       "Chl-a" ~ "chl_progress",
       "HPLC"  ~ "hplc_progress",
