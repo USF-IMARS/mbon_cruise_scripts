@@ -1225,7 +1225,8 @@ add_info.comment <- function(
         "*Jen*: Fluorescence reading for 100% methanol 'blank'",
         author  = "Jen", visible = FALSE),
       low_read  = createComment(
-        "*Jen*: Report average of all 'low' readings collected that day.",
+        # "*Jen*: Report average of all 'low' readings collected that day.",
+        "*Jen*: No low solid sample available.",
         author  = "Jen", visible = FALSE),
       high_read = createComment(
         "*Jen*: Report average of all 'high' readings collected that day.", 
