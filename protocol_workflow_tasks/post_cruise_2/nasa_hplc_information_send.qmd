@@ -114,6 +114,30 @@ metadata <-
     .before   = date_mm_dd_yy
   ) %T>% print()
 
+# reach hplc metadaa
+# metadata2 <-
+#   here("data", "raw") %>%
+#   dir_ls(regexp = "reach") %>%
+#   str_subset("~", negate = TRUE) %>%
+#   read.xlsx(
+#     detectDates = FALSE
+#     ) %>%
+#   janitor::clean_names() %>%
+#   mutate(
+#     .before = 1,
+#     cruise_id = str_remove(identifier, "-.*")
+#   ) %>%
+#   filter(str_detect(sample_type, "(?i)hplc")) %>%
+#   mutate(
+#     date      = excel_numeric_to_date(date_mm_dd_yy),
+#     # date_time = excel_numeric_to_date(date_time, include_time = TRUE, tz = "GMT"),
+#     time      = janitor::excel_numeric_to_date(sample_collection_time_gmt, include_time = TRUE),
+#     time = hms::as_hms(time),
+#     datetime  = ymd_hms(str_c(date, time), truncated = 3),
+#     station   = str_remove(station, "\\.0$"),
+#     .before   = date_mm_dd_yy
+#   ) %T>% print()
+
 
 # select cruise IDs for submission
 # if you want to select by cruise, add names in `str_subset()`
@@ -229,13 +253,15 @@ water_body <- list(
   "West Florida Shelf" = c(
     "Z04-068", "CBH", "NBH", "EB1",
     
-    as.vector(outer(
+    outer(
       c("AMI", "V", "TB", "CW", "L", "GP", "RP", "ROME", "CAL", "BG", "CORE-"),
       c(1:12),
       str_c
-    )),
+    ),
     "BG13", "BG15", "BG17", "BG20", "AC1", "AC4", "AC6", "HB1", "HB4", "HB6",
-    "REDTIDE", "BloomHG26045", "PN_1", "ROGE5"
+    "REDTIDE", "BloomHG26045", "PN_1", "ROGE5", "BG19",
+    "BIOM-SKYWAY", 
+    (outer("BIOM-", c(0:8), str_c))
   )
 ) %T>% print()
 ```
@@ -346,6 +372,7 @@ meta_format <-
       water_body[[2]] ~ names(water_body)[2],
       water_body[[3]] ~ names(water_body)[3],
       .default = NA_character_
+      # .default =  names(water_body)[3]
     ),
     
     # add depth if NA
@@ -703,7 +730,7 @@ getSheetNames(prev_f)[-c(1, 5:12)] %>%
 
 hplc_check <-
   getSheetNames(prev_f)[-c(1, 5:12)]  %>%
-  str_subset("(HG|WS)(25|26)") %>%      # <--- edit here to select which sheets to use
+  str_subset("(HG|WS|WB)(25|26)") %>%      # <--- edit here to select which sheets to use
   map(., ~ read.xlsx(prev_f, sheet = .x, startRow = 2) %>%
   mutate(
     sheet = .x,
@@ -755,7 +782,9 @@ meta_format2 <-
                     "CMS Collaborative Oceanographic Research and Education  ")
       
     )
-  ) %T>% print()
+  )
+
+meta_format2
 ```
 
 
@@ -811,7 +840,9 @@ meta_format2 <-
   # ) %>%
   
 
-  select(-contains("dup")) %T>% print()
+  select(-contains("dup"))
+
+meta_format2
 ```
 
 
